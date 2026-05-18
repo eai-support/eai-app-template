@@ -15,11 +15,11 @@ Scaffold a new vertical application from the template.
 eai init [name] [options]
 ```
 
-| Argument/Flag | Description | Default |
-|---------------|-------------|---------|
-| `name` | Project name (kebab-case) | Interactive prompt |
-| `--from <repo>` | Template repo URL or local path | `https://github.com/eai-tools/Vertical-Template.git` |
-| `--skip-prompts` | Use defaults without interactive prompts | `false` |
+| Argument/Flag    | Description                              | Default                                             |
+| ---------------- | ---------------------------------------- | --------------------------------------------------- |
+| `name`           | Project name (kebab-case)                | Interactive prompt                                  |
+| `--from <repo>`  | Template repo URL or local path          | `https://github.com/eai-tools/eai-app-template.git` |
+| `--skip-prompts` | Use defaults without interactive prompts | `false`                                             |
 
 ### Examples
 
@@ -47,11 +47,11 @@ Start the local development server with platform connectivity.
 eai dev [options]
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--port <port>` | Port number | `3000` |
-| `--turbo` | Use Turbopack | `true` |
-| `--no-turbo` | Disable Turbopack | — |
+| Flag            | Description              | Default |
+| --------------- | ------------------------ | ------- |
+| `--port <port>` | Port number              | `3000`  |
+| `--turbo`       | Use Turbopack            | `true`  |
+| `--no-turbo`    | Disable Turbopack        | —       |
 | `--skip-checks` | Skip connectivity checks | `false` |
 
 ### Examples
@@ -103,6 +103,7 @@ eai types validate
 ```
 
 Validates:
+
 - PascalCase naming convention
 - Required fields (name, properties)
 - Property type correctness
@@ -117,14 +118,14 @@ Push Object Types from `src/eai.config/object-types.ts` to the platform.
 eai types seed [options]
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--env <environment>` | Target environment | `dev` |
-| `--tenant-key <key>` | Specific tenant key | All tenants |
-| `--tenant-id <id>` | Explicit platform tenant ID to publish to | Active tenant |
-| `--dry-run` | Preview without changes | `false` |
-| `--format <format>` | Output format (`text` or `json`) | `text` |
-| `--json` | Deprecated alias for `--format json` | `false` |
+| Flag                  | Description                               | Default       |
+| --------------------- | ----------------------------------------- | ------------- |
+| `--env <environment>` | Target environment                        | `dev`         |
+| `--tenant-key <key>`  | Specific tenant key                       | All tenants   |
+| `--tenant-id <id>`    | Explicit platform tenant ID to publish to | Active tenant |
+| `--dry-run`           | Preview without changes                   | `false`       |
+| `--format <format>`   | Output format (`text` or `json`)          | `text`        |
+| `--json`              | Deprecated alias for `--format json`      | `false`       |
 
 ### Examples
 
@@ -155,10 +156,10 @@ eai types diff [options]
 
 Shows additions, removals, and modifications for each object type and property.
 
-| Flag | Description |
-|------|-------------|
+| Flag                 | Description                                          |
+| -------------------- | ---------------------------------------------------- |
 | `--tenant-key <key>` | Compare only one tenant scope from `object-types.ts` |
-| `--tenant-id <id>` | Compare against an explicit remote tenant |
+| `--tenant-id <id>`   | Compare against an explicit remote tenant            |
 
 Example:
 
@@ -188,10 +189,10 @@ Manage tenants on the platform.
 eai tenant list [options]
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--format <format>` | Output format (`text` or `json`) | `text` |
-| `--json` | Deprecated alias for `--format json` | `false` |
+| Flag                | Description                          | Default |
+| ------------------- | ------------------------------------ | ------- |
+| `--format <format>` | Output format (`text` or `json`)     | `text`  |
+| `--json`            | Deprecated alias for `--format json` | `false` |
 
 ### `eai tenant info`
 
@@ -221,12 +222,12 @@ Select the active tenant for subsequent CLI commands. Use `eai whoami` to confir
 eai tenant create [options]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--name <name>` | Tenant display name |
-| `--slug <slug>` | URL-safe tenant identifier (kebab-case) |
-| `--parent <id>` | Parent tenant ID |
-| `--domain <domains>` | Comma-separated domain list |
+| Flag                 | Description                             |
+| -------------------- | --------------------------------------- |
+| `--name <name>`      | Tenant display name                     |
+| `--slug <slug>`      | URL-safe tenant identifier (kebab-case) |
+| `--parent <id>`      | Parent tenant ID                        |
+| `--domain <domains>` | Comma-separated domain list             |
 
 ### Example
 
@@ -265,14 +266,14 @@ CRUD operations on platform resources (data stored in ResourceAPI).
 eai resources list <type> [options]
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--page <n>` | Page number | `1` |
-| `--limit <n>` | Items per page | `20` |
-| `--sort <field>` | Sort field (`-` prefix for descending) | `-created_at` |
-| `--tenant-id <id>` | Run the read-only query against a specific tenant | Active tenant |
-| `--format <format>` | Output format (`text` or `json`) | `text` |
-| `--json` | Deprecated alias for `--format json` | `false` |
+| Flag                | Description                                       | Default       |
+| ------------------- | ------------------------------------------------- | ------------- |
+| `--page <n>`        | Page number                                       | `1`           |
+| `--limit <n>`       | Items per page                                    | `20`          |
+| `--sort <field>`    | Sort field (`-` prefix for descending)            | `-created_at` |
+| `--tenant-id <id>`  | Run the read-only query against a specific tenant | Active tenant |
+| `--format <format>` | Output format (`text` or `json`)                  | `text`        |
+| `--json`            | Deprecated alias for `--format json`              | `false`       |
 
 ### `eai resources get`
 
@@ -288,12 +289,12 @@ Supports `--tenant-id`, `--format json`, and `--json`.
 eai resources create <type> [options]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--data <json>` | Resource data as JSON string |
-| `--file <path>` | Read data from a JSON file |
-| `--tenant-id <id>` | Run the mutation against a specific tenant |
-| `--format <format>` | Output format (`text` or `json`) |
+| Flag                | Description                                |
+| ------------------- | ------------------------------------------ |
+| `--data <json>`     | Resource data as JSON string               |
+| `--file <path>`     | Read data from a JSON file                 |
+| `--tenant-id <id>`  | Run the mutation against a specific tenant |
+| `--format <format>` | Output format (`text` or `json`)           |
 
 ### `eai resources update`
 
@@ -482,8 +483,8 @@ Generate GitHub Actions workflow and configure secrets.
 eai deploy setup [options]
 ```
 
-| Flag | Description |
-|------|-------------|
+| Flag            | Description                      |
+| --------------- | -------------------------------- |
 | `--repo <repo>` | GitHub repo in `org/name` format |
 
 ### `eai deploy trigger`
@@ -526,6 +527,7 @@ eai verify
 ```
 
 Checks:
+
 - PublicAPI reachability
 - Authentication validity
 - Configurator tenant access
@@ -542,8 +544,8 @@ Diagnose common issues and optionally fix them.
 eai doctor [options]
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
+| Flag    | Description             | Default |
+| ------- | ----------------------- | ------- |
 | `--fix` | Attempt automatic fixes | `false` |
 
 ### What it checks

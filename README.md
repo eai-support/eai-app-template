@@ -2,11 +2,11 @@
 
 A production-ready Next.js template for building tenant-scoped vertical applications on the Enterprise AI platform.
 
-**[Documentation](https://eai-tools.github.io/vt-docs/)** | **[Package Registry](https://enterpriseaigroup.github.io/enterpriseai-packages/)** | **[Mirror Repo](https://github.com/eai-tools/eai-vertical-template)**
+**[Documentation](https://eai-tools.github.io/eai-app-docs/)** | **[Package Registry](https://enterpriseaigroup.github.io/enterpriseai-packages/)** | **[Mirror Repo](https://github.com/eai-tools/eai-app-template)**
 
 ## What This Template Assumes
 
-- Vertical developers work through `eai-cli`, not direct platform credentials.
+- Vertical developers work through the `eai` CLI, not direct platform credentials.
 - Object types declare a logical storage backend such as `postgresql`, `documentdb`, `blob`, or `search`.
 - Tenant connections resolve the physical store for that tenant at runtime.
 - PublicAPI and ResourceAPI enforce tenant access. Frontends do not receive raw Blob, DocumentDB, PostgreSQL, or AI Search credentials.
@@ -14,7 +14,7 @@ A production-ready Next.js template for building tenant-scoped vertical applicat
 ## Quick Start
 
 ```bash
-git clone https://github.com/eai-tools/eai-vertical-template.git my-vertical
+git clone https://github.com/eai-tools/eai-app-template.git my-vertical
 cd my-vertical
 npm install
 cp .env.example .env.local
@@ -82,7 +82,7 @@ The `@enterpriseaigroup/*` packages are served from a public registry. The inclu
 
 ## Documentation
 
-Full documentation is available at **https://eai-tools.github.io/vt-docs/**, covering:
+Full documentation is available at **https://eai-tools.github.io/eai-app-docs/**, covering:
 
 - Getting started and onboarding
 - CLI usage and tenant workflows

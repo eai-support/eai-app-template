@@ -13,7 +13,7 @@ Deploy your vertical application to Azure App Service using the multi-app deploy
 - GitHub repository created
 - Azure subscription with access to the shared App Service
 - GitHub Secrets configured (or admin access to set them)
-- A tenant that is already connected and verified through `eai-cli`
+- A tenant that is already connected and verified through the `eai` CLI
 
 Before you deploy, confirm the platform side is healthy:
 
