@@ -34,7 +34,7 @@ Browser → useChat hook → /api/eai/stream/v3/chat/stream/{tenant}/{workflow}/
 Key concepts:
 - **Workflow**: A named AI pipeline configured in the Configurator
 - **Stage**: A step within a workflow (e.g., `chat`, `classify`, `summarize`)
-- **Conversation**: Identified by `conversation_id` for multi-turn context
+- **Thread**: Identified by `thread_id` for multi-turn context
 
 ## Step 2: Configure the Workflow
 
@@ -73,7 +73,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [conversationId] = useState(() => crypto.randomUUID());
+  const [threadId] = useState(() => crypto.randomUUID());
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -95,7 +95,7 @@ export default function ChatPage() {
     try {
       const reader = await stream({
         message: userMessage,
-        conversationId,
+        threadId,
         params: {},
       });
 
@@ -277,7 +277,7 @@ This is why chat uses `/api/eai/stream/` while all other calls use `/api/eai/`.
 
 - **SSE Streaming**: Real-time chat with Server-Sent Events through the BFF proxy
 - **useChat Hook**: Abstraction over the streaming protocol
-- **Conversation Management**: Multi-turn context with `conversation_id`
+- **Thread Management**: Multi-turn context with `thread_id`
 - **Document RAG**: Upload, index, and query documents through AICore
 
 ## Next Steps

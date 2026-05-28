@@ -143,8 +143,8 @@ export interface OrchestrationRequest {
 export interface ChatMessage {
   /** The user's message text. Maps to ChatRequest.message. */
   message: string;
-  /** Conversation ID. Maps to ChatRequest.conversation_id. REQUIRED. */
-  conversation_id: string;
+  /** Thread ID. Maps to ChatRequest.thread_id. REQUIRED. */
+  thread_id: string;
   /** Parameters dict. Maps to ChatRequest.params. REQUIRED, use {} if none. */
   params: Record<string, unknown>;
   runtime_context?: Record<string, unknown>;
@@ -158,7 +158,7 @@ export interface ChatStreamOptions {
   stage: string;
   message: string;
   /** Auto-generated via crypto.randomUUID() if not provided. */
-  conversationId?: string;
+  threadId?: string;
   /** Use {} if no params needed. */
   params?: Record<string, unknown>;
   runtime_context?: Record<string, unknown>;
