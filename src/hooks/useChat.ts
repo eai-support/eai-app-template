@@ -17,7 +17,7 @@ import type { ChatStreamOptions } from '@enterpriseaigroup/platform-sdk';
  *
  * const readable = await stream({
  *   message: 'Hello',
- *   conversationId: crypto.randomUUID(),
+ *   threadId: crypto.randomUUID(),
  *   params: { context: 'permits' },
  * });
  * ```

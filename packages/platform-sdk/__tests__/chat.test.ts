@@ -45,14 +45,14 @@ describe('ChatModule', () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.message).toBe('Hello world');
-      expect(body.conversation_id).toBeDefined();
+      expect(body.thread_id).toBeDefined();
       expect(body.params).toEqual({ context: 'test' });
       // Verify wrong field names are NOT present
       expect(body.chat_input).toBeUndefined();
       expect(body.user_config).toBeUndefined();
     });
 
-    it('auto-generates conversationId if not provided', async () => {
+    it('auto-generates threadId if not provided', async () => {
       const mockStream = new ReadableStream();
       mockFetch.mockResolvedValueOnce({ ok: true, body: mockStream });
 
@@ -64,10 +64,10 @@ describe('ChatModule', () => {
       });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.conversation_id).toBe('test-uuid-1234');
+      expect(body.thread_id).toBe('test-uuid-1234');
     });
 
-    it('uses provided conversationId', async () => {
+    it('uses provided threadId', async () => {
       const mockStream = new ReadableStream();
       mockFetch.mockResolvedValueOnce({ ok: true, body: mockStream });
 
@@ -75,12 +75,12 @@ describe('ChatModule', () => {
         workflowId: 'wf',
         stage: 's',
         message: 'test',
-        conversationId: 'custom-id',
+        threadId: 'custom-id',
         params: {},
       });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.conversation_id).toBe('custom-id');
+      expect(body.thread_id).toBe('custom-id');
     });
 
     it('uses streamBaseUrl (not baseUrl)', async () => {
@@ -108,7 +108,7 @@ describe('ChatModule', () => {
         workflowId: 'my-workflow',
         stage: 'chat',
         message: 'Hello',
-        conversationId: 'conv-123',
+        threadId: 'thread-123',
         params: {},
       });
 
