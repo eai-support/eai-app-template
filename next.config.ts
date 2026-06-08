@@ -11,18 +11,16 @@ const nextConfig: NextConfig = {
   assetPrefix: basePath || undefined,
   transpilePackages: ['@enterpriseaigroup/client', '@enterpriseaigroup/core', '@enterpriseaigroup/platform-sdk'],
   compress: false,
-  experimental: {
-    turbo: {
-      resolveAlias: {
-        // Ensure @tanstack/react-query from packages/client uses the same instance as the main app
-        '@tanstack/react-query': './node_modules/@tanstack/react-query',
-      },
-      rules: {
-        // Fix Zustand ESM module concatenation issue
-        '*/node_modules/zustand': {
-          loaders: [],
-          as: '*.js',
-        },
+  turbopack: {
+    resolveAlias: {
+      // Ensure @tanstack/react-query from packages/client uses the same instance as the main app
+      '@tanstack/react-query': './node_modules/@tanstack/react-query',
+    },
+    rules: {
+      // Fix Zustand ESM module concatenation issue
+      '*/node_modules/zustand': {
+        loaders: [],
+        as: '*.js',
       },
     },
   },

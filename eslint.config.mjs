@@ -12,7 +12,18 @@ const compat = new FlatCompat({
 const eslintConfig = [
   ...compat.extends('next/core-web-vitals', 'next/typescript', 'prettier'),
   {
-    ignores: ['node_module/**', '.next/**'],
+    ignores: [
+      'node_modules/**',
+      'dist/**',
+      'build/**',
+      'coverage/**',
+      '.next/**',
+      'out/**',
+      'storybook-static/**',
+      'playwright-report/**',
+      'test-results/**',
+      '*.log',
+    ],
   },
   {
     rules: {

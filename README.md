@@ -63,6 +63,16 @@ eai resources schema --tenant-id <tenant-id> --format json
 eai verify calls --tenant-id <tenant-id> --resource-type application
 ```
 
+## App Router Guardrail
+
+- In `src/app/**/route.ts`, export only HTTP methods like `GET`, `POST`, `PUT`,
+  `PATCH`, `DELETE`, `HEAD`, and `OPTIONS`
+- Only export supported route config fields such as `dynamic`, `runtime`, and
+  `revalidate`
+- Keep reusable logic in a sibling `handler.ts` or a module under `src/lib/`
+- Run `npm run check:route-exports` to catch unsupported `route.ts` exports
+  before `next build`
+
 ## Package Registry
 
 The `@enterpriseaigroup/*` packages are served from a public registry. The included `.npmrc` configures this automatically.
