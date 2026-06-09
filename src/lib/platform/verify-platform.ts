@@ -1,4 +1,5 @@
 import { EAIPlatformClient } from '@enterpriseaigroup/platform-sdk';
+import { buildPublicApiUrl } from '@/lib/platform/publicapi-url';
 
 export interface PlatformStatus {
   configurator: boolean;
@@ -16,7 +17,9 @@ export interface PlatformStatus {
  *
  * @param tenantId - Configurator tenant ID (from TENANT_*_ID env var)
  */
-export async function verifyPlatform(tenantId: string): Promise<PlatformStatus> {
+export async function verifyPlatform(
+  tenantId: string,
+): Promise<PlatformStatus> {
   const client = new EAIPlatformClient({ tenantId });
   const status: PlatformStatus = {
     configurator: false,
@@ -28,12 +31,11 @@ export async function verifyPlatform(tenantId: string): Promise<PlatformStatus> 
 
   // Check 1: Configurator responds (object types exist)
   try {
-    const response = await client.orchestrate.send({
-      target_backend: 'payload',
-      endpoint: '/object-types',
-      method: 'GET',
-      params: { limit: 1 },
-    });
+    const response = await fetch(
+      buildPublicApiUrl(client.baseUrl, '/v4/data/resources/object-types', {
+        limit: 1,
+      }),
+    );
     status.configurator = response.ok;
   } catch {
     status.configurator = false;
@@ -42,15 +44,16 @@ export async function verifyPlatform(tenantId: string): Promise<PlatformStatus> 
   // Check 2: ResourceAPI responds (schema query)
   try {
     const schema = await client.resources.getSchema();
-    status.resourceApi = Array.isArray((schema as { objectTypes?: unknown[] }).objectTypes)
-      || Array.isArray((schema as { object_types?: unknown[] }).object_types);
+    status.resourceApi =
+      Array.isArray((schema as { objectTypes?: unknown[] }).objectTypes) ||
+      Array.isArray((schema as { object_types?: unknown[] }).object_types);
   } catch {
     status.resourceApi = false;
   }
 
   // Check 3: list/aggregate/cursor work for at least one published type
   try {
-    const schema = await client.resources.getSchema() as {
+    const schema = (await client.resources.getSchema()) as {
       objectTypes?: Array<{ name?: string; slug?: string }>;
       object_types?: Array<{ name?: string; slug?: string }>;
     };
@@ -67,9 +70,10 @@ export async function verifyPlatform(tenantId: string): Promise<PlatformStatus> 
       });
       status.aggregate = Array.isArray(aggregateResponse.rows);
 
-      status.cursor = listResponse.nextCursor === null
-        || typeof listResponse.nextCursor === 'string'
-        || listResponse.nextCursor === undefined;
+      status.cursor =
+        listResponse.nextCursor === null ||
+        typeof listResponse.nextCursor === 'string' ||
+        listResponse.nextCursor === undefined;
     }
   } catch {
     status.crud = false;

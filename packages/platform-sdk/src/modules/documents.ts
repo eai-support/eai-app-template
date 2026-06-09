@@ -1,7 +1,7 @@
 /**
  * Documents Module
  *
- * Document upload, classification, and indexing via /v3/documents/*.
+ * Document upload, classification, and indexing via /v4/data/documents/*.
  */
 
 import type { ChecklistRequest } from '../types';
@@ -14,11 +14,14 @@ export class DocumentsModule {
   ) {}
 
   private docsUrl(path: string): string {
-    return `${this.baseUrl}/v3/documents${path}`;
+    return `${this.baseUrl}/v4/data/documents${path}`;
   }
 
   /** Upload a document (multipart/form-data). */
-  async upload(file: File, metadata?: Record<string, string>): Promise<Response> {
+  async upload(
+    file: File,
+    metadata?: Record<string, string>,
+  ): Promise<Response> {
     const formData = new FormData();
     formData.append('file', file);
     if (metadata) {

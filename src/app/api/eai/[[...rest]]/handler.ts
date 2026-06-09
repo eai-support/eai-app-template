@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getClientCredentialsToken, getAccessToken } from '@enterpriseaigroup/core/server';
+import {
+  getClientCredentialsToken,
+  getAccessToken,
+} from '@enterpriseaigroup/core/server';
 import {
   resolvePublicApiBaseUrl,
   RoutingResolutionError,
 } from '@/lib/platform/session-resolve';
+import { resolvePublicApiRoutePath } from '@/lib/platform/publicapi-route-family';
 
 export interface RouteContext {
   params: Promise<{ rest?: string[] }>;
@@ -69,7 +73,10 @@ async function proxyRequest(
       console.log('[EAI Proxy] Using user token for:', path);
       headers.set('Authorization', `Bearer ${token}`);
     } else {
-      console.log('[EAI Proxy] No user token available, using client credentials for:', path);
+      console.log(
+        '[EAI Proxy] No user token available, using client credentials for:',
+        path,
+      );
       if (!baseUrl) {
         throw new Error('BASE_URL_PUBLIC_API environment variable is not set');
       }
@@ -82,7 +89,8 @@ async function proxyRequest(
     }
 
     const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-    const targetUrl = new URL(path, normalizedBaseUrl);
+    const targetPath = resolvePublicApiRoutePath(path);
+    const targetUrl = new URL(targetPath, normalizedBaseUrl);
     console.log('[EAI Proxy] Target URL:', targetUrl.toString());
 
     // Preserve query params
@@ -111,7 +119,10 @@ async function proxyRequest(
           const bodyText = await request.text();
           if (bodyText) {
             fetchOptions.body = bodyText;
-            console.log('[EAI Proxy] Forwarding JSON body, length:', bodyText.length);
+            console.log(
+              '[EAI Proxy] Forwarding JSON body, length:',
+              bodyText.length,
+            );
           }
         } catch (e) {
           console.log('[EAI Proxy] Could not read JSON body:', e);
@@ -166,10 +177,9 @@ async function proxyRequest(
 
     // Don't expose internal error details to client
     const isConfigError =
-      error instanceof Error && (
-        error.message.includes('BASE_URL_PUBLIC_API')
-        || error.message.includes('PublicAPI base URL')
-      );
+      error instanceof Error &&
+      (error.message.includes('BASE_URL_PUBLIC_API') ||
+        error.message.includes('PublicAPI base URL'));
 
     return new NextResponse(
       JSON.stringify({

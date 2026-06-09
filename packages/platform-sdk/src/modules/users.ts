@@ -1,7 +1,7 @@
 /**
  * Users Module
  *
- * User provisioning and profile management via /v3/users/*.
+ * User provisioning and profile management via /v4/identity/*.
  */
 
 import { platformFetch } from '../client';
@@ -14,7 +14,7 @@ export class UsersModule {
    * tenant_id is REQUIRED.
    */
   async provisionMe(tenantId: string): Promise<Response> {
-    return platformFetch(`${this.baseUrl}/v3/users/provisionme`, {
+    return platformFetch(`${this.baseUrl}/v4/identity/me/provision`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tenant_id: tenantId }),
@@ -23,17 +23,20 @@ export class UsersModule {
 
   /** Update the current user's profile. */
   async updateProfile(data: Record<string, unknown>): Promise<Response> {
-    return platformFetch(`${this.baseUrl}/v3/users/profile`, {
-      method: 'PUT',
+    return platformFetch(`${this.baseUrl}/v4/identity/me/profile`, {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
   }
 
-  /** Deprovision the current user. */
-  async deprovision(): Promise<Response> {
-    return platformFetch(`${this.baseUrl}/v3/users/deprovision`, {
-      method: 'DELETE',
-    });
+  /** Remove the current user's membership from a tenant. */
+  async deprovision(tenantId: string): Promise<Response> {
+    return platformFetch(
+      `${this.baseUrl}/v4/identity/tenants/${encodeURIComponent(tenantId)}/membership`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 }

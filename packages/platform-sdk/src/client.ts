@@ -11,7 +11,6 @@ import { ChatModule } from './modules/chat';
 import { DocumentsModule } from './modules/documents';
 import { UsersModule } from './modules/users';
 import { AuthModule } from './modules/auth';
-import { OrchestrateModule } from './modules/orchestrate';
 
 export interface PlatformClientConfig {
   /** Tenant ID for all requests. */
@@ -37,15 +36,18 @@ export class EAIPlatformClient {
   private _documents?: DocumentsModule;
   private _users?: UsersModule;
   private _auth?: AuthModule;
-  private _orchestrate?: OrchestrateModule;
-
   constructor(config: PlatformClientConfig) {
+    const appBasePath = (process.env.NEXT_PUBLIC_APP_BASE_PATH ?? '').replace(
+      /\/+$/,
+      '',
+    );
     this.tenantId = config.tenantId;
-    this.baseUrl = config.baseUrl || '/api/eai';
-    this.streamBaseUrl = config.streamBaseUrl || '/api/eai/stream';
+    this.baseUrl = config.baseUrl || `${appBasePath}/api/eai`;
+    this.streamBaseUrl =
+      config.streamBaseUrl || `${appBasePath}/api/eai/stream`;
   }
 
-  /** CRUD operations on resources via /v3/resources/* */
+  /** CRUD operations on resources via /v4/data/resources/* */
   get resources(): ResourcesModule {
     if (!this._resources) {
       this._resources = new ResourcesModule(this.baseUrl, this.tenantId);
@@ -53,15 +55,19 @@ export class EAIPlatformClient {
     return this._resources;
   }
 
-  /** Chat streaming and messaging via /v3/chat/* */
+  /** Chat streaming and messaging via /v4/ai/chat/* */
   get chat(): ChatModule {
     if (!this._chat) {
-      this._chat = new ChatModule(this.baseUrl, this.streamBaseUrl, this.tenantId);
+      this._chat = new ChatModule(
+        this.baseUrl,
+        this.streamBaseUrl,
+        this.tenantId,
+      );
     }
     return this._chat;
   }
 
-  /** Document upload, classification, and indexing via /v3/documents/* */
+  /** Document upload, classification, and indexing via /v4/data/documents/* */
   get documents(): DocumentsModule {
     if (!this._documents) {
       this._documents = new DocumentsModule(this.baseUrl, this.tenantId);
@@ -69,7 +75,7 @@ export class EAIPlatformClient {
     return this._documents;
   }
 
-  /** User provisioning and profile management via /v3/users/* */
+  /** User provisioning and profile management via /v4/identity/* */
   get users(): UsersModule {
     if (!this._users) {
       this._users = new UsersModule(this.baseUrl);
@@ -77,20 +83,12 @@ export class EAIPlatformClient {
     return this._users;
   }
 
-  /** Auth information via /v3/auth/* */
+  /** Auth information via /v4/identity/* */
   get auth(): AuthModule {
     if (!this._auth) {
       this._auth = new AuthModule(this.baseUrl);
     }
     return this._auth;
-  }
-
-  /** Low-level orchestrate access via /v3/orchestrate */
-  get orchestrate(): OrchestrateModule {
-    if (!this._orchestrate) {
-      this._orchestrate = new OrchestrateModule(this.baseUrl);
-    }
-    return this._orchestrate;
   }
 }
 

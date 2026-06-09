@@ -18,6 +18,77 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, '..');
 const inputPath = join(projectRoot, 'src/eai.config/object-types.ts');
 const outputPath = join(projectRoot, 'src/eai.config/object-types.json');
+const provisioningOutputPath = join(
+  projectRoot,
+  'src/eai.config/object-types.provisioning.json',
+);
+
+const BACKEND_ORDER = ['postgresql', 'documentdb', 'blob', 'search'];
+
+function summarizeProvisioning(objectTypesByTenant) {
+  return Object.entries(objectTypesByTenant).map(([tenantKey, types]) => {
+    const objectTypesByBackend = {
+      postgresql: [],
+      documentdb: [],
+      blob: [],
+      search: [],
+    };
+
+    for (const type of types) {
+      objectTypesByBackend[type.storageBackend].push(type.name);
+    }
+
+    const declaredBackends = BACKEND_ORDER.filter(
+      (backend) => objectTypesByBackend[backend].length > 0,
+    );
+    const requiresPostgresql = declaredBackends.some(
+      (backend) =>
+        backend === 'postgresql' ||
+        backend === 'documentdb' ||
+        backend === 'blob',
+    );
+
+    const notes = [];
+    if (objectTypesByBackend.documentdb.length > 0) {
+      notes.push(
+        'DocumentDB object types require a dedicated ResourceAPI DocumentDB plus PostgreSQL shadow records for links, history, and query parity.',
+      );
+    }
+    if (objectTypesByBackend.blob.length > 0) {
+      notes.push(
+        'Blob object types require Blob Storage plus PostgreSQL shadow records for metadata, links, history, and aggregate/list behavior.',
+      );
+    }
+    if (objectTypesByBackend.search.length > 0) {
+      notes.push(
+        'Search is a derived projection backend, not the primary system of record. Provision AI Search intentionally and pair it with a canonical write store.',
+      );
+    }
+    if (
+      objectTypesByBackend.search.length > 0 &&
+      !requiresPostgresql &&
+      objectTypesByBackend.documentdb.length === 0 &&
+      objectTypesByBackend.blob.length === 0
+    ) {
+      notes.push(
+        'Search-only object type sets are not sufficient for canonical runtime data. Add a canonical backend before relying on runtime writes.',
+      );
+    }
+
+    return {
+      tenantKey,
+      declaredBackends,
+      objectTypesByBackend,
+      provision: {
+        postgresql: requiresPostgresql,
+        documentdb: objectTypesByBackend.documentdb.length > 0,
+        blob: objectTypesByBackend.blob.length > 0,
+        search: objectTypesByBackend.search.length > 0,
+      },
+      notes,
+    };
+  });
+}
 
 // Read TypeScript source
 const tsContent = readFileSync(inputPath, 'utf-8');
@@ -35,20 +106,24 @@ for (const line of lines) {
   const stripped = line.trim();
 
   // Skip standalone type/interface/enum declarations
-  if (/^export\s+(type|interface|enum)\s+/.test(stripped) ||
-      /^(type|interface|enum)\s+/.test(stripped)) {
+  if (
+    /^export\s+(type|interface|enum)\s+/.test(stripped) ||
+    /^(type|interface|enum)\s+/.test(stripped)
+  ) {
     if (stripped.endsWith(';') && !stripped.includes('{')) {
       continue; // Single-line type alias
     }
     // Multi-line block
     inBlock = true;
-    braceDepth = (stripped.match(/{/g) || []).length - (stripped.match(/}/g) || []).length;
+    braceDepth =
+      (stripped.match(/{/g) || []).length - (stripped.match(/}/g) || []).length;
     if (braceDepth <= 0) inBlock = false;
     continue;
   }
 
   if (inBlock) {
-    braceDepth += (stripped.match(/{/g) || []).length - (stripped.match(/}/g) || []).length;
+    braceDepth +=
+      (stripped.match(/{/g) || []).length - (stripped.match(/}/g) || []).length;
     if (braceDepth <= 0) inBlock = false;
     continue;
   }
@@ -77,9 +152,20 @@ if (typeof objectTypes !== 'object' || objectTypes === null) {
 const json = JSON.stringify(objectTypes, null, 2);
 writeFileSync(outputPath, json + '\n', 'utf-8');
 
+const provisioning = summarizeProvisioning(objectTypes);
+writeFileSync(
+  provisioningOutputPath,
+  JSON.stringify(provisioning, null, 2) + '\n',
+  'utf-8',
+);
+
 // Summary
 const tenantKeys = Object.keys(objectTypes);
-const totalTypes = tenantKeys.reduce((sum, key) => sum + objectTypes[key].length, 0);
+const totalTypes = tenantKeys.reduce(
+  (sum, key) => sum + objectTypes[key].length,
+  0,
+);
 console.log(`Generated ${outputPath}`);
+console.log(`Generated ${provisioningOutputPath}`);
 console.log(`  ${tenantKeys.length} tenant(s): ${tenantKeys.join(', ')}`);
 console.log(`  ${totalTypes} Object Type(s) total`);

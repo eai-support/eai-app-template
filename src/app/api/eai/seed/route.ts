@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { objectTypes } from '@/eai.config/object-types';
 import { seedObjectTypes } from '@/lib/platform/seed-object-types';
+import { summarizeTenantStorageProvisioning } from '@/lib/platform/storage-provisioning';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,12 +35,21 @@ export async function POST(request: NextRequest) {
     }
 
     const results = await seedObjectTypes(tenantKey, tenantId);
+    const tenantTypes =
+      objectTypes[tenantKey as keyof typeof objectTypes] || [];
+    const provisioning = summarizeTenantStorageProvisioning(
+      tenantKey,
+      tenantTypes,
+    );
 
-    return NextResponse.json({ results });
+    return NextResponse.json({ results, provisioning });
   } catch (error) {
     console.error('[Seed] Failed:', error);
     return NextResponse.json(
-      { error: 'Seeding failed', message: error instanceof Error ? error.message : 'Unknown error' },
+      {
+        error: 'Seeding failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 },
     );
   }

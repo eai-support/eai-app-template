@@ -1,7 +1,7 @@
 /**
  * Chat Module
  *
- * SSE streaming and non-streaming chat via /v3/chat/*.
+ * SSE streaming and non-streaming chat via /v4/ai/chat/*.
  *
  * CRITICAL field names (from PublicAPI ChatRequest):
  * - message (NOT chat_input)
@@ -25,11 +25,13 @@ export class ChatModule {
    *
    * @returns ReadableStream of SSE events
    */
-  async stream(options: ChatStreamOptions): Promise<ReadableStream<Uint8Array>> {
+  async stream(
+    options: ChatStreamOptions,
+  ): Promise<ReadableStream<Uint8Array>> {
     const { workflowId, stage, message, params, ...rest } = options;
     const conversationId = options.conversationId || crypto.randomUUID();
 
-    const url = `${this.streamBaseUrl}/v3/chat/stream/${this.tenantId}/${workflowId}/${stage}`;
+    const url = `${this.streamBaseUrl}/v4/ai/chat/stream/${this.tenantId}/${workflowId}/${stage}`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -38,10 +40,12 @@ export class ChatModule {
         message,
         conversation_id: conversationId,
         params: params || {},
-        ...rest.runtime_context && { runtime_context: rest.runtime_context },
-        ...rest.message_history && { message_history: rest.message_history },
-        ...rest.ai_config && { ai_config: rest.ai_config },
-        ...rest.business_request_id && { business_request_id: rest.business_request_id },
+        ...(rest.runtime_context && { runtime_context: rest.runtime_context }),
+        ...(rest.message_history && { message_history: rest.message_history }),
+        ...(rest.ai_config && { ai_config: rest.ai_config }),
+        ...(rest.business_request_id && {
+          business_request_id: rest.business_request_id,
+        }),
       }),
     });
 
@@ -61,7 +65,7 @@ export class ChatModule {
     const { workflowId, stage, message, params, ...rest } = options;
     const conversationId = options.conversationId || crypto.randomUUID();
 
-    const url = `${this.baseUrl}/v3/chat/${this.tenantId}/${workflowId}/${stage}`;
+    const url = `${this.baseUrl}/v4/ai/chat/${this.tenantId}/${workflowId}/${stage}`;
 
     return platformFetch(url, {
       method: 'POST',
@@ -70,10 +74,12 @@ export class ChatModule {
         message,
         conversation_id: conversationId,
         params: params || {},
-        ...rest.runtime_context && { runtime_context: rest.runtime_context },
-        ...rest.message_history && { message_history: rest.message_history },
-        ...rest.ai_config && { ai_config: rest.ai_config },
-        ...rest.business_request_id && { business_request_id: rest.business_request_id },
+        ...(rest.runtime_context && { runtime_context: rest.runtime_context }),
+        ...(rest.message_history && { message_history: rest.message_history }),
+        ...(rest.ai_config && { ai_config: rest.ai_config }),
+        ...(rest.business_request_id && {
+          business_request_id: rest.business_request_id,
+        }),
       }),
     });
   }
