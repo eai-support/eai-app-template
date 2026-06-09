@@ -1,0 +1,296 @@
+{
+  "template": [
+    {
+      "name": "Application",
+      "displayName": "Application",
+      "description": "A generic application or request submitted by a user",
+      "properties": [
+        {
+          "name": "applicantName",
+          "type": "text",
+          "required": true,
+          "indexed": true,
+          "description": "Full name of the applicant"
+        },
+        {
+          "name": "applicantEmail",
+          "type": "text",
+          "required": true,
+          "indexed": true,
+          "description": "Email address of the applicant"
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "indexed": true,
+          "defaultValue": "draft",
+          "options": [
+            {
+              "label": "Draft",
+              "value": "draft"
+            },
+            {
+              "label": "Submitted",
+              "value": "submitted"
+            },
+            {
+              "label": "Under Review",
+              "value": "under_review"
+            },
+            {
+              "label": "Approved",
+              "value": "approved"
+            },
+            {
+              "label": "Rejected",
+              "value": "rejected"
+            }
+          ],
+          "description": "Current status of the application"
+        },
+        {
+          "name": "submittedAt",
+          "type": "date",
+          "required": false,
+          "indexed": true,
+          "description": "Date when the application was submitted"
+        },
+        {
+          "name": "reviewedAt",
+          "type": "date",
+          "required": false,
+          "description": "Date when the application was reviewed"
+        },
+        {
+          "name": "reviewedBy",
+          "type": "text",
+          "required": false,
+          "description": "User ID of the reviewer"
+        },
+        {
+          "name": "notes",
+          "type": "json",
+          "required": false,
+          "description": "Additional notes or metadata as JSON"
+        }
+      ],
+      "linkTypes": [
+        {
+          "name": "documents",
+          "targetObjectType": "document",
+          "cardinality": "one-to-many",
+          "cascadeDelete": true
+        }
+      ],
+      "actions": [
+        {
+          "name": "submit",
+          "displayName": "Submit Application",
+          "requiredRole": "tenant-viewer",
+          "validationRules": {
+            "requiredFields": [
+              "applicantName",
+              "applicantEmail"
+            ],
+            "requiredStatus": "draft"
+          },
+          "sideEffects": [
+            {
+              "type": "set_field",
+              "field": "status",
+              "value": "submitted"
+            },
+            {
+              "type": "set_timestamp",
+              "field": "submittedAt"
+            }
+          ]
+        },
+        {
+          "name": "approve",
+          "displayName": "Approve Application",
+          "requiredRole": "tenant-builder",
+          "validationRules": {
+            "requiredStatus": "under_review"
+          },
+          "sideEffects": [
+            {
+              "type": "set_field",
+              "field": "status",
+              "value": "approved"
+            },
+            {
+              "type": "set_timestamp",
+              "field": "reviewedAt"
+            },
+            {
+              "type": "set_user",
+              "field": "reviewedBy"
+            }
+          ]
+        },
+        {
+          "name": "reject",
+          "displayName": "Reject Application",
+          "requiredRole": "tenant-builder",
+          "validationRules": {
+            "requiredStatus": "under_review"
+          },
+          "sideEffects": [
+            {
+              "type": "set_field",
+              "field": "status",
+              "value": "rejected"
+            },
+            {
+              "type": "set_timestamp",
+              "field": "reviewedAt"
+            },
+            {
+              "type": "set_user",
+              "field": "reviewedBy"
+            }
+          ]
+        }
+      ],
+      "storageBackend": "postgresql",
+      "status": "published"
+    },
+    {
+      "name": "Document",
+      "displayName": "Document",
+      "description": "A file or document attached to an application",
+      "properties": [
+        {
+          "name": "fileName",
+          "type": "text",
+          "required": true,
+          "indexed": true,
+          "description": "Original filename"
+        },
+        {
+          "name": "fileType",
+          "type": "text",
+          "required": true,
+          "description": "MIME type of the file (e.g., application/pdf)"
+        },
+        {
+          "name": "fileSize",
+          "type": "number",
+          "required": true,
+          "description": "File size in bytes"
+        },
+        {
+          "name": "storageUrl",
+          "type": "text",
+          "required": true,
+          "description": "URL or path to the stored file"
+        },
+        {
+          "name": "uploadedAt",
+          "type": "date",
+          "required": true,
+          "indexed": true,
+          "description": "Date when the document was uploaded"
+        },
+        {
+          "name": "uploadedBy",
+          "type": "text",
+          "required": true,
+          "description": "User ID who uploaded the document"
+        },
+        {
+          "name": "isVerified",
+          "type": "boolean",
+          "required": false,
+          "defaultValue": false,
+          "description": "Whether the document has been verified by staff"
+        }
+      ],
+      "linkTypes": [],
+      "actions": [
+        {
+          "name": "verify",
+          "displayName": "Verify Document",
+          "requiredRole": "tenant-builder",
+          "validationRules": {},
+          "sideEffects": [
+            {
+              "type": "set_field",
+              "field": "isVerified",
+              "value": true
+            }
+          ]
+        }
+      ],
+      "storageBackend": "postgresql",
+      "status": "published"
+    },
+    {
+      "name": "Notification",
+      "displayName": "Notification",
+      "description": "A notification sent to users about application status changes",
+      "properties": [
+        {
+          "name": "recipientEmail",
+          "type": "text",
+          "required": true,
+          "indexed": true,
+          "description": "Email address of the notification recipient"
+        },
+        {
+          "name": "subject",
+          "type": "text",
+          "required": true,
+          "description": "Email subject line"
+        },
+        {
+          "name": "body",
+          "type": "text",
+          "required": true,
+          "description": "Email body content"
+        },
+        {
+          "name": "sentAt",
+          "type": "date",
+          "required": false,
+          "indexed": true,
+          "description": "Date when the notification was sent"
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "defaultValue": "pending",
+          "options": [
+            {
+              "label": "Pending",
+              "value": "pending"
+            },
+            {
+              "label": "Sent",
+              "value": "sent"
+            },
+            {
+              "label": "Failed",
+              "value": "failed"
+            }
+          ],
+          "description": "Delivery status of the notification"
+        },
+        {
+          "name": "relatedApplicationId",
+          "type": "text",
+          "required": false,
+          "indexed": true,
+          "description": "ID of the related application (if applicable)"
+        }
+      ],
+      "linkTypes": [],
+      "actions": [],
+      "storageBackend": "postgresql",
+      "status": "published"
+    }
+  ]
+}
