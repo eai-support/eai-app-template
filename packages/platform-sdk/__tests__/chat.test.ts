@@ -45,14 +45,16 @@ describe('ChatModule', () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.message).toBe('Hello world');
-      expect(body.thread_id).toBeDefined();
+      expect(body.conversation_id).toBeDefined();
       expect(body.params).toEqual({ context: 'test' });
       // Verify wrong field names are NOT present
       expect(body.chat_input).toBeUndefined();
       expect(body.user_config).toBeUndefined();
+      expect(body.thread_id).toBeUndefined();
+      expect(body.threadId).toBeUndefined();
     });
 
-    it('auto-generates threadId if not provided', async () => {
+    it('auto-generates conversationId if not provided', async () => {
       const mockStream = new ReadableStream();
       mockFetch.mockResolvedValueOnce({ ok: true, body: mockStream });
 
@@ -64,10 +66,10 @@ describe('ChatModule', () => {
       });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.thread_id).toBe('test-uuid-1234');
+      expect(body.conversation_id).toBe('test-uuid-1234');
     });
 
-    it('uses provided threadId', async () => {
+    it('uses provided conversationId', async () => {
       const mockStream = new ReadableStream();
       mockFetch.mockResolvedValueOnce({ ok: true, body: mockStream });
 
@@ -75,12 +77,12 @@ describe('ChatModule', () => {
         workflowId: 'wf',
         stage: 's',
         message: 'test',
-        threadId: 'custom-id',
+        conversationId: 'custom-id',
         params: {},
       });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.thread_id).toBe('custom-id');
+      expect(body.conversation_id).toBe('custom-id');
     });
 
     it('uses streamBaseUrl (not baseUrl)', async () => {
@@ -108,12 +110,18 @@ describe('ChatModule', () => {
         workflowId: 'my-workflow',
         stage: 'chat',
         message: 'Hello',
-        threadId: 'thread-123',
+        conversationId: 'conversation-123',
         params: {},
       });
 
       const url = mockFetch.mock.calls[0][0] as string;
       expect(url).toBe('/api/eai/v3/chat/test-tenant/my-workflow/chat');
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.message).toBe('Hello');
+      expect(body.conversation_id).toBe('conversation-123');
+      expect(body.params).toEqual({});
+      expect(body.thread_id).toBeUndefined();
+      expect(body.threadId).toBeUndefined();
     });
 
     it('uses baseUrl (not streamBaseUrl)', async () => {
