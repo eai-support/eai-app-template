@@ -34,7 +34,7 @@ Browser → useChat hook → /api/eai/stream/v3/chat/stream/{tenant}/{workflow}/
 Key concepts:
 - **Workflow**: A named AI pipeline configured in the Configurator
 - **Stage**: A step within a workflow (e.g., `chat`, `classify`, `summarize`)
-- **Thread**: Identified by `conversation_id` for multi-turn context
+- **Conversation**: Identified by `conversation_id` for multi-turn context
 
 ## Step 2: Configure the Workflow
 
