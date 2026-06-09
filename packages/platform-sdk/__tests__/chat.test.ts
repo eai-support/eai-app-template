@@ -35,7 +35,7 @@ describe('ChatModule', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/stream/v3/chat/stream/test-tenant/my-workflow/chat',
+        '/api/eai/stream/v4/ai/chat/stream/test-tenant/my-workflow/chat',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -115,7 +115,7 @@ describe('ChatModule', () => {
       });
 
       const url = mockFetch.mock.calls[0][0] as string;
-      expect(url).toBe('/api/eai/v3/chat/test-tenant/my-workflow/chat');
+      expect(url).toBe('/api/eai/v4/ai/chat/test-tenant/my-workflow/chat');
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.message).toBe('Hello');
       expect(body.conversation_id).toBe('conversation-123');

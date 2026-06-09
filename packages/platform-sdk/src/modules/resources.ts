@@ -1,7 +1,7 @@
 /**
  * Resources Module
  *
- * CRUD operations on domain resources via /v3/resources/{tenant}/{type}[/{id}].
+ * CRUD operations on domain resources via /v4/data/resources/{tenant}/{type}[/{id}].
  * ResourceAPI routes tenant-scoped data to the configured backend while
  * preserving a consistent external REST contract.
  */
@@ -33,7 +33,7 @@ export class ResourcesModule {
       .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
       .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
       .toLowerCase();
-    const base = `${this.baseUrl}/v3/resources/${this.tenantId}/${slug}`;
+    const base = `${this.baseUrl}/v4/data/resources/${this.tenantId}/${slug}`;
     return id ? `${base}/${id}` : base;
   }
 
@@ -59,7 +59,12 @@ export class ResourcesModule {
         });
         return response.json();
       } catch (error) {
-        if (!(error instanceof PlatformError) || !error.isConflict || !enabled || attempt >= maxRetries) {
+        if (
+          !(error instanceof PlatformError) ||
+          !error.isConflict ||
+          !enabled ||
+          attempt >= maxRetries
+        ) {
           throw error;
         }
 
@@ -68,7 +73,7 @@ export class ResourcesModule {
         // without reimplementing conflict handling at every call site.
         const latest = await this.get(objectType, id);
         nextVersion = latest.version;
-        const delayMs = baseDelayMs * (2 ** attempt);
+        const delayMs = baseDelayMs * 2 ** attempt;
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         attempt += 1;
       }
@@ -102,11 +107,15 @@ export class ResourcesModule {
     objectType: string,
     options?: ListOptions,
   ): Promise<PaginatedResponse<Resource<T>>> {
-    const url = new URL(this.resourceUrl(objectType), globalThis.location?.origin || 'http://localhost');
+    const url = new URL(
+      this.resourceUrl(objectType),
+      globalThis.location?.origin || 'http://localhost',
+    );
     if (options?.page) url.searchParams.set('page', String(options.page));
     if (options?.limit) url.searchParams.set('limit', String(options.limit));
     if (options?.sort) url.searchParams.set('sort', options.sort);
-    if (options?.where) url.searchParams.set('where', JSON.stringify(options.where));
+    if (options?.where)
+      url.searchParams.set('where', JSON.stringify(options.where));
     if (options?.cursor) url.searchParams.set('cursor', options.cursor);
 
     const response = await platformFetch(url.pathname + url.search);
@@ -117,10 +126,14 @@ export class ResourcesModule {
     objectType: string,
     options?: Pick<ListOptions, 'limit' | 'sort' | 'where' | 'cursor'>,
   ): Promise<Response> {
-    const url = new URL(`${this.resourceUrl(objectType)}/stream`, globalThis.location?.origin || 'http://localhost');
+    const url = new URL(
+      `${this.resourceUrl(objectType)}/stream`,
+      globalThis.location?.origin || 'http://localhost',
+    );
     if (options?.limit) url.searchParams.set('limit', String(options.limit));
     if (options?.sort) url.searchParams.set('sort', options.sort);
-    if (options?.where) url.searchParams.set('where', JSON.stringify(options.where));
+    if (options?.where)
+      url.searchParams.set('where', JSON.stringify(options.where));
     if (options?.cursor) url.searchParams.set('cursor', options.cursor);
     return platformFetch(url.pathname + url.search);
   }
@@ -150,11 +163,14 @@ export class ResourcesModule {
     objectType: string,
     items: Array<BatchCreateItem<T>>,
   ): Promise<BatchResponse> {
-    const response = await platformFetch(`${this.resourceUrl(objectType)}/batch/create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items }),
-    });
+    const response = await platformFetch(
+      `${this.resourceUrl(objectType)}/batch/create`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      },
+    );
     return response.json();
   }
 
@@ -162,29 +178,41 @@ export class ResourcesModule {
     objectType: string,
     items: Array<BatchUpdateItem<T>>,
   ): Promise<BatchResponse> {
-    const response = await platformFetch(`${this.resourceUrl(objectType)}/batch/update`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items }),
-    });
+    const response = await platformFetch(
+      `${this.resourceUrl(objectType)}/batch/update`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      },
+    );
     return response.json();
   }
 
   async batchDelete(objectType: string, ids: string[]): Promise<BatchResponse> {
-    const response = await platformFetch(`${this.resourceUrl(objectType)}/batch/delete`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids }),
-    });
+    const response = await platformFetch(
+      `${this.resourceUrl(objectType)}/batch/delete`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      },
+    );
     return response.json();
   }
 
-  async aggregate(objectType: string, request: AggregateRequest): Promise<AggregateResponse> {
-    const response = await platformFetch(`${this.resourceUrl(objectType)}/aggregate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-    });
+  async aggregate(
+    objectType: string,
+    request: AggregateRequest,
+  ): Promise<AggregateResponse> {
+    const response = await platformFetch(
+      `${this.resourceUrl(objectType)}/aggregate`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      },
+    );
     return response.json();
   }
 
@@ -225,7 +253,10 @@ export class ResourcesModule {
     targetId: string,
     targetType: string,
   ): Promise<Response> {
-    const body: CreateLinkRequest = { target_id: targetId, target_type: targetType };
+    const body: CreateLinkRequest = {
+      target_id: targetId,
+      target_type: targetType,
+    };
     return platformFetch(
       `${this.resourceUrl(objectType, id)}/links/${linkType}`,
       {
@@ -254,7 +285,7 @@ export class ResourcesModule {
     request: QueryRequest,
   ): Promise<PaginatedResponse<Resource<T>>> {
     const response = await platformFetch(
-      `${this.baseUrl}/v3/resources/${this.tenantId}/query`,
+      `${this.baseUrl}/v4/data/resources/${this.tenantId}/query`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -267,7 +298,7 @@ export class ResourcesModule {
   /** Get the schema for all object types in this tenant. */
   async getSchema(): Promise<Record<string, unknown>> {
     const response = await platformFetch(
-      `${this.baseUrl}/v3/resources/schema/${this.tenantId}`,
+      `${this.baseUrl}/v4/data/resources/schema/${this.tenantId}`,
     );
     return response.json();
   }

@@ -106,37 +106,6 @@ export interface RetryOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Orchestration types (from PublicAPI orchestration.py)
-// ---------------------------------------------------------------------------
-
-export type TargetBackend = 'payload' | 'mid' | 'resources';
-
-export interface OrchestrationMultipart {
-  file_field_name?: string;
-  filename: string;
-  content_base64: string;
-  content_type?: string;
-  form_data?: Record<string, string>;
-}
-
-export interface OrchestrationRequest {
-  target_backend: TargetBackend;
-  /**
-   * Endpoint path on the target backend.
-   * CRITICAL: For target_backend "payload", do NOT include /api prefix.
-   * The orchestrator_service already prepends /api.
-   * Use "/object-types" not "/api/object-types".
-   */
-  endpoint: string;
-  /** HTTP method. Defaults to "POST" on the server. */
-  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
-  body?: unknown;
-  headers?: Record<string, string>;
-  params?: Record<string, unknown>;
-  multipart?: OrchestrationMultipart;
-}
-
-// ---------------------------------------------------------------------------
 // Chat types (from PublicAPI chat.py ChatRequest)
 // ---------------------------------------------------------------------------
 

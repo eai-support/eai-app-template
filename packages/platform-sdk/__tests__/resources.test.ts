@@ -30,7 +30,7 @@ describe('ResourcesModule', () => {
       await resources.create('Application', resourceData);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application',
+        '/api/eai/v4/data/resources/test-tenant/application',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -47,7 +47,7 @@ describe('ResourcesModule', () => {
       await resources.get('Application', '123');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/123',
+        '/api/eai/v4/data/resources/test-tenant/application/123',
         undefined,
       );
     });
@@ -55,12 +55,18 @@ describe('ResourcesModule', () => {
 
   describe('list', () => {
     it('includes cursor when provided', async () => {
-      mockOkResponse({ docs: [], totalDocs: 0, page: 1, totalPages: 1, nextCursor: null });
+      mockOkResponse({
+        docs: [],
+        totalDocs: 0,
+        page: 1,
+        totalPages: 1,
+        nextCursor: null,
+      });
 
       await resources.list('Application', { limit: 5, cursor: 'cursor-1' });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application?limit=5&cursor=cursor-1',
+        '/api/eai/v4/data/resources/test-tenant/application?limit=5&cursor=cursor-1',
         undefined,
       );
     });
@@ -74,7 +80,7 @@ describe('ResourcesModule', () => {
       await resources.update('Application', '123', data, 1);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/123',
+        '/api/eai/v4/data/resources/test-tenant/application/123',
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -95,7 +101,12 @@ describe('ResourcesModule', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ id: '123', data: { status: 'draft' }, version: 2 }),
+          json: () =>
+            Promise.resolve({
+              id: '123',
+              data: { status: 'draft' },
+              version: 2,
+            }),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -111,7 +122,7 @@ describe('ResourcesModule', () => {
       expect(updated.version).toBe(3);
       expect(mockFetch).toHaveBeenNthCalledWith(
         1,
-        '/api/eai/v3/resources/test-tenant/application/123',
+        '/api/eai/v4/data/resources/test-tenant/application/123',
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -120,12 +131,12 @@ describe('ResourcesModule', () => {
       );
       expect(mockFetch).toHaveBeenNthCalledWith(
         2,
-        '/api/eai/v3/resources/test-tenant/application/123',
+        '/api/eai/v4/data/resources/test-tenant/application/123',
         undefined,
       );
       expect(mockFetch).toHaveBeenNthCalledWith(
         3,
-        '/api/eai/v3/resources/test-tenant/application/123',
+        '/api/eai/v4/data/resources/test-tenant/application/123',
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -142,7 +153,7 @@ describe('ResourcesModule', () => {
       await resources.delete('Application', '123');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/123',
+        '/api/eai/v4/data/resources/test-tenant/application/123',
         { method: 'DELETE' },
       );
     });
@@ -152,10 +163,12 @@ describe('ResourcesModule', () => {
     it('sends POST to action endpoint with params wrapper', async () => {
       mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
 
-      await resources.executeAction('Application', '123', 'submit', { note: 'test' });
+      await resources.executeAction('Application', '123', 'submit', {
+        note: 'test',
+      });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/123/actions/submit',
+        '/api/eai/v4/data/resources/test-tenant/application/123/actions/submit',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -170,7 +183,7 @@ describe('ResourcesModule', () => {
       await resources.executeAction('Application', '123', 'submit');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/123/actions/submit',
+        '/api/eai/v4/data/resources/test-tenant/application/123/actions/submit',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -187,7 +200,7 @@ describe('ResourcesModule', () => {
       await resources.getLinks('Application', '123', 'documents');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/123/links/documents',
+        '/api/eai/v4/data/resources/test-tenant/application/123/links/documents',
         undefined,
       );
     });
@@ -197,10 +210,16 @@ describe('ResourcesModule', () => {
     it('sends POST with target_id and target_type', async () => {
       mockFetch.mockResolvedValueOnce({ ok: true, status: 201 });
 
-      await resources.createLink('Application', '123', 'documents', '456', 'Document');
+      await resources.createLink(
+        'Application',
+        '123',
+        'documents',
+        '456',
+        'Document',
+      );
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/123/links/documents',
+        '/api/eai/v4/data/resources/test-tenant/application/123/links/documents',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -217,7 +236,7 @@ describe('ResourcesModule', () => {
       await resources.deleteLink('Application', '123', 'documents', '456');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/123/links/documents/456',
+        '/api/eai/v4/data/resources/test-tenant/application/123/links/documents/456',
         { method: 'DELETE' },
       );
     });
@@ -234,7 +253,7 @@ describe('ResourcesModule', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/query',
+        '/api/eai/v4/data/resources/test-tenant/query',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -250,16 +269,24 @@ describe('ResourcesModule', () => {
 
   describe('batchCreate', () => {
     it('sends batch create payload to the batch endpoint', async () => {
-      mockOkResponse({ succeeded: 1, failed: 0, results: [{ index: 0, id: '123', success: true, version: 1 }] });
+      mockOkResponse({
+        succeeded: 1,
+        failed: 0,
+        results: [{ index: 0, id: '123', success: true, version: 1 }],
+      });
 
-      await resources.batchCreate('Application', [{ data: { applicantName: 'Jane' } }]);
+      await resources.batchCreate('Application', [
+        { data: { applicantName: 'Jane' } },
+      ]);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/batch/create',
+        '/api/eai/v4/data/resources/test-tenant/application/batch/create',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: [{ data: { applicantName: 'Jane' } }] }),
+          body: JSON.stringify({
+            items: [{ data: { applicantName: 'Jane' } }],
+          }),
         },
       );
     });
@@ -267,16 +294,24 @@ describe('ResourcesModule', () => {
 
   describe('batchUpdate', () => {
     it('sends batch update payload to the batch endpoint', async () => {
-      mockOkResponse({ succeeded: 1, failed: 0, results: [{ index: 0, id: '123', success: true, version: 2 }] });
+      mockOkResponse({
+        succeeded: 1,
+        failed: 0,
+        results: [{ index: 0, id: '123', success: true, version: 2 }],
+      });
 
-      await resources.batchUpdate('Application', [{ id: '123', data: { status: 'submitted' }, version: 1 }]);
+      await resources.batchUpdate('Application', [
+        { id: '123', data: { status: 'submitted' }, version: 1 },
+      ]);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/batch/update',
+        '/api/eai/v4/data/resources/test-tenant/application/batch/update',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: [{ id: '123', data: { status: 'submitted' }, version: 1 }] }),
+          body: JSON.stringify({
+            items: [{ id: '123', data: { status: 'submitted' }, version: 1 }],
+          }),
         },
       );
     });
@@ -284,12 +319,16 @@ describe('ResourcesModule', () => {
 
   describe('batchDelete', () => {
     it('sends batch delete ids to the batch endpoint', async () => {
-      mockOkResponse({ succeeded: 1, failed: 0, results: [{ index: 0, id: '123', success: true }] });
+      mockOkResponse({
+        succeeded: 1,
+        failed: 0,
+        results: [{ index: 0, id: '123', success: true }],
+      });
 
       await resources.batchDelete('Application', ['123']);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/batch/delete',
+        '/api/eai/v4/data/resources/test-tenant/application/batch/delete',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -310,7 +349,7 @@ describe('ResourcesModule', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/aggregate',
+        '/api/eai/v4/data/resources/test-tenant/application/aggregate',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -331,7 +370,7 @@ describe('ResourcesModule', () => {
       await resources.getSchema();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/schema/test-tenant',
+        '/api/eai/v4/data/resources/schema/test-tenant',
         undefined,
       );
     });
@@ -344,7 +383,7 @@ describe('ResourcesModule', () => {
       await resources.getHistory('Application', '123');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/application/123/history',
+        '/api/eai/v4/data/resources/test-tenant/application/123/history',
         undefined,
       );
     });
@@ -356,7 +395,8 @@ describe('ResourcesModule', () => {
         ok: false,
         status: 404,
         statusText: 'Not Found',
-        json: () => Promise.resolve({ message: 'Resource not found', code: 'NOT_FOUND' }),
+        json: () =>
+          Promise.resolve({ message: 'Resource not found', code: 'NOT_FOUND' }),
       });
 
       await expect(resources.get('Application', 'missing')).rejects.toThrow();
@@ -370,7 +410,7 @@ describe('ResourcesModule', () => {
       await resources.get('TrendDigest', '1');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/trend-digest/1',
+        '/api/eai/v4/data/resources/test-tenant/trend-digest/1',
         undefined,
       );
     });
@@ -381,7 +421,7 @@ describe('ResourcesModule', () => {
       await resources.get('APIKey', '1');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        '/api/eai/v3/resources/test-tenant/api-key/1',
+        '/api/eai/v4/data/resources/test-tenant/api-key/1',
         undefined,
       );
     });

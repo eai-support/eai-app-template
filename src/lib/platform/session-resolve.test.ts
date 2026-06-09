@@ -63,6 +63,33 @@ describe('resolvePublicApiBaseUrl', () => {
     );
   });
 
+  it('HP001 uses the v4 identity bootstrap route when enabled', async () => {
+    process.env.PUBLICAPI_V4_IDENTITY_ENABLED = 'true';
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: 'resolved',
+        userId: 'user-123',
+        product: 'eai-app-template',
+        productAllowed: true,
+        apiBaseUrl: 'https://api.eu.example.com',
+        appBaseUrl: null,
+        routingMode: 'api_only',
+      }),
+    });
+
+    await resolvePublicApiBaseUrl({
+      accessToken: 'user-token',
+      fallbackBaseUrl: 'https://api.test.example.com',
+      product: 'eai-app-template',
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.example.com/v4/identity/session/resolve',
+      expect.any(Object),
+    );
+  });
+
   it('throws RoutingResolutionError when tenant selection is required', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
@@ -98,7 +125,10 @@ describe('resolvePublicApiBaseUrl', () => {
       throw new Error('Expected RoutingResolutionError to be thrown');
     } catch (error) {
       expect(error).toHaveProperty('statusCode', 409);
-      expect(error).toHaveProperty('responseBody.candidateTenants.0.id', 'tenant-eu');
+      expect(error).toHaveProperty(
+        'responseBody.candidateTenants.0.id',
+        'tenant-eu',
+      );
     }
   });
 

@@ -1,4 +1,9 @@
-export type SessionResolveStatus = 'resolved' | 'selection_required' | 'blocked';
+import { resolvePublicApiRoutePath } from '@/lib/platform/publicapi-route-family';
+
+export type SessionResolveStatus =
+  | 'resolved'
+  | 'selection_required'
+  | 'blocked';
 
 export interface SessionResolveCandidateTenant {
   id: string;
@@ -21,7 +26,12 @@ export interface SessionResolveResponse {
   productAllowed: boolean;
   apiBaseUrl?: string | null;
   appBaseUrl?: string | null;
-  routingMode: 'redirect' | 'in_place' | 'api_only' | 'selection_required' | 'blocked';
+  routingMode:
+    | 'redirect'
+    | 'in_place'
+    | 'api_only'
+    | 'selection_required'
+    | 'blocked';
   currentHostMatchesTarget?: boolean | null;
   reason?: string | null;
   candidateTenants?: SessionResolveCandidateTenant[];
@@ -62,7 +72,11 @@ function normalizeBaseUrl(baseUrl?: string | null): string | null {
 export function getRoutingRedirectUrl(
   routing: SessionResolveResponse | null,
 ): string | null {
-  if (!routing || routing.status !== 'resolved' || routing.routingMode !== 'redirect') {
+  if (
+    !routing ||
+    routing.status !== 'resolved' ||
+    routing.routingMode !== 'redirect'
+  ) {
     return null;
   }
 
@@ -71,14 +85,15 @@ export function getRoutingRedirectUrl(
 
 function buildBootstrapResolveUrl(): string {
   const bootstrapBaseUrl = normalizeBaseUrl(
-    process.env.ROUTING_BOOTSTRAP_PUBLIC_API_URL ?? DEFAULT_BOOTSTRAP_PUBLIC_API_URL,
+    process.env.ROUTING_BOOTSTRAP_PUBLIC_API_URL ??
+      DEFAULT_BOOTSTRAP_PUBLIC_API_URL,
   );
 
   if (!bootstrapBaseUrl) {
-    return `${DEFAULT_BOOTSTRAP_PUBLIC_API_URL}/v3/session/resolve`;
+    return `${DEFAULT_BOOTSTRAP_PUBLIC_API_URL}/${resolvePublicApiRoutePath('v3/session/resolve')}`;
   }
 
-  return `${bootstrapBaseUrl}/v3/session/resolve`;
+  return `${bootstrapBaseUrl}/${resolvePublicApiRoutePath('v3/session/resolve')}`;
 }
 
 export async function resolvePublicApiBaseUrl(
@@ -133,7 +148,10 @@ export async function resolvePublicApiBaseUrl(
       return { baseUrl: fallbackBaseUrl, routing: null };
     }
 
-    throw new RoutingResolutionError('Routing bootstrap returned an empty response', 502);
+    throw new RoutingResolutionError(
+      'Routing bootstrap returned an empty response',
+      502,
+    );
   }
 
   if (payload.status === 'resolved' && payload.apiBaseUrl) {
@@ -144,7 +162,11 @@ export async function resolvePublicApiBaseUrl(
   }
 
   if (payload.status === 'selection_required') {
-    throw new RoutingResolutionError('Tenant selection is required before routing can continue', 409, payload);
+    throw new RoutingResolutionError(
+      'Tenant selection is required before routing can continue',
+      409,
+      payload,
+    );
   }
 
   if (payload.status === 'blocked') {
@@ -159,5 +181,9 @@ export async function resolvePublicApiBaseUrl(
     return { baseUrl: fallbackBaseUrl, routing: payload };
   }
 
-  throw new RoutingResolutionError('Routing bootstrap did not return apiBaseUrl', 502, payload);
+  throw new RoutingResolutionError(
+    'Routing bootstrap did not return apiBaseUrl',
+    502,
+    payload,
+  );
 }

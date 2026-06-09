@@ -24,9 +24,6 @@ export type {
   BatchCreateItem,
   BatchResponse,
   BatchUpdateItem,
-  TargetBackend,
-  OrchestrationMultipart,
-  OrchestrationRequest,
   ChatMessage,
   ChatStreamOptions,
   ProvisionMeRequest,
@@ -43,4 +40,3 @@ export type { ChatModule } from './modules/chat';
 export type { DocumentsModule } from './modules/documents';
 export type { UsersModule } from './modules/users';
 export type { AuthModule } from './modules/auth';
-export type { OrchestrateModule } from './modules/orchestrate';
