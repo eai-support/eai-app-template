@@ -7,7 +7,7 @@ import type { ChatStreamOptions } from '@enterpriseaigroup/platform-sdk';
 /**
  * Chat hook using Platform SDK.
  *
- * @param workflowId - Configurator workflow ID
+ * @param workflowId - Platform workflow ID
  * @param stage - Workflow stage (e.g., 'chat')
  * @param tenantId - Optional tenant ID override
  *
@@ -22,11 +22,7 @@ import type { ChatStreamOptions } from '@enterpriseaigroup/platform-sdk';
  * });
  * ```
  */
-export function useChat(
-  workflowId: string,
-  stage: string,
-  tenantId?: string,
-) {
+export function useChat(workflowId: string, stage: string, tenantId?: string) {
   const client = useMemo(
     () => new EAIPlatformClient({ tenantId: tenantId || '' }),
     [tenantId],

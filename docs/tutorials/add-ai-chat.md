@@ -3,64 +3,63 @@ sidebar_position: 2
 slug: /tutorials/add-ai-chat
 ---
 
-# Tutorial: Add AI Chat to Your Vertical
+# Tutorial: Add AI Chat To Your App
 
-Add a streaming AI chat interface to your vertical application using AICore. This tutorial walks you through configuring a chat workflow, building a chat UI with real-time streaming, and integrating document-based RAG.
+Add a streaming AI chat interface to an EAI App Template project through the
+template hooks and BFF routes. Browser code should call the local app boundary;
+it should not call model providers or downstream platform services directly.
 
 ## What You'll Build
 
-- A streaming chat interface with SSE (Server-Sent Events)
-- Context-aware AI responses using your domain documents
-- Document upload and RAG indexing
+- A streaming chat interface using Server-Sent Events.
+- Multi-turn conversations with a stable `conversation_id`.
+- Document upload and RAG indexing through the template document hook.
 
 ## Prerequisites
 
-- A working vertical project (see [Build a Task Tracker](/docs/tutorials/build-a-task-tracker))
-- Authenticated with `eai login`
-- Object Types seeded to the platform
+- A working app project. See [Build a Task Tracker](/docs/tutorials/build-a-task-tracker).
+- Authenticated with `eai login`.
+- A selected tenant with Object Types seeded to the platform.
+- A platform workflow ID supplied by onboarding, tenant configuration, or
+  `eai workflow status`.
 
-## Step 1: Understand the AI Architecture
+## Step 1: Understand The Public Boundary
 
-```
-Browser → useChat hook → /api/eai/stream/v3/chat/stream/{tenant}/{workflow}/{stage}
-                                    ↓
-                              BFF Stream Proxy (injects Bearer token)
-                                    ↓
-                              PublicAPI → AICore
-                                    ↓
-                              SSE events stream back to browser
+```text
+Browser
+  -> useChat hook
+  -> /api/eai/stream/...
+  -> app BFF attaches auth and tenant context
+  -> PublicAPI chat route
+  -> SSE events stream back to the browser
 ```
 
 Key concepts:
-- **Workflow**: A named AI pipeline configured in the Configurator
-- **Stage**: A step within a workflow (e.g., `chat`, `classify`, `summarize`)
-- **Conversation**: Identified by `conversation_id` for multi-turn context
 
-## Step 2: Configure the Workflow
+- **Workflow**: A named AI workflow available to the tenant.
+- **Stage**: A step within that workflow, such as `chat`.
+- **Conversation**: A stable `conversation_id` used for multi-turn context.
 
-Your workflow needs to be registered in the Configurator. Use the CLI:
+## Step 2: Confirm The Workflow
 
-```bash
-# Check if your workflow exists
-eai verify
-```
-
-The workflow ID is configured in your `.env.local`:
+Use the CLI before wiring UI to the workflow:
 
 ```bash
-WORKFLOW_tracker_ID=<workflow-id-from-configurator>
+eai workflow status <workflow-key> --tenant <tenant-id>
+eai chat send "What can you help me with?" --workflow <workflow-id> --tenant <tenant-id>
 ```
 
-If you need to create a workflow, contact your platform admin or use the Configurator UI.
+Store runtime IDs in local or deployment environment configuration, not in
+committed source.
 
-## Step 3: Build the Chat Page
+## Step 3: Build The Chat Page
 
 Create `src/app/(presentation)/chat/page.tsx`:
 
 ```tsx
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useChat } from '@/hooks/useChat';
 
 interface Message {
@@ -68,8 +67,11 @@ interface Message {
   content: string;
 }
 
+const workflowId = 'task-workflow';
+const stage = 'chat';
+
 export default function ChatPage() {
-  const { stream } = useChat();
+  const { stream } = useChat(workflowId, stage);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -80,17 +82,19 @@ export default function ChatPage() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    if (!input.trim() || isStreaming) return;
+  async function handleSend(event: React.FormEvent) {
+    event.preventDefault();
 
-    const userMessage = input;
+    const userMessage = input.trim();
+    if (!userMessage || isStreaming) return;
+
     setInput('');
-    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
+    setMessages((current) => [
+      ...current,
+      { role: 'user', content: userMessage },
+      { role: 'assistant', content: '' },
+    ]);
     setIsStreaming(true);
-
-    // Add empty assistant message for streaming
-    setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
 
     try {
       const reader = await stream({
@@ -99,90 +103,76 @@ export default function ChatPage() {
         params: {},
       });
 
-      let fullContent = '';
       const decoder = new TextDecoder();
+      let assistantText = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        // Parse SSE data lines
-        const lines = chunk.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') break;
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.content) {
-                fullContent += parsed.content;
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    role: 'assistant',
-                    content: fullContent,
-                  };
-                  return updated;
-                });
-              }
-            } catch {
-              // Non-JSON SSE line, skip
-            }
-          }
-        }
+        assistantText += decoder.decode(value, { stream: true });
+        setMessages((current) =>
+          current.map((message, index) =>
+            index === current.length - 1
+              ? { ...message, content: assistantText }
+              : message,
+          ),
+        );
       }
-    } catch (error) {
-      console.error('Chat stream error:', error);
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[updated.length - 1] = {
-          role: 'assistant',
-          content: 'Sorry, something went wrong. Please try again.',
-        };
-        return updated;
-      });
+    } catch {
+      setMessages((current) =>
+        current.map((message, index) =>
+          index === current.length - 1
+            ? {
+                ...message,
+                content: 'Sorry, something went wrong. Please try again.',
+              }
+            : message,
+        ),
+      );
     } finally {
       setIsStreaming(false);
     }
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+    <div className='flex h-[calc(100vh-4rem)] flex-col'>
+      <div className='flex-1 space-y-4 overflow-y-auto p-6'>
         {messages.length === 0 && (
-          <div className="text-center text-muted-foreground mt-20">
-            <h2 className="text-xl font-medium mb-2">AI Assistant</h2>
-            <p>Ask me anything about your domain.</p>
+          <div className='text-muted-foreground mt-20 text-center'>
+            <h2 className='mb-2 text-xl font-medium'>AI Assistant</h2>
+            <p>Ask me anything about this workspace.</p>
           </div>
         )}
-        {messages.map((msg, i) => (
+
+        {messages.map((message, index) => (
           <div
-            key={i}
-            className={`max-w-[80%] p-4 rounded-lg ${
-              msg.role === 'user'
-                ? 'ml-auto bg-primary text-primary-foreground'
+            key={index}
+            className={`max-w-[80%] rounded-lg p-4 ${
+              message.role === 'user'
+                ? 'bg-primary text-primary-foreground ml-auto'
                 : 'bg-muted'
             }`}
           >
-            {msg.content || (isStreaming && i === messages.length - 1 ? '...' : '')}
+            {message.content ||
+              (isStreaming && index === messages.length - 1 ? '...' : '')}
           </div>
         ))}
         <div ref={endRef} />
       </div>
 
-      <form onSubmit={handleSend} className="border-t p-4 flex gap-2">
+      <form onSubmit={handleSend} className='flex gap-2 border-t p-4'>
         <input
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message..."
-          className="flex-1 border rounded-md px-3 py-2"
+          onChange={(event) => setInput(event.target.value)}
+          placeholder='Type your message...'
+          className='flex-1 rounded-md border px-3 py-2'
           disabled={isStreaming}
         />
         <button
-          type="submit"
+          type='submit'
           disabled={isStreaming || !input.trim()}
-          className="px-4 py-2 bg-primary text-white rounded-md disabled:opacity-50"
+          className='bg-primary rounded-md px-4 py-2 text-white disabled:opacity-50'
         >
           Send
         </button>
@@ -192,54 +182,61 @@ export default function ChatPage() {
 }
 ```
 
-## Step 4: Add Document Upload for RAG
+## Step 4: Add Document Upload For RAG
 
-Create a document upload component that feeds documents into the RAG index:
+Create a document upload component that feeds documents into the platform RAG
+index:
 
 ```tsx
 'use client';
 
-import { useDocuments } from '@/hooks/useDocuments';
 import { useState } from 'react';
+import { useDocuments } from '@/hooks/useDocuments';
 
 export function DocumentUploader() {
-  const { upload, index } = useDocuments();
-  const [status, setStatus] = useState<string>('');
+  const { upload, ragIndex } = useDocuments();
+  const [status, setStatus] = useState('');
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
     if (!file) return;
 
     setStatus('Uploading...');
-    const doc = await upload(file);
+    const uploaded = await upload(file, { category: 'knowledge-source' });
 
     setStatus('Indexing for RAG...');
-    await index(doc.id);
+    await ragIndex(uploaded.documentId);
 
-    setStatus(`Done! Document "${file.name}" is now searchable.`);
+    setStatus(`Done. ${file.name} is now available to the workflow.`);
   }
 
   return (
-    <div className="border rounded-lg p-4">
-      <h3 className="font-medium mb-2">Upload Knowledge Document</h3>
-      <input type="file" onChange={handleUpload} accept=".pdf,.docx,.txt,.md" />
-      {status && <p className="text-sm text-muted-foreground mt-2">{status}</p>}
+    <div className='rounded-lg border p-4'>
+      <h3 className='mb-2 font-medium'>Upload Knowledge Document</h3>
+      <input type='file' onChange={handleUpload} accept='.pdf,.docx,.txt,.md' />
+      {status && <p className='text-muted-foreground mt-2 text-sm'>{status}</p>}
     </div>
   );
 }
 ```
 
-## Step 5: Wire It Up
+## Step 5: Wire It Into Config
 
-Add the chat page to your navigation. In your tenant config:
+Add the chat link through a normal registered component and the template slot
+shape:
 
-```typescript
+```ts
 layout: {
-  sidebar: [
-    { component: 'NavLink', props: { href: '/tasks', label: 'Tasks' }, priority: 1 },
-    { component: 'NavLink', props: { href: '/chat', label: 'AI Chat' }, priority: 2 },
-  ],
-},
+  leftPane: {
+    components: [
+      {
+        component: "NavLink",
+        priority: 10,
+        props: { href: "/chat", label: "AI Chat" },
+      },
+    ],
+  },
+}
 ```
 
 ## Step 6: Test It
@@ -248,40 +245,27 @@ layout: {
 eai dev
 ```
 
-1. Navigate to http://localhost:3000/chat
-2. Type a message and watch the response stream in
-3. Upload a document and ask questions about its content
+1. Navigate to `http://localhost:3000/chat`.
+2. Send a message and confirm the response streams back.
+3. Upload a document and ask a question that should use that document context.
 
-You can also test from the CLI:
+You can also smoke test from the CLI:
 
 ```bash
-# Quick test
-eai chat send "What can you help me with?"
-
-# Interactive streaming
-eai chat stream "Tell me about the uploaded documents"
+eai chat send "What can you help me with?" --workflow <workflow-id>
+eai chat stream "Summarise the uploaded documents" --workflow <workflow-id>
 ```
-
-## How the SSE Proxy Works
-
-The stream proxy at `src/app/api/eai/stream/[[...rest]]/route.ts` handles SSE differently from regular API calls:
-
-1. Sets `Content-Type: text/event-stream` header
-2. Disables response buffering (`Cache-Control: no-cache`)
-3. Keeps connection alive (`Connection: keep-alive`)
-4. Forwards the `ReadableStream` directly from PublicAPI to the browser
-
-This is why chat uses `/api/eai/stream/` while all other calls use `/api/eai/`.
 
 ## What You Learned
 
-- **SSE Streaming**: Real-time chat with Server-Sent Events through the BFF proxy
-- **useChat Hook**: Abstraction over the streaming protocol
-- **Conversation Management**: Multi-turn context with `conversation_id`
-- **Document RAG**: Upload, index, and query documents through AICore
+- How to call chat through `useChat`.
+- How to keep streaming behind `/api/eai/stream/...`.
+- How to use `conversation_id` for multi-turn context.
+- How to upload and index documents through `useDocuments`.
 
 ## Next Steps
 
-- [Deploy to Azure](/docs/tutorials/deploy-to-azure) — Ship your AI-powered vertical
-- [Architecture Overview](/docs/architecture/overview) — Understand the full platform stack
-- [AI Integration Guide](/docs/extending/public-api-access) — Advanced AI patterns
+- [EAI Service Patterns](/docs/platform/eai-service-patterns) — Choose resource,
+  document, chat, and PublicAPI patterns.
+- [Deploy An EAI App](/docs/tutorials/deploy-to-azure) — Ship the app using
+  your organization's approved deployment path.
