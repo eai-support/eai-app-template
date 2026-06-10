@@ -11,6 +11,9 @@ Complete reference for all EAI CLI commands.
 
 Scaffold a new vertical application from the template.
 
+The default template comes from the latest `main` commit pinned in the released
+`eai` CLI manifest, rather than from a separate template release tag.
+
 ```bash
 eai init [name] [options]
 ```

@@ -7,6 +7,9 @@ A production-ready Next.js template for building tenant-scoped applications on t
 ## What This Template Assumes
 
 - App developers work through the `eai` CLI, not direct platform credentials.
+- The `eai` CLI release manifest pins this repository's latest `main` commit
+  when the CLI is released; this template does not need a separate template
+  release tag.
 - Object types declare a logical storage backend such as `postgresql`, `documentdb`, `blob`, or `search`.
 - Tenant connections resolve the physical store for that tenant at runtime.
 - PublicAPI and ResourceAPI enforce tenant access. Frontends do not receive raw Blob, DocumentDB, PostgreSQL, or AI Search credentials.
