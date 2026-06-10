@@ -97,6 +97,8 @@ Full documentation is available at **https://eai-tools.github.io/eai-app-docs/**
 - Getting started and onboarding
 - CLI usage and tenant workflows
 - Architecture and tenant data-plane patterns
+- Platform service usage patterns for resources, storage, documents, search, and chat
+- Config-driven UI composition with store bindings and component registries
 - App configuration and extension points
 
 ## License

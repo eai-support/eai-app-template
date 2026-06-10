@@ -10,6 +10,7 @@ Build a fully functional task tracking application on the Enterprise AI platform
 ## What You'll Build
 
 A task tracker with:
+
 - Task list with filtering and pagination
 - Task creation and editing
 - Status workflow (draft → in-progress → done)
@@ -35,22 +36,41 @@ This clones the EAI App Template and sets up the project structure.
 Create a tenant configuration at `src/eai.config/tenants/tracker.config.ts`:
 
 ```typescript
-import type { EAIConfig } from '../types';
+import { defineConfig } from '@enterpriseaigroup/core/config/server';
 
-export const trackerConfig: EAIConfig = {
+export const trackerConfig = defineConfig({
   tenantId: 'task-tracker',
+  workflowId: 'task-workflow',
+  defaultEmail: 'support@example.com',
   meta: {
     title: 'Task Tracker',
     description: 'AI-powered task management',
   },
   store: {
     user: { initialState: { name: null }, persist: true },
+    tasks: {
+      initialState: { items: [], isLoading: false, selectedId: null },
+      persist: true,
+    },
   },
   layout: {
-    header: [{ component: 'Header', priority: 1 }],
-    middlePane: [{ component: 'Dashboard', priority: 1 }],
+    header: {
+      components: [{ component: 'Header', priority: 1 }],
+    },
+    middlePane: {
+      components: [
+        {
+          component: 'Dashboard',
+          priority: 1,
+          storeBindings: [
+            { prop: 'tasks', storePath: 'tasks.items' },
+            { prop: 'isLoading', storePath: 'tasks.isLoading' },
+          ],
+        },
+      ],
+    },
   },
-};
+});
 ```
 
 Register it in `src/eai.config/index.ts`:
@@ -58,7 +78,8 @@ Register it in `src/eai.config/index.ts`:
 ```typescript
 import { trackerConfig } from './tenants/tracker.config';
 
-export const configs: Record<string, EAIConfig> = {
+export const tenantConfigs = {
+  default: trackerConfig,
   'task-tracker': trackerConfig,
 };
 ```
@@ -182,29 +203,37 @@ export default function TasksPage() {
     done: 'bg-green-100 text-green-700',
   };
 
-  if (loading) return <div className="p-8 text-center">Loading tasks...</div>;
+  if (loading) return <div className='p-8 text-center'>Loading tasks...</div>;
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Tasks</h1>
-        <a href="/tasks/new" className="px-4 py-2 bg-primary text-white rounded-md">
+    <div className='p-6'>
+      <div className='mb-6 flex items-center justify-between'>
+        <h1 className='text-2xl font-bold'>Tasks</h1>
+        <a
+          href='/tasks/new'
+          className='bg-primary rounded-md px-4 py-2 text-white'
+        >
           New Task
         </a>
       </div>
-      <div className="space-y-3">
+      <div className='space-y-3'>
         {tasks.map((task) => (
-          <div key={task.id} className="border rounded-lg p-4 hover:bg-muted/30">
-            <div className="flex justify-between items-start">
+          <div
+            key={task.id}
+            className='hover:bg-muted/30 rounded-lg border p-4'
+          >
+            <div className='flex items-start justify-between'>
               <div>
-                <h3 className="font-medium">{task.data.title}</h3>
+                <h3 className='font-medium'>{task.data.title}</h3>
                 {task.data.description && (
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <p className='text-muted-foreground mt-1 text-sm'>
                     {task.data.description}
                   </p>
                 )}
               </div>
-              <span className={`text-xs px-2 py-1 rounded-full ${statusColors[task.data.status]}`}>
+              <span
+                className={`rounded-full px-2 py-1 text-xs ${statusColors[task.data.status]}`}
+              >
                 {task.data.status}
               </span>
             </div>
@@ -249,40 +278,43 @@ export default function NewTaskPage() {
   }
 
   return (
-    <div className="p-6 max-w-lg">
-      <h1 className="text-2xl font-bold mb-6">New Task</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <div className='max-w-lg p-6'>
+      <h1 className='mb-6 text-2xl font-bold'>New Task</h1>
+      <form onSubmit={handleSubmit} className='space-y-4'>
         <div>
-          <label className="block text-sm font-medium mb-1">Title</label>
+          <label className='mb-1 block text-sm font-medium'>Title</label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full border rounded-md px-3 py-2"
+            className='w-full rounded-md border px-3 py-2'
             required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Description</label>
+          <label className='mb-1 block text-sm font-medium'>Description</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full border rounded-md px-3 py-2"
+            className='w-full rounded-md border px-3 py-2'
             rows={3}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Priority</label>
+          <label className='mb-1 block text-sm font-medium'>Priority</label>
           <select
             value={priority}
             onChange={(e) => setPriority(e.target.value)}
-            className="w-full border rounded-md px-3 py-2"
+            className='w-full rounded-md border px-3 py-2'
           >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
+            <option value='low'>Low</option>
+            <option value='medium'>Medium</option>
+            <option value='high'>High</option>
           </select>
         </div>
-        <button type="submit" className="px-4 py-2 bg-primary text-white rounded-md">
+        <button
+          type='submit'
+          className='bg-primary rounded-md px-4 py-2 text-white'
+        >
           Create Task
         </button>
       </form>
@@ -300,6 +332,7 @@ eai dev
 ```
 
 Open http://localhost:3000/tasks and:
+
 1. Click "New Task" to create a task
 2. See the task appear in the list
 3. Check `eai resources list Task` to verify platform storage
@@ -311,7 +344,11 @@ Add a chat component to help users write better task descriptions using the `use
 ```tsx
 import { useChat } from '@/hooks/useChat';
 
-function DescriptionHelper({ onSuggestion }: { onSuggestion: (text: string) => void }) {
+function DescriptionHelper({
+  onSuggestion,
+}: {
+  onSuggestion: (text: string) => void;
+}) {
   const { send } = useChat();
   const [loading, setLoading] = useState(false);
 

@@ -17,12 +17,12 @@ This opens a browser window for Entra CIAM authentication. After signing in, the
 
 ### Options
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--tenant-name <name>` | CIAM tenant name | `example-ciam-tenant` |
-| `--tenant-id <id>` | CIAM tenant GUID | Platform default |
-| `--client-id <id>` | App registration client ID | From `.env.local` |
-| `--scope <scope>` | OAuth scopes | `openid profile email offline_access` |
+| Flag                   | Description                | Default                               |
+| ---------------------- | -------------------------- | ------------------------------------- |
+| `--tenant-name <name>` | CIAM tenant name           | `example-ciam-tenant`                 |
+| `--tenant-id <id>`     | CIAM tenant GUID           | Platform default                      |
+| `--client-id <id>`     | App registration client ID | From `.env.local`                     |
+| `--scope <scope>`      | OAuth scopes               | `openid profile email offline_access` |
 
 ### Custom Tenant Authentication
 
@@ -50,6 +50,7 @@ eai whoami
 ```
 
 Displays:
+
 - authenticated user email
 - authority tenant and active tenant
 - token expiry status
@@ -76,7 +77,7 @@ eai <any command>
   → Reads stored access token
   → If expired → uses refresh token to get new access token
   → Attaches Authorization: Bearer <token> to API calls
-  → PublicAPI validates JWT → OPA checks permissions
+  → PublicAPI validates JWT and applies platform authorization
 ```
 
 ## Environment Variables

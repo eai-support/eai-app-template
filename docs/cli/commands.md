@@ -175,7 +175,7 @@ Download remote Object Types to local TypeScript definitions.
 eai types pull [options]
 ```
 
-Useful for syncing with changes made through the Configurator UI.
+Useful for syncing with changes made through an approved platform admin UI.
 
 ---
 
@@ -520,7 +520,8 @@ eai deploy status
 
 ## `eai verify`
 
-Run platform connectivity checks against PublicAPI, Configurator, ResourceAPI, and AICore.
+Run public connectivity checks against PublicAPI and the platform capabilities
+your app uses.
 
 ```bash
 eai verify
@@ -530,9 +531,9 @@ Checks:
 
 - PublicAPI reachability
 - Authentication validity
-- Configurator tenant access
-- ResourceAPI schema availability
-- AICore chat endpoint
+- Tenant access
+- Resource schema availability
+- Chat endpoint availability, when configured
 
 ---
 

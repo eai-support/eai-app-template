@@ -3,19 +3,22 @@ sidebar_position: 3
 slug: /tutorials/deploy-to-azure
 ---
 
-# Tutorial: Deploy to Azure
+# Tutorial: Deploy An EAI App
 
-Deploy your app to an Azure App Service owned by your project or organization. Your app will be available at `https://<your-app-service>.azurewebsites.net/<your-app-name>`.
+Deploy an EAI App Template project to your organization's approved hosting
+target. This public guide stays at the supported CLI and application boundary;
+use your organization's private deployment guide for exact cloud resource names,
+subscriptions, and environment-specific settings.
 
 ## Prerequisites
 
-- A working app project
-- GitHub repository created
-- Azure subscription with access to an App Service
-- GitHub Secrets configured (or admin access to set them)
-- A tenant that is already connected and verified through the `eai` CLI
+- A working app project created from the EAI App Template.
+- A GitHub repository for the app.
+- Access to your organization's deployment environment.
+- Required deployment secrets configured in the hosting provider or CI system.
+- A tenant that has been connected and verified through the `eai` CLI.
 
-Before you deploy, confirm the platform side is healthy:
+Before deploying, confirm the app and tenant contract:
 
 ```bash
 eai login
@@ -27,203 +30,113 @@ eai resources schema --tenant-id <tenant-id> --format json
 eai verify calls --tenant-id <tenant-id> --resource-type <resource-type>
 ```
 
-For tenant data, the platform remains the storage boundary. Your frontend should never receive raw database, blob storage, or search service credentials.
+The platform remains the storage and AI boundary. Browser code should call the
+app BFF at `/api/eai/...` and should never receive raw database, blob, search,
+model-provider, or PublicAPI credentials.
 
-## Step 1: Register Your App in Infrastructure
+## Step 1: Prepare Runtime Settings
 
-Add your app to your deployment infrastructure configuration. For example:
+Set runtime values through your deployment provider's secret or app settings
+store. Do not commit tenant IDs, endpoint URLs, client secrets, or generated
+credentials to source control.
 
-```bicep
-param appNames = [
-  'existing-app'
-  'my-vertical'    // ← Add your app here
-]
-```
+Common runtime values include:
 
-This provisions:
-- Port assignment (auto-incremented: 3001, 3002, ...)
-- Router entry for subpath routing
-- Startup script configuration
+| Setting                                   | Purpose                                                                |
+| ----------------------------------------- | ---------------------------------------------------------------------- |
+| `BASE_URL_PUBLIC_API`                     | PublicAPI base URL supplied by onboarding or your environment profile. |
+| `TENANT_<KEY>_ID`                         | Tenant ID for the app runtime boundary.                                |
+| `WORKFLOW_<KEY>_ID`                       | Workflow ID used by chat or AI-assisted screens.                       |
+| `ENTRA_TENANT_NAME` / `ENTRA_TENANT_ID`   | Entra CIAM authority used by the app.                                  |
+| `ENTRA_CLIENT_ID` / `ENTRA_CLIENT_SECRET` | App registration values stored only in secret storage.                 |
+| `AUTH_SECRET`                             | Auth.js secret generated for the deployment environment.               |
+| `APP_BASE_PATH`                           | Optional app base path when hosted below a subpath.                    |
 
-## Step 2: Configure Deployment with eai CLI
+## Step 2: Configure Deployment
 
-The fastest way to set up deployment:
-
-```bash
-eai deploy setup --repo eai-tools/my-vertical
-```
-
-This command:
-1. Generates `.github/workflows/deploy-demo.yml` if it doesn't exist
-2. Sets `APP_NAME` in the workflow to your app's name
-3. Configures GitHub Secrets for Azure authentication
-
-### Manual Configuration
-
-If you prefer to configure manually, edit `.github/workflows/deploy-demo.yml`:
-
-```yaml
-env:
-  APP_NAME: my-vertical   # Must match your infrastructure registration
-```
-
-Configure these GitHub Secrets in `Settings > Environments > demo`:
-
-| Secret | Description |
-|--------|-------------|
-| `AZUREAPPSERVICE_CLIENTID` | Azure AD app registration client ID |
-| `AZUREAPPSERVICE_TENANTID` | Azure AD tenant ID |
-| `AZUREAPPSERVICE_SUBSCRIPTIONID` | Azure subscription ID |
-| `AZURE_RESOURCE_GROUP` | `rg-example-apps` |
-| `AZURE_WEBAPP_NAME` | `example-app-service` |
-
-## Step 3: Set Environment Variables
-
-Your app needs runtime environment variables in Azure App Service. These are set through the Azure Portal or CLI:
+If your organization has enabled the EAI deployment workflow, use the CLI:
 
 ```bash
-# Required variables
-az webapp config appsettings set \
-  --resource-group <resource-group> \
-  --name <app-service-name> \
-  --settings \
-  BASE_URL_PUBLIC_API=https://api.test.example.com \
-  TENANT_tracker_ID=<your-tenant-id> \
-  WORKFLOW_tracker_ID=<your-workflow-id> \
-  ENTRA_TENANT_NAME=example-ciam-tenant \
-  ENTRA_TENANT_ID=<entra-tenant-id> \
-  ENTRA_CLIENT_ID=<client-id> \
-  ENTRA_CLIENT_SECRET=<client-secret> \
-  AUTH_SECRET=$(openssl rand -base64 32) \
-  APP_BASE_PATH=/my-vertical
+eai deploy setup --repo <owner>/<repo>
 ```
 
-## Step 4: Deploy
+The setup command prepares the repository workflow and prompts for the settings
+it is allowed to configure. It does not remove the need for environment-specific
+approval, secrets, or hosting access.
 
-Push to `main` to trigger automatic deployment:
+If your organization uses a custom deployment pipeline, keep the public app
+contract the same:
 
-```bash
-git add .
-git commit -m "Ready for deployment"
-git push origin main
-```
+1. Install dependencies with `npm ci`.
+2. Build the app with the correct environment settings.
+3. Deploy the built Next.js output to the approved hosting target.
+4. Keep all secrets in the hosting or CI secret store.
 
-Or trigger manually:
+## Step 3: Deploy
+
+Trigger the deployment through your configured workflow:
 
 ```bash
 eai deploy trigger
 ```
 
-## Step 5: Verify
+Or use your CI provider's manual workflow trigger if your organization manages
+deployments outside the CLI.
 
-Check deployment status:
+## Step 4: Verify
+
+Check the deployment workflow:
 
 ```bash
 eai deploy status
 ```
 
-Then visit your app:
-
-```
-https://<your-app-service>.azurewebsites.net/my-vertical
-```
-
-Run platform checks:
+Then run platform checks against the tenant:
 
 ```bash
-eai verify
+eai verify calls --tenant-id <tenant-id> --resource-type <resource-type>
 ```
 
-## How Multi-App Deployment Works
+After the app is reachable, verify:
 
-```
-Azure App Service (<your-app-service>)
-├── Express Router (port 8080)
-│   ├── /app-one    → localhost:3001
-│   ├── /app-two    → localhost:3002
-│   └── /my-vertical → localhost:3003
-├── app-one/       (standalone Next.js)
-├── app-two/       (standalone Next.js)
-└── my-vertical/   (standalone Next.js)
-```
-
-Each app runs as a standalone Next.js server on its own port. The router handles:
-- Subpath routing (`/my-vertical/*` → `localhost:3003`)
-- Port assignment (from your app registration order)
-- Process management (PM2-like startup)
-
-### Build Process
-
-The GitHub Actions workflow:
-1. Checks out your code
-2. Installs dependencies (`npm ci`)
-3. Builds with subpath: `APP_BASE_PATH=/my-vertical npm run build`
-4. Packages the standalone output
-5. Deploys via `az webapp deploy --type zip`
-6. Restarts the App Service
-
-### The `basePath` Configuration
-
-`next.config.ts` reads `APP_BASE_PATH` to configure Next.js subpath routing:
-
-```typescript
-const nextConfig = {
-  basePath: process.env.APP_BASE_PATH || '',
-  assetPrefix: process.env.APP_BASE_PATH || '',
-  output: 'standalone',
-};
-```
-
-This ensures all routes and static assets are served under `/my-vertical/`.
+1. Sign-in completes.
+2. Object Type-backed pages can list and create resources.
+3. Chat or document workflows use the app BFF and do not expose credentials.
+4. Browser routes work under the configured base path.
 
 ## Troubleshooting
 
 ### App returns 404
 
-- Check that `APP_NAME` in the workflow matches your infrastructure registration
-- Verify `APP_BASE_PATH` is set correctly in Azure App Settings
-- Check the Express router is restarted: `az webapp restart ...`
-
-### Authentication redirect fails
-
-- Ensure `AUTH_URL` includes the **full path through `/api/auth`**:
-  `https://<your-app-service>.azurewebsites.net/my-vertical/api/auth`
-  (Auth.js v5 reads the URL's pathname as its basePath; without `/api/auth`
-  in `AUTH_URL`, the action parser rejects every request as `UnknownAction`.)
-- Verify Entra CIAM redirect URIs include `{AUTH_URL}/callback/microsoft-entra-id`
-- The `[...nextauth]` route handler ships with a small request rewriter that
-  re-prepends `APP_BASE_PATH` to the URL Next.js stripped before invoking
-  Auth.js — see `src/app/api/auth/[...nextauth]/route.ts`. Don't simplify
-  it to `export const { GET, POST } = handlers` or sign-in will 400 with
-  `UnknownAction: Cannot parse action at /api/auth/...`. Upstream issue:
-  [nextauthjs/next-auth#9722](https://github.com/nextauthjs/next-auth/issues/9722).
-
-### Build fails
-
-Run locally first:
+- Confirm the deployed base path matches `APP_BASE_PATH`.
+- Confirm your hosting provider routes requests to the Next.js app.
+- Rebuild locally with the same base path before redeploying.
 
 ```bash
-APP_BASE_PATH=/my-vertical npm run build
+APP_BASE_PATH=/my-app npm run build
 ```
 
-### Environment variables not loading
+### Authentication Redirect Fails
 
-```bash
-az webapp config appsettings list \
-  --resource-group <resource-group> \
-  --name <app-service-name> \
-  --query "[?contains(name, 'TENANT')]"
-```
+- Ensure the deployed auth URL includes the app's auth route path.
+- Ensure Entra CIAM redirect URIs match the deployed callback URL.
+- Keep callback URLs environment-specific and out of committed examples.
+
+### Runtime Settings Are Missing
+
+Check the hosting provider's app settings or CI secret store. Do not print
+secret values in logs; confirm only that required keys exist.
 
 ## What You Learned
 
-- **Multi-app architecture**: How multiple apps can share one App Service
-- **Subpath routing**: `APP_BASE_PATH` and Express router configuration
-- **CI/CD pipeline**: GitHub Actions → Azure deployment flow
-- **Infrastructure registration**: Adding your app to deployment infrastructure
+- How to verify tenant contracts before deployment.
+- How to keep deployment secrets outside source control.
+- How to use `eai deploy` without exposing private hosting details.
+- How to validate the app through PublicAPI-backed CLI checks after deployment.
 
 ## Next Steps
 
-- [Architecture Overview](/docs/architecture/overview) — Full platform architecture
-- [Environment Configuration](/docs/configuration/environment) — All environment variables explained
-- [Troubleshooting Guide](/docs/getting-started/troubleshooting) — Common issues and fixes
+- [EAI Service Patterns](/docs/platform/eai-service-patterns) — Choose the right
+  resource, document, chat, and PublicAPI pattern.
+- [Configuration](/docs/cli/authentication) — Confirm sign-in and tenant
+  context.
