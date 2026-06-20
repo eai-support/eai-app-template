@@ -27,7 +27,9 @@ npm run dev
 Then connect the project to a real tenant:
 
 ```bash
-npm install -g @eai-tools/cli@0.3.0
+npm config set @eai-tools:registry https://eai-tools.github.io/eai/registry/ --location=user
+npm install -g @eai-tools/cli
+eai update --check
 eai login
 eai tenant list --format json
 eai tenant select <tenant-slug>
@@ -39,6 +41,23 @@ eai resources schema --tenant-id <tenant-id> --format json
 ```
 
 The `types seed` step should converge cleanly. If `types diff` still shows drift, stop and fix the object types before continuing.
+
+## AI Agent Workflow
+
+When an AI agent is working in this template, it should use the EAI CLI as the source of truth instead of guessing command shapes:
+
+```bash
+eai --describe
+eai agent guide --format json
+```
+
+If an `eai` command fails, the agent should explain the known error before choosing recovery steps:
+
+```bash
+eai errors explain <code-or-reason> --format json
+```
+
+Use `eai update --check` or `eai doctor --check-updates` when a command is missing, help looks stale, or the local CLI may be behind the published release. Direct PublicAPI calls through `eai publicapi` should use only `/v4/...` paths.
 
 ## Tenant Data Plane Model
 

@@ -42,6 +42,52 @@ eai init my-vertical --skip-prompts
 
 ---
 
+## `eai agent guide`
+
+Print the AI-readable operating guide for EAI CLI discovery, safe diagnostics,
+error recovery, and command-selection rules.
+
+```bash
+eai agent guide
+eai agent guide --format json
+```
+
+Agents should run this before EAI platform work so they can prefer structured
+output, avoid stale command assumptions, and follow mutation safety guidance.
+
+---
+
+## `eai errors`
+
+Explain known EAI CLI errors and recovery steps without exposing private
+platform internals.
+
+```bash
+eai errors list
+eai errors explain E101
+eai errors explain tenant_authorization_incomplete --format json
+```
+
+Use this immediately after a failed `eai` command. Prefer the JSON form for
+agent workflows because it includes diagnostics, fixes, retry limits, and
+mutation safety.
+
+---
+
+## `eai update`
+
+Check for and install newer EAI CLI releases from the public static registry.
+
+```bash
+eai update --check
+eai update
+```
+
+Run this when a command is missing, help output looks stale, or an agent cannot
+find a command that current documentation references.
+
+---
+
 ## `eai dev`
 
 Start the local development server with platform connectivity.
