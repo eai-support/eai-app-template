@@ -10,14 +10,15 @@ The Enterprise AI CLI (`eai`) is the supported operator workflow for tenant-scop
 ## Installation
 
 ```bash
-npm install -g @eai-tools/cli@0.3.0
+npm config set @eai-tools:registry https://eai-tools.github.io/eai/registry/ --location=user
+npm install -g @eai-tools/cli
 ```
 
 Verify installation:
 
 ```bash
 eai --version
-# 0.3.0
+eai update --check
 ```
 
 ## Quick Reference
@@ -37,6 +38,33 @@ eai --version
 | `eai verify` | Run platform connectivity checks |
 | `eai doctor` | Diagnose common issues and suggest fixes |
 | `eai whoami` | Show auth status and tenant info |
+| `eai errors` | Explain known CLI/platform errors and recovery commands |
+| `eai agent guide` | Print AI-readable EAI CLI operating guidance |
+| `eai update` | Check for and install newer CLI releases |
+
+## AI Agent Discovery
+
+Agents should ask the CLI how to use it before guessing command names or flags:
+
+```bash
+eai --describe
+eai agent guide --format json
+```
+
+After an `eai` error, use the structured explanation path:
+
+```bash
+eai errors explain <code-or-reason> --format json
+```
+
+When a command is missing or help output looks stale, check drift first:
+
+```bash
+eai update --check
+eai doctor --check-updates
+```
+
+When calling PublicAPI directly through `eai publicapi`, use only `/v4/...` paths.
 
 ## Getting Started Workflow
 
@@ -88,6 +116,7 @@ eai verify calls --tenant-id <tenant-id> --resource-type <resource-type>
 
 ```bash
 eai doctor --fix
+eai errors explain <code-or-reason> --format json
 ```
 
 ### Deploy to Azure
