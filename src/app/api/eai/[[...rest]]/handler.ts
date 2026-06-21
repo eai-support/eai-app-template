@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  getClientCredentialsToken,
-  getAccessToken,
-} from '@enterpriseaigroup/core/server';
+import { getAccessToken } from '@enterpriseaigroup/core/server';
 import {
   resolvePublicApiBaseUrl,
   RoutingResolutionError,
 } from '@/lib/platform/session-resolve';
 import { resolvePublicApiRoutePath } from '@/lib/platform/publicapi-route-family';
+import { getServiceAccessToken } from '@/lib/platform/service-token';
 
 export interface RouteContext {
   params: Promise<{ rest?: string[] }>;
@@ -80,7 +78,7 @@ async function proxyRequest(
       if (!baseUrl) {
         throw new Error('BASE_URL_PUBLIC_API environment variable is not set');
       }
-      token = await getClientCredentialsToken();
+      token = await getServiceAccessToken();
       headers.set('Authorization', `Bearer ${token}`);
     }
 

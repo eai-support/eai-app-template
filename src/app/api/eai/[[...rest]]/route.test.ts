@@ -1,6 +1,6 @@
 const mockGetAccessToken = jest.fn();
-const mockGetClientCredentialsToken = jest.fn();
 const mockResolvePublicApiBaseUrl = jest.fn();
+const mockGetServiceAccessToken = jest.fn();
 
 jest.mock('next/server', () => ({
   NextResponse: class MockNextResponse {
@@ -20,7 +20,10 @@ jest.mock('next/server', () => ({
 
 jest.mock('@enterpriseaigroup/core/server', () => ({
   getAccessToken: () => mockGetAccessToken(),
-  getClientCredentialsToken: () => mockGetClientCredentialsToken(),
+}));
+
+jest.mock('@/lib/platform/service-token', () => ({
+  getServiceAccessToken: () => mockGetServiceAccessToken(),
 }));
 
 jest.mock('@/lib/platform/session-resolve', () => {
@@ -75,7 +78,7 @@ describe('EAI proxy v4 route-family routing', () => {
       EAI_PRODUCT_SLUG: 'eai-app-template',
     };
     mockGetAccessToken.mockResolvedValue('user-token');
-    mockGetClientCredentialsToken.mockResolvedValue('client-token');
+    mockGetServiceAccessToken.mockResolvedValue('client-token');
     mockResolvePublicApiBaseUrl.mockResolvedValue({
       baseUrl: 'https://regional-api.example.com/public',
       routing: {

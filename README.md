@@ -42,6 +42,46 @@ eai resources schema --tenant-id <tenant-id> --format json
 
 The `types seed` step should converge cleanly. If `types diff` still shows drift, stop and fix the object types before continuing.
 
+## Runtime Contract
+
+This template declares its deploy-time requirements in `eai.runtime.json`. The
+contract is provider-neutral: Vercel, Docker, Azure, AWS, Kubernetes, a VM, or
+an internal demo host can all translate the same requirements into their own
+environment and secret mechanism.
+
+The default contract requires:
+
+- Auth.js with Microsoft Entra sign-in
+- PublicAPI access through the app BFF at `/api/eai`
+- tenant/workflow runtime configuration through `/api/eai/config`
+- `/health` for host-level liveness
+- optional service identity for server-side PublicAPI calls without an end-user session
+
+Validate the local contract and a deployed app with:
+
+```bash
+eai runtime validate
+eai deploy env --provider generic
+eai deploy doctor --url https://your-deployed-app.example.com
+```
+
+`/health` returning 200 is only the first check. A deployment is not considered
+healthy until Auth.js, runtime config, tenant/workflow values, and declared
+smoke tests pass.
+
+For app-only PublicAPI access, prefer the clear service identity names:
+
+```text
+EAI_SERVICE_CLIENT_ID
+EAI_SERVICE_CLIENT_SECRET
+EAI_SERVICE_TARGET_SCOPE
+EAI_SERVICE_TENANT_NAME
+```
+
+The runtime still recognises the older `OBO_CLIENT_ID`,
+`OBO_CLIENT_SECRET`, `OBO_TARGET_SCOPE`, and `OBO_TENANT_NAME` aliases for
+existing apps.
+
 ## AI Agent Workflow
 
 When an AI agent is working in this template, it should use the EAI CLI as the source of truth instead of guessing command shapes:
