@@ -377,5 +377,5 @@ function DescriptionHelper({
 ## Next Steps
 
 - [Add AI Chat to Your Vertical](/docs/tutorials/add-ai-chat) — Full AI integration guide
-- [Deploy to Azure](/docs/tutorials/deploy-to-azure) — Ship your vertical to production
+- [Deploy to Azure](/docs/tutorials/deploy-to-azure) — Ship your app to production
 - [Configuration Deep Dive](/docs/configuration/overview) — Advanced tenant configuration
