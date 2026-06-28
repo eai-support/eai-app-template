@@ -58,12 +58,12 @@ describe('EAI block extensions', () => {
   const customerExtension: ClientBlockExtension = {
     manifest: {
       schemaVersion: '1.0.0',
-      packageName: '@customer/vertical-blocks',
+      packageName: '@customer/app-blocks',
       blocks: [
         {
           id: 'customer.external-panel',
           title: 'Customer External Panel',
-          packageName: '@customer/vertical-blocks',
+          packageName: '@customer/app-blocks',
           importPath: '@/eai.blocks',
           exportName: 'CustomerExternalPanel',
           packageLane: 'addon',
@@ -73,7 +73,7 @@ describe('EAI block extensions', () => {
         {
           id: 'customer.adapter-panel',
           title: 'Customer Adapter Panel',
-          packageName: '@customer/vertical-blocks',
+          packageName: '@customer/app-blocks',
           importPath: '@/eai.blocks',
           exportName: 'CustomerAdapterPanel',
           packageLane: 'addon',
@@ -83,7 +83,7 @@ describe('EAI block extensions', () => {
         {
           id: 'customer.internal-panel',
           title: 'Customer Internal Panel',
-          packageName: '@customer/vertical-blocks',
+          packageName: '@customer/app-blocks',
           importPath: '@/eai.blocks',
           exportName: 'CustomerInternalPanel',
           packageLane: 'addon',
@@ -93,7 +93,7 @@ describe('EAI block extensions', () => {
         {
           id: 'customer.hybrid-only-panel',
           title: 'Customer Hybrid Only Panel',
-          packageName: '@customer/vertical-blocks',
+          packageName: '@customer/app-blocks',
           importPath: '@/eai.blocks',
           exportName: 'CustomerHybridOnlyPanel',
           packageLane: 'addon',
@@ -195,7 +195,7 @@ describe('EAI block extensions', () => {
     expect(manifests).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          packageName: '@customer/vertical-blocks',
+          packageName: '@customer/app-blocks',
           blocks: expect.arrayContaining([
             expect.objectContaining({
               id: 'customer.internal-panel',

@@ -101,7 +101,7 @@ Use `eai update --check` or `eai doctor --check-updates` when a command is missi
 
 ## Tenant Data Plane Model
 
-- `postgresql`: canonical structured resource storage for most vertical data.
+- `postgresql`: canonical structured resource storage for most app data.
 - `documentdb`: tenant-scoped document storage when a resource type genuinely needs a document model.
 - `blob`: file and large object storage behind API-mediated access.
 - `search`: derived search/vector projection only, never the system of record.

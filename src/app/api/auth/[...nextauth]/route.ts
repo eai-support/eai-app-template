@@ -3,11 +3,11 @@ import { handlers } from '@/auth';
 
 // Auth.js v5 + Next.js basePath workaround.
 //
-// When APP_BASE_PATH is set (e.g. "/my-vertical"), Next.js strips that
+// When APP_BASE_PATH is set (e.g. "/my-app"), Next.js strips that
 // prefix from req.url before route handlers run. With AUTH_URL set to the
-// full path (`http://localhost:3000/my-vertical/api/auth`), Auth.js's
+// full path (`http://localhost:3000/my-app/api/auth`), Auth.js's
 // internal parser (parseActionAndProviderId) expects URLs to start with
-// `/my-vertical/api/auth`, but actually sees `/api/auth/...` →
+// `/my-app/api/auth`, but actually sees `/api/auth/...` →
 // throws UnknownAction.
 //
 // We re-prepend APP_BASE_PATH to the URL we hand to Auth.js so its parser

@@ -26,7 +26,7 @@ This opens a browser window for Entra CIAM authentication. After signing in, the
 
 ### Custom Tenant Authentication
 
-For verticals with their own Entra ID tenant:
+For apps with their own Entra ID tenant:
 
 ```bash
 eai login --tenant-name my-ciam-tenant --client-id 12dcbf85-xxxx-xxxx-xxxx
@@ -54,7 +54,7 @@ Displays:
 - authenticated user email
 - authority tenant and active tenant
 - token expiry status
-- current project context when run inside a vertical repo
+- current project context when run inside an app repo
 
 ## Logout
 

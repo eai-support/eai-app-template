@@ -2,7 +2,7 @@
  * Same-origin API helpers for client-side code.
  *
  * Both `fetch()` and the platform-SDK list response shape leak Next.js
- * basePath / PayloadCMS pagination details into vertical pages. These two
+ * basePath / PayloadCMS pagination details into app pages. These two
  * helpers absorb that so page code can stay short and uniform.
  */
 
@@ -11,7 +11,7 @@
  * `fetch()` works under Next.js basePath. No-op when empty (root mount).
  *
  * @example
- *   await fetch(apiUrl(`/api/my-vertical/whatever?id=${id}`));
+ *   await fetch(apiUrl(`/api/my-app/whatever?id=${id}`));
  */
 export function apiUrl(path: string): string {
   const basePath = (process.env.NEXT_PUBLIC_APP_BASE_PATH ?? '').replace(/\/+$/, '');

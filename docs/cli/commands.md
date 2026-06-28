@@ -9,7 +9,7 @@ Complete reference for all EAI CLI commands.
 
 ## `eai init`
 
-Scaffold a new vertical application from the template.
+Scaffold a new app from the template.
 
 The default template comes from the latest `main` commit pinned in the released
 `eai` CLI manifest, rather than from a separate template release tag.
@@ -31,13 +31,13 @@ eai init [name] [options]
 eai init
 
 # Quick scaffold with name
-eai init my-vertical
+eai init my-app
 
 # Use a custom template
-eai init my-vertical --from https://github.com/my-org/my-template.git
+eai init my-app --from https://github.com/my-org/my-template.git
 
 # Non-interactive (CI/CD)
-eai init my-vertical --skip-prompts
+eai init my-app --skip-prompts
 ```
 
 ---
@@ -126,7 +126,7 @@ Audit the exact read-only platform contracts the template now depends on.
 eai verify calls --tenant-id <tenant-id> --resource-type application --format json
 ```
 
-For post-012 verticals this should confirm:
+For post-012 apps this should confirm:
 
 - schema contract
 - resource list contract
@@ -556,7 +556,7 @@ eai deploy status [options]
 
 ```bash
 # Initial setup
-eai deploy setup --repo eai-tools/my-vertical
+eai deploy setup --repo eai-tools/my-app
 
 # Deploy
 eai deploy trigger

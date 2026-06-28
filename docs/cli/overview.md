@@ -5,7 +5,7 @@ slug: /cli/overview
 
 # EAI CLI
 
-The Enterprise AI CLI (`eai`) is the supported operator workflow for tenant-scoped vertical development on the Enterprise AI platform.
+The Enterprise AI CLI (`eai`) is the supported operator workflow for tenant-scoped app development on the Enterprise AI platform.
 
 ## Installation
 
@@ -25,7 +25,7 @@ eai update --check
 
 | Command | Description |
 |---------|-------------|
-| `eai init` | Scaffold a new vertical application |
+| `eai init` | Scaffold a new app |
 | `eai login` | Authenticate with Entra CIAM |
 | `eai dev` | Start local development server |
 | `eai types` | Manage Object Type definitions |
@@ -68,7 +68,7 @@ When calling PublicAPI directly through `eai publicapi`, use only `/v4/...` path
 
 ## Getting Started Workflow
 
-The standard workflow for a new or newly connected vertical is:
+The standard workflow for a new or newly connected app is:
 
 ```bash
 # 1. Authenticate and pick the tenant you are actually working on
@@ -122,7 +122,7 @@ eai errors explain <code-or-reason> --format json
 ### Deploy to Azure
 
 ```bash
-eai deploy setup --repo eai-tools/my-vertical
+eai deploy setup --repo eai-tools/my-app
 eai deploy trigger
 eai deploy status
 ```

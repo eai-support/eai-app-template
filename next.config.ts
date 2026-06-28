@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const isProdOrTest = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test';
 
-// Support deployment to a subpath (e.g., /my-vertical)
+// Support deployment to a subpath (e.g., /my-app)
 const basePath = process.env.APP_BASE_PATH || '';
 
 const nextConfig: NextConfig = {
