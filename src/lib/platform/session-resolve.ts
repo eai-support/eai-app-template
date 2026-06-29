@@ -1,5 +1,3 @@
-import { resolvePublicApiRoutePath } from '@/lib/platform/publicapi-route-family';
-
 export type SessionResolveStatus =
   | 'resolved'
   | 'selection_required'
@@ -46,6 +44,7 @@ export interface ResolvePublicApiBaseUrlOptions {
 }
 
 const DEFAULT_BOOTSTRAP_PUBLIC_API_URL = 'https://api.example.com';
+const SESSION_RESOLVE_ROUTE = 'v4/identity/session/resolve';
 
 export class RoutingResolutionError extends Error {
   readonly statusCode: number;
@@ -90,10 +89,10 @@ function buildBootstrapResolveUrl(): string {
   );
 
   if (!bootstrapBaseUrl) {
-    return `${DEFAULT_BOOTSTRAP_PUBLIC_API_URL}/${resolvePublicApiRoutePath('v3/session/resolve')}`;
+    return `${DEFAULT_BOOTSTRAP_PUBLIC_API_URL}/${SESSION_RESOLVE_ROUTE}`;
   }
 
-  return `${bootstrapBaseUrl}/${resolvePublicApiRoutePath('v3/session/resolve')}`;
+  return `${bootstrapBaseUrl}/${SESSION_RESOLVE_ROUTE}`;
 }
 
 export async function resolvePublicApiBaseUrl(

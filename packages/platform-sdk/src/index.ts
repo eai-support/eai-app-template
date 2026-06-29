@@ -1,7 +1,7 @@
 /**
  * @enterpriseaigroup/platform-sdk
  *
- * Typed TypeScript SDK for the Enterprise AI PublicAPI.
+ * Typed TypeScript SDK for the Enterprise AI platform API.
  * All calls go through the BFF proxy — tokens are injected server-side.
  */
 
@@ -24,6 +24,22 @@ export type {
   BatchCreateItem,
   BatchResponse,
   BatchUpdateItem,
+  ObjectTypeManagementRequest,
+  ResourceFileCompleteRequest,
+  ResourceFileDeleteResponse,
+  ResourceFileIndexStatusResponse,
+  ResourceFileResponse,
+  ResourceFileRetryResponse,
+  ResourceFileSasOptions,
+  ResourceFileSasResponse,
+  ResourceFileUploadOptions,
+  ResourceFileUploadSessionOptions,
+  ResourceFileUploadSessionRequest,
+  ResourceFileUploadSessionResponse,
+  ResourceSearchHit,
+  ResourceSearchMode,
+  ResourceSearchRequest,
+  ResourceSearchResponse,
   ChatMessage,
   ChatStreamOptions,
   ProvisionMeRequest,
@@ -37,6 +53,16 @@ export type {
 // Module types (for consumers who need to type module references)
 export type { ResourcesModule } from './modules/resources';
 export type { ChatModule } from './modules/chat';
-export type { DocumentsModule } from './modules/documents';
+export type {
+  BatchJobStatusResponse,
+  DocumentsModule,
+  RagIndexRequest,
+  RagIndexResponse,
+} from './modules/documents';
 export type { UsersModule } from './modules/users';
 export type { AuthModule } from './modules/auth';
+export type {
+  PlatformHttpMethod,
+  PlatformModule,
+  PlatformRequestOptions,
+} from './modules/platform';

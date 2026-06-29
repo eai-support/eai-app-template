@@ -70,6 +70,71 @@ describe('ResourcesModule', () => {
         undefined,
       );
     });
+
+    it('uses the v4 data resource route for sorted project lists', async () => {
+      mockOkResponse({
+        docs: [],
+        totalDocs: 0,
+        page: 1,
+        totalPages: 1,
+        nextCursor: null,
+      });
+
+      await resources.list('Project', { limit: 20, sort: '-updated_at' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/project?limit=20&sort=-updated_at',
+        undefined,
+      );
+    });
+
+  });
+
+  describe('object type management', () => {
+    it('lists object types through the v4 data resources route', async () => {
+      mockOkResponse({ docs: [], totalDocs: 0 });
+
+      await resources.listObjectTypes({ limit: 1 });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/eai/v4/data/resources/object-types?limit=1',
+        undefined,
+      );
+    });
+
+    it('creates and updates object types through v4 management routes', async () => {
+      mockOkResponse({ id: 'object-type-1' });
+      await resources.createObjectType({
+        name: 'Application',
+        displayName: 'Application',
+        tenant: tenantId,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/eai/v4/data/resources/object-types',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'Application',
+            displayName: 'Application',
+            tenant: tenantId,
+          }),
+        },
+      );
+
+      mockOkResponse({ id: 'object-type-1' });
+      await resources.updateObjectType('object/type/1', { status: 'active' });
+
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/object-types/object%2Ftype%2F1',
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'active' }),
+        },
+      );
+    });
   });
 
   describe('update', () => {
@@ -359,6 +424,161 @@ describe('ResourcesModule', () => {
             limit: 10,
           }),
         },
+      );
+    });
+  });
+
+  describe('search', () => {
+    it('sends resource search requests to the v4 tenant search endpoint', async () => {
+      mockOkResponse({
+        tenantId,
+        query: 'stormwater',
+        mode: 'hybrid',
+        indexName: 'idx',
+        results: [],
+      });
+
+      await resources.search({
+        query: 'stormwater',
+        objectTypes: ['PlanningDocument'],
+        mode: 'hybrid',
+        limit: 5,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/search',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: 'stormwater',
+            objectTypes: ['planning-document'],
+            mode: 'hybrid',
+            limit: 5,
+          }),
+        },
+      );
+    });
+  });
+
+  describe('files', () => {
+    it('uploads files through the resource file property endpoint', async () => {
+      mockOkResponse({
+        tenantId,
+        objectType: 'planning-document',
+        resourceId: 'res-1',
+        propertyName: 'file',
+        filename: 'hello.txt',
+        contentType: 'text/plain',
+        size: 5,
+        blobRef: 'blob-ref',
+        blobUrl: 'https://example.test/blob',
+        version: 2,
+      });
+
+      const file = new Blob(['hello'], { type: 'text/plain' });
+      await resources.uploadFile('PlanningDocument', 'res-1', 'file', file, {
+        filename: 'hello.txt',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/planning-document/res-1/files/file?filename=hello.txt',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: file,
+        },
+      );
+    });
+
+    it('creates direct upload sessions with expiry options', async () => {
+      mockOkResponse({
+        tenantId,
+        objectType: 'planning-document',
+        resourceId: 'res-1',
+        propertyName: 'file',
+        filename: 'large.pdf',
+        contentType: 'application/pdf',
+        size: 1024,
+        blobRef: 'blob-ref',
+        uploadUrl: 'https://example.test/upload',
+        expiresInSeconds: 900,
+        requiredHeaders: {},
+      });
+
+      await resources.createFileUploadSession(
+        'PlanningDocument',
+        'res-1',
+        'file',
+        {
+          filename: 'large.pdf',
+          contentType: 'application/pdf',
+          size: 1024,
+        },
+        { expiresInSeconds: 1200 },
+      );
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/planning-document/res-1/files/file/upload-session?expires_in_seconds=1200',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: 'large.pdf',
+            contentType: 'application/pdf',
+            size: 1024,
+          }),
+        },
+      );
+    });
+
+    it('completes direct uploads and queues ingestion', async () => {
+      mockOkResponse({ id: 'res-1', version: 3, data: {} });
+
+      await resources.completeFileUpload('PlanningDocument', 'res-1', 'file', {
+        blobRef: 'blob-ref',
+        filename: 'large.pdf',
+        contentType: 'application/pdf',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/planning-document/res-1/files/file/complete',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            blobRef: 'blob-ref',
+            filename: 'large.pdf',
+            contentType: 'application/pdf',
+          }),
+        },
+      );
+    });
+
+    it('reads SAS and index status from file helper endpoints', async () => {
+      mockOkResponse({ url: 'https://example.test/sas', expiresInSeconds: 900 });
+      await resources.getFileSas('PlanningDocument', 'res-1', 'file', {
+        expiresInSeconds: 900,
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/planning-document/res-1/files/file/sas?expires_in_seconds=900',
+        undefined,
+      );
+
+      mockOkResponse({
+        tenantId,
+        objectType: 'planning-document',
+        resourceId: 'res-1',
+        propertyName: 'file',
+        documentId: 'DOC-1',
+        status: 'indexed',
+      });
+      await resources.getFileIndexStatus('PlanningDocument', 'res-1', 'file');
+
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/planning-document/res-1/files/file/index-status',
+        undefined,
       );
     });
   });

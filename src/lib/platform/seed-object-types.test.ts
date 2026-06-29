@@ -38,6 +38,7 @@ describe('seedObjectTypes', () => {
       expect.stringMatching(
         /^\/my-template\/api\/eai\/v4\/data\/resources\/object-types\?/,
       ),
+      undefined,
     );
     expect(mockFetch).toHaveBeenCalledWith(
       '/my-template/api/eai/v4/data/resources/object-types',

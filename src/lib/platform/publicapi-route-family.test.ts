@@ -14,9 +14,9 @@ describe('publicApi route-family resolver', () => {
     process.env = originalEnv;
   });
 
-  it('BP001 keeps v3 paths by default', () => {
+  it('BP001 maps resource paths to v4 data resources by default', () => {
     expect(resolvePublicApiRoutePath('v3/resources/tenant-a/Application')).toBe(
-      'v3/resources/tenant-a/Application',
+      'v4/data/resources/tenant-a/Application',
     );
   });
 

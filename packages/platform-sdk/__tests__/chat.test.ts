@@ -124,6 +124,32 @@ describe('ChatModule', () => {
       expect(body.threadId).toBeUndefined();
     });
 
+    it('passes v4 chat document-search and tool options through', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+
+      await chat.send({
+        workflowId: 'my-workflow',
+        stage: 'chat',
+        message: 'Find policy documents',
+        conversationId: 'conversation-123',
+        params: {},
+        document_scope: 'kb_only',
+        tags: ['policy'],
+        search_context: { jurisdiction: 'nsw' },
+        tools: [{ type: 'function', function: { name: 'lookup' } }],
+        tool_choice: 'auto',
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.document_scope).toBe('kb_only');
+      expect(body.tags).toEqual(['policy']);
+      expect(body.search_context).toEqual({ jurisdiction: 'nsw' });
+      expect(body.tools).toEqual([
+        { type: 'function', function: { name: 'lookup' } },
+      ]);
+      expect(body.tool_choice).toBe('auto');
+    });
+
     it('uses baseUrl (not streamBaseUrl)', async () => {
       mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
 

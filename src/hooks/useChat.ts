@@ -23,9 +23,11 @@ import type { ChatStreamOptions } from '@enterpriseaigroup/platform-sdk';
  * ```
  */
 export function useChat(workflowId: string, stage: string, tenantId?: string) {
+  const resolvedTenantId =
+    tenantId || process.env.NEXT_PUBLIC_EAI_TENANT_ID || '';
   const client = useMemo(
-    () => new EAIPlatformClient({ tenantId: tenantId || '' }),
-    [tenantId],
+    () => new EAIPlatformClient({ tenantId: resolvedTenantId }),
+    [resolvedTenantId],
   );
 
   const stream = useCallback(

@@ -1,9 +1,8 @@
 import { EAIPlatformClient } from '@enterpriseaigroup/platform-sdk';
-import { buildPublicApiUrl } from '@/lib/platform/publicapi-url';
 
 export interface PlatformStatus {
-  configurator: boolean;
-  resourceApi: boolean;
+  objectTypes: boolean;
+  dataResources: boolean;
   crud: boolean;
   aggregate: boolean;
   cursor: boolean;
@@ -11,44 +10,40 @@ export interface PlatformStatus {
 
 /**
  * Verifies platform connectivity by checking:
- * 1. Configurator responds (object types exist)
- * 2. ResourceAPI responds (schema query)
+ * 1. Object Type metadata is reachable
+ * 2. Data resource schema is reachable
  * 3. CRUD works for at least one object type
  *
- * @param tenantId - Configurator tenant ID (from TENANT_*_ID env var)
+ * @param tenantId - Tenant ID (from TENANT_*_ID env var)
  */
 export async function verifyPlatform(
   tenantId: string,
 ): Promise<PlatformStatus> {
   const client = new EAIPlatformClient({ tenantId });
   const status: PlatformStatus = {
-    configurator: false,
-    resourceApi: false,
+    objectTypes: false,
+    dataResources: false,
     crud: false,
     aggregate: false,
     cursor: false,
   };
 
-  // Check 1: Configurator responds (object types exist)
+  // Check 1: Object Type metadata is reachable
   try {
-    const response = await fetch(
-      buildPublicApiUrl(client.baseUrl, '/v4/data/resources/object-types', {
-        limit: 1,
-      }),
-    );
-    status.configurator = response.ok;
+    const response = await client.resources.listObjectTypes({ limit: 1 });
+    status.objectTypes = Array.isArray(response.docs);
   } catch {
-    status.configurator = false;
+    status.objectTypes = false;
   }
 
-  // Check 2: ResourceAPI responds (schema query)
+  // Check 2: data resource schema is reachable
   try {
     const schema = await client.resources.getSchema();
-    status.resourceApi =
+    status.dataResources =
       Array.isArray((schema as { objectTypes?: unknown[] }).objectTypes) ||
       Array.isArray((schema as { object_types?: unknown[] }).object_types);
   } catch {
-    status.resourceApi = false;
+    status.dataResources = false;
   }
 
   // Check 3: list/aggregate/cursor work for at least one published type
