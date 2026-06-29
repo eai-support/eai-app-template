@@ -1,7 +1,7 @@
 /**
  * Platform SDK Client
  *
- * Factory class providing typed access to all PublicAPI modules.
+ * Factory class providing typed access to platform API modules.
  * Uses BFF proxy paths by default — tokens are injected server-side.
  */
 
@@ -11,6 +11,7 @@ import { ChatModule } from './modules/chat';
 import { DocumentsModule } from './modules/documents';
 import { UsersModule } from './modules/users';
 import { AuthModule } from './modules/auth';
+import { PlatformModule } from './modules/platform';
 
 export interface PlatformClientConfig {
   /** Tenant ID for all requests. */
@@ -36,6 +37,7 @@ export class EAIPlatformClient {
   private _documents?: DocumentsModule;
   private _users?: UsersModule;
   private _auth?: AuthModule;
+  private _platform?: PlatformModule;
   constructor(config: PlatformClientConfig) {
     const appBasePath = (process.env.NEXT_PUBLIC_APP_BASE_PATH ?? '').replace(
       /\/+$/,
@@ -89,6 +91,14 @@ export class EAIPlatformClient {
       this._auth = new AuthModule(this.baseUrl);
     }
     return this._auth;
+  }
+
+  /** Platform management helpers via /v4/platform/* */
+  get platform(): PlatformModule {
+    if (!this._platform) {
+      this._platform = new PlatformModule(this.baseUrl);
+    }
+    return this._platform;
   }
 }
 

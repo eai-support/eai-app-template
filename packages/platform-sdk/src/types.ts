@@ -1,12 +1,11 @@
 /**
  * Platform SDK Types
  *
- * Core types derived from PublicAPI Pydantic models and ResourceAPI contracts.
- * Verified against platform submodules by engineering review.
+ * Core types for v4 platform API contracts.
  */
 
 // ---------------------------------------------------------------------------
-// Resource types (from ResourceAPI resource.py)
+// Resource types
 // ---------------------------------------------------------------------------
 
 export interface Resource<T = Record<string, unknown>> {
@@ -23,7 +22,7 @@ export interface Resource<T = Record<string, unknown>> {
 
 export interface ResourceUpdate {
   data: Record<string, unknown>;
-  /** Required for optimistic locking. ResourceAPI returns 409 on mismatch. */
+  /** Required for optimistic locking. The platform returns 409 on mismatch. */
   version: number;
 }
 
@@ -105,8 +104,137 @@ export interface RetryOptions {
   baseDelayMs?: number;
 }
 
+export interface ObjectTypeManagementRequest {
+  name?: string;
+  displayName?: string;
+  slug?: string;
+  status?: string;
+  tenant?: string;
+  [key: string]: unknown;
+}
+
+export type ResourceSearchMode = 'fulltext' | 'hybrid' | 'vector';
+
+export interface ResourceSearchRequest {
+  query: string;
+  objectTypes?: string[];
+  mode?: ResourceSearchMode;
+  limit?: number;
+  includePayload?: boolean;
+}
+
+export interface ResourceSearchHit<T = Record<string, unknown>> {
+  id: string;
+  objectType: string;
+  score?: number | null;
+  rerankerScore?: number | null;
+  content?: string | null;
+  payload?: T | null;
+}
+
+export interface ResourceSearchResponse<T = Record<string, unknown>> {
+  tenantId: string;
+  query: string;
+  mode: ResourceSearchMode;
+  indexName: string;
+  results: Array<ResourceSearchHit<T>>;
+}
+
+export interface ResourceFileUploadOptions {
+  filename?: string;
+  contentType?: string;
+  storagePath?: string;
+}
+
+export interface ResourceFileSasOptions {
+  expiresInSeconds?: number;
+}
+
+export interface ResourceFileUploadSessionOptions {
+  expiresInSeconds?: number;
+}
+
+export interface ResourceFileResponse {
+  tenantId: string;
+  objectType: string;
+  resourceId: string;
+  propertyName: string;
+  filename: string;
+  contentType?: string | null;
+  size: number;
+  blobRef: string;
+  blobUrl: string;
+  version: number;
+}
+
+export interface ResourceFileDeleteResponse {
+  tenantId: string;
+  objectType: string;
+  resourceId: string;
+  propertyName: string;
+  deleted: boolean;
+  version: number;
+}
+
+export interface ResourceFileSasResponse {
+  url: string;
+  expiresInSeconds: number;
+}
+
+export interface ResourceFileIndexStatusResponse {
+  tenantId: string;
+  objectType: string;
+  resourceId: string;
+  propertyName: string;
+  documentId: string;
+  status: 'pending' | 'indexed' | string;
+  indexName?: string | null;
+}
+
+export interface ResourceFileUploadSessionRequest {
+  filename: string;
+  contentType?: string;
+  size?: number | null;
+}
+
+export interface ResourceFileUploadSessionResponse {
+  tenantId: string;
+  objectType: string;
+  resourceId: string;
+  propertyName: string;
+  filename: string;
+  contentType: string;
+  size?: number | null;
+  blobRef: string;
+  uploadUrl: string;
+  serviceUploadUrl?: string | null;
+  expiresInSeconds: number;
+  requiredHeaders: Record<string, string>;
+}
+
+export interface ResourceFileCompleteRequest {
+  blobRef: string;
+  filename: string;
+  contentType?: string;
+  size?: number | null;
+  category?: string | null;
+  workflowKey?: string | null;
+  metadata?: Record<string, unknown>;
+  queueIngestion?: boolean;
+}
+
+export interface ResourceFileRetryResponse {
+  tenantId: string;
+  objectType: string;
+  resourceId: string;
+  propertyName: string;
+  latestRunId: string;
+  ingestionStatus: 'queued' | string;
+  version: number;
+}
+
 // ---------------------------------------------------------------------------
-// Chat types (from PublicAPI chat.py ChatRequest)
+// Chat types
 // ---------------------------------------------------------------------------
 
 export interface ChatMessage {
@@ -119,7 +247,21 @@ export interface ChatMessage {
   runtime_context?: Record<string, unknown>;
   message_history?: Array<{ role: string; content: string }>;
   ai_config?: Record<string, unknown>;
+  vertical_key?: string;
+  use_context_enrichment?: boolean;
+  integrations?: Array<Record<string, unknown>>;
+  document_scope?: 'all' | 'kb_only' | 'br_only' | 'kb_and_br' | 'none';
   business_request_id?: string;
+  ultimate_parent_id?: string;
+  tags?: string[];
+  flags?: string[];
+  document_type?: string | string[];
+  documentType?: string | string[];
+  search_context?: Record<string, unknown>;
+  integration_id?: string;
+  applicability_filter?: Record<string, unknown>;
+  tools?: Array<Record<string, unknown>>;
+  tool_choice?: string | Record<string, unknown>;
 }
 
 export interface ChatStreamOptions {
@@ -133,11 +275,25 @@ export interface ChatStreamOptions {
   runtime_context?: Record<string, unknown>;
   message_history?: Array<{ role: string; content: string }>;
   ai_config?: Record<string, unknown>;
+  vertical_key?: string;
+  use_context_enrichment?: boolean;
+  integrations?: Array<Record<string, unknown>>;
+  document_scope?: 'all' | 'kb_only' | 'br_only' | 'kb_and_br' | 'none';
   business_request_id?: string;
+  ultimate_parent_id?: string;
+  tags?: string[];
+  flags?: string[];
+  document_type?: string | string[];
+  documentType?: string | string[];
+  search_context?: Record<string, unknown>;
+  integration_id?: string;
+  applicability_filter?: Record<string, unknown>;
+  tools?: Array<Record<string, unknown>>;
+  tool_choice?: string | Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
-// User types (from PublicAPI users.py)
+// User types
 // ---------------------------------------------------------------------------
 
 export interface ProvisionMeRequest {
@@ -153,7 +309,7 @@ export interface EntraUser {
 }
 
 // ---------------------------------------------------------------------------
-// Document types (from PublicAPI documents.py)
+// Document types
 // ---------------------------------------------------------------------------
 
 export interface ChecklistRequest {
@@ -166,7 +322,7 @@ export interface ChecklistRequest {
 }
 
 // ---------------------------------------------------------------------------
-// Query types (from ResourceAPI query.py)
+// Query types
 // ---------------------------------------------------------------------------
 
 export interface JoinConfig {
@@ -193,6 +349,6 @@ export interface QueryRequest {
 
 export interface CreateLinkRequest {
   target_id: string;
-  /** Required by ResourceAPI — the object type of the target resource. */
+  /** Required by the platform — the object type of the target resource. */
   target_type: string;
 }

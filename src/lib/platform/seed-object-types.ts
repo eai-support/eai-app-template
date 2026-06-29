@@ -1,6 +1,5 @@
 import { objectTypes } from '@/eai.config/object-types';
-import { EAIPlatformClient } from '@enterpriseaigroup/platform-sdk';
-import { buildPublicApiUrl } from '@/lib/platform/publicapi-url';
+import { EAIPlatformClient, PlatformError } from '@enterpriseaigroup/platform-sdk';
 
 export interface SeedResult {
   name: string;
@@ -8,31 +7,37 @@ export interface SeedResult {
   message?: string;
 }
 
-function objectTypesUrl(
-  client: EAIPlatformClient,
-  params?: Record<string, unknown>,
-): string {
-  return buildPublicApiUrl(
-    client.baseUrl,
-    '/v4/data/resources/object-types',
-    params,
-  );
+function objectTypePayload(
+  type: (typeof objectTypes)[keyof typeof objectTypes][number],
+  tenantId?: string,
+) {
+  return {
+    name: type.name,
+    displayName: type.displayName,
+    description: type.description,
+    properties: type.properties,
+    linkTypes: type.linkTypes,
+    actions: type.actions,
+    storageBackend: type.storageBackend,
+    status: type.status,
+    ...(tenantId ? { tenant: tenantId } : {}),
+  };
 }
 
-function objectTypeRecordUrl(client: EAIPlatformClient, id: string): string {
-  return buildPublicApiUrl(
-    client.baseUrl,
-    `/v4/data/resources/object-types/${encodeURIComponent(id)}`,
-  );
+function failureMessage(prefix: string, error: unknown): string {
+  if (error instanceof PlatformError) {
+    return `${prefix}: ${error.status}`;
+  }
+  return error instanceof Error ? error.message : 'Unknown error';
 }
 
 /**
- * Seeds object types from eai.config to Configurator via PublicAPI v4.
+ * Seeds object types from eai.config through the v4 platform API.
  *
  * Idempotent: checks if each type exists before creating.
  *
  * @param tenantKey - Key in objectTypes map (e.g., 'template')
- * @param tenantId - Configurator tenant record ID (from TENANT_*_ID env var)
+ * @param tenantId - Tenant record ID (from TENANT_*_ID env var)
  */
 export async function seedObjectTypes(
   tenantKey: string,
@@ -55,77 +60,39 @@ export async function seedObjectTypes(
 
   for (const type of types) {
     try {
-      // Check if type already exists
-      const checkResponse = await fetch(
-        objectTypesUrl(client, {
+      const checkData = await client.resources.listObjectTypes<{
+        id?: string;
+      }>({
           where: { name: { equals: type.name }, tenant: { equals: tenantId } },
-        }),
-      );
-
-      const checkData = await checkResponse.json();
+      });
       const existing = checkData?.docs?.[0];
 
       if (existing) {
-        // Update existing type
-        const updateResponse = await fetch(
-          objectTypeRecordUrl(client, existing.id),
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              displayName: type.displayName,
-              description: type.description,
-              properties: type.properties,
-              linkTypes: type.linkTypes,
-              actions: type.actions,
-              storageBackend: type.storageBackend,
-              status: type.status,
-            }),
-          },
+        if (!existing.id) {
+          results.push({
+            name: type.name,
+            status: 'failed',
+            message: 'Existing object type is missing id',
+          });
+          continue;
+        }
+
+        await client.resources.updateObjectType(
+          existing.id,
+          objectTypePayload(type),
         );
-
-        if (updateResponse.ok) {
-          results.push({ name: type.name, status: 'updated' });
-        } else {
-          results.push({
-            name: type.name,
-            status: 'failed',
-            message: `Update failed: ${updateResponse.status}`,
-          });
-        }
+        results.push({ name: type.name, status: 'updated' });
       } else {
-        // Create new type
-        const createResponse = await fetch(objectTypesUrl(client), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: type.name,
-            displayName: type.displayName,
-            description: type.description,
-            properties: type.properties,
-            linkTypes: type.linkTypes,
-            actions: type.actions,
-            storageBackend: type.storageBackend,
-            status: type.status,
-            tenant: tenantId,
-          }),
-        });
-
-        if (createResponse.ok) {
-          results.push({ name: type.name, status: 'created' });
-        } else {
-          results.push({
-            name: type.name,
-            status: 'failed',
-            message: `Create failed: ${createResponse.status}`,
-          });
-        }
+        await client.resources.createObjectType(
+          objectTypePayload(type, tenantId),
+        );
+        results.push({ name: type.name, status: 'created' });
       }
     } catch (error) {
       results.push({
         name: type.name,
         status: 'failed',
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: failureMessage('Object type seed failed', error),
       });
     }
   }

@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { EAIPlatformClient } from '@enterpriseaigroup/platform-sdk';
+import {
+  EAIPlatformClient,
+  type RagIndexRequest,
+} from '@enterpriseaigroup/platform-sdk';
 
 /**
  * Document processing hook using Platform SDK.
@@ -17,9 +20,11 @@ import { EAIPlatformClient } from '@enterpriseaigroup/platform-sdk';
  * ```
  */
 export function useDocuments(tenantId?: string) {
+  const resolvedTenantId =
+    tenantId || process.env.NEXT_PUBLIC_EAI_TENANT_ID || '';
   const client = useMemo(
-    () => new EAIPlatformClient({ tenantId: tenantId || '' }),
-    [tenantId],
+    () => new EAIPlatformClient({ tenantId: resolvedTenantId }),
+    [resolvedTenantId],
   );
 
   const upload = useCallback(
@@ -39,9 +44,14 @@ export function useDocuments(tenantId?: string) {
   );
 
   const ragIndex = useCallback(
-    (documentId: string) => client.documents.ragIndex(documentId),
+    (request: string | RagIndexRequest) => client.documents.ragIndex(request),
     [client],
   );
 
-  return { upload, classify, classifyByUrl, ragIndex };
+  const getJobStatus = useCallback(
+    (jobId: string) => client.documents.getJobStatus(jobId),
+    [client],
+  );
+
+  return { upload, classify, classifyByUrl, ragIndex, getJobStatus };
 }

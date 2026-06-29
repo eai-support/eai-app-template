@@ -53,7 +53,7 @@ describe('resolvePublicApiBaseUrl', () => {
 
     expect(result.baseUrl).toBe('https://api.eu.example.com');
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://api.example.com/v3/session/resolve',
+      'https://api.example.com/v4/identity/session/resolve',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
@@ -63,8 +63,7 @@ describe('resolvePublicApiBaseUrl', () => {
     );
   });
 
-  it('HP001 uses the v4 identity bootstrap route when enabled', async () => {
-    process.env.PUBLICAPI_V4_IDENTITY_ENABLED = 'true';
+  it('HP001 uses the v4 identity bootstrap route without feature flags', async () => {
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
       json: async () => ({

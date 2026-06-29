@@ -111,6 +111,12 @@ export function publicApiRouteFamilyForPath(
 export function resolvePublicApiRoutePath(path: string): string {
   const { routePath, query } = splitPathAndQuery(path);
   const family = publicApiRouteFamilyForPath(routePath);
+  if (family === 'data-resources') {
+    return withQuery(
+      routePath.replace(/^v3\/resources/, 'v4/data/resources'),
+      query,
+    );
+  }
   if (!family || !isPublicApiV4RouteFamilyEnabled(family)) {
     return withQuery(routePath, query);
   }
@@ -160,12 +166,6 @@ export function resolvePublicApiRoutePath(path: string): string {
   }
   if (family === 'ai') {
     return withQuery(routePath.replace(/^v3\//, 'v4/ai/'), query);
-  }
-  if (family === 'data-resources') {
-    return withQuery(
-      routePath.replace(/^v3\/resources/, 'v4/data/resources'),
-      query,
-    );
   }
   if (family === 'data-documents') {
     return withQuery(

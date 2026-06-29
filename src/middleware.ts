@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { auth } from '@/auth';
 
 // API routes that require authentication
-const PROTECTED_API_ROUTES = ['/api/eai/v3/users/', '/api/eai/v4/identity/'];
+const PROTECTED_API_ROUTES = ['/api/eai/v4/identity/'];
 
 // Routes that should bypass auth check
 const PUBLIC_ROUTES = [
