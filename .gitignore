@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+.stage050-artifacts/
 
 # next.js
 /.next/
@@ -72,5 +73,4 @@ node_modules/
 # Log files
 *.log
 mcp_sharepoint.log
-
 
