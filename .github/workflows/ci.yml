@@ -49,6 +49,9 @@ jobs:
       - name: Unit tests
         run: npm run test:unit:ci
 
+      - name: Source-unknown handoff evidence test
+        run: npm run test:source-unknown-evidence
+
       - name: Type check
         run: npm run typecheck
 
