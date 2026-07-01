@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { APPROVED_SCHEMA_PROVENANCE } from './schema-provenance';
+
 describe('eai.runtime.json', () => {
   it('declares the provider-neutral runtime contract expected by the CLI', async () => {
     const contract = JSON.parse(
@@ -36,5 +38,6 @@ describe('eai.runtime.json', () => {
       targetScope: 'EAI_SERVICE_TARGET_SCOPE',
       tenantName: 'EAI_SERVICE_TENANT_NAME',
     });
+    expect(contract.schemaProvenance).toEqual(APPROVED_SCHEMA_PROVENANCE);
   });
 });
