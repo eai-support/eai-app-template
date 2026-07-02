@@ -194,9 +194,11 @@ jobs:
             --tenant-id "$TENANT_ID" \
             --operation-id "$OPERATION_ID" \
             --environment "$DEPLOY_ENVIRONMENT" \
+            --repo "$GITHUB_REPOSITORY" \
             --workflow "$EAI_WORKFLOW_PATH" \
             --ref "$GITHUB_REF" \
             --commit "$GITHUB_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
             --config-hash "${{ steps.evidence.outputs.config_hash }}" \
             --artifact-digest "${{ steps.evidence.outputs.artifact_digest }}" \
             --image-digest "${{ steps.evidence.outputs.image_digest }}" \

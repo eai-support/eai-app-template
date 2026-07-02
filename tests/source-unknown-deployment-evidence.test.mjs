@@ -8,6 +8,7 @@ import test from 'node:test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const evidenceScript = join(repoRoot, 'scripts/source-unknown-deployment-evidence.mjs');
+const workflowPath = join(repoRoot, '.github/workflows/eai-app.yml');
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 
 function writeFixtureApp(root) {
@@ -96,6 +97,17 @@ test('collect writes source-unknown handoff evidence and GitHub outputs', () => 
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
+});
+
+test('workflow sends source metadata in deployment handoff', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const handoffStep = workflow.match(
+    /- name: Request deployment handoff[\s\S]*?- name: Assert TenantInfra handoff remains pending/,
+  )?.[0];
+
+  assert.ok(handoffStep, 'Request deployment handoff step must exist');
+  assert.match(handoffStep, /--repo "\$GITHUB_REPOSITORY"/);
+  assert.match(handoffStep, /--workflow-run-id "\$GITHUB_RUN_ID"/);
 });
 
 test('assert-handoff-pending accepts pending TenantInfra handoff responses', () => {
