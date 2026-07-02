@@ -24,6 +24,8 @@ describe('readiness route', () => {
       BASE_URL_PUBLIC_API: 'https://publicapi.example.test',
       ROUTING_BOOTSTRAP_PUBLIC_API_URL: 'https://publicapi.example.test',
       EAI_PRODUCT_SLUG: 'contract-test',
+      EAI_ENVIRONMENT: 'dev',
+      EAI_CONFIG_HASH: 'cfg-123',
       TENANT_KEYS: 'template',
       TENANT_TEMPLATE_ID: 'tenant-template',
       WORKFLOW_TEMPLATE_ID: 'workflow-template',
@@ -47,8 +49,21 @@ describe('readiness route', () => {
     process.env = originalEnv;
   });
 
+  function readinessRequest(headers: Record<string, string> = {}): Request {
+    return {
+      headers: new Headers({
+        'x-eai-readiness-probe': 'tenantinfra',
+        'x-eai-tenant-id': 'tenant-template',
+        'x-eai-app-key': 'contract-test',
+        'x-eai-environment': 'dev',
+        'x-eai-config-hash': 'cfg-123',
+        ...headers,
+      }),
+    } as Request;
+  }
+
   it('returns readiness with no-store cache headers', async () => {
-    const response = await GET();
+    const response = await GET(readinessRequest());
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -63,7 +78,7 @@ describe('readiness route', () => {
   it('returns 503 with sanitized failure categories when readiness fails', async () => {
     delete process.env.AUTH_SECRET;
 
-    const response = await GET();
+    const response = await GET(readinessRequest());
     const body = await response.json();
     const serialized = JSON.stringify(body);
 
@@ -74,5 +89,48 @@ describe('readiness route', () => {
     expect(serialized).toContain('AUTH_SECRET');
     expect(serialized).not.toContain('test-entra-secret');
     expect(serialized).not.toContain('test-auth-secret');
+  });
+
+  it('rejects requests that are not TenantInfra readiness probes', async () => {
+    const response = await GET({ headers: new Headers() } as Request);
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.failureCategories).toEqual(['auth_misconfigured']);
+    expect(body.checks).toEqual([
+      { name: 'tenantinfra-probe', ok: false, category: 'auth_misconfigured' },
+    ]);
+  });
+
+  it('rejects readiness probes with mismatched tenant scope', async () => {
+    const response = await GET(
+      readinessRequest({ 'x-eai-tenant-id': 'tenant-other' }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.failureCategories).toEqual(['tenant_assignment_invalid']);
+  });
+
+  it('rejects probes without the configured bearer token', async () => {
+    process.env.EAI_READINESS_PROBE_TOKEN = 'probe-token';
+
+    const response = await GET(readinessRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.failureCategories).toEqual(['auth_misconfigured']);
+  });
+
+  it('accepts probes with the configured bearer token', async () => {
+    process.env.EAI_READINESS_PROBE_TOKEN = 'probe-token';
+
+    const response = await GET(
+      readinessRequest({ authorization: 'Bearer probe-token' }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.failureCategories).toEqual([]);
   });
 });
