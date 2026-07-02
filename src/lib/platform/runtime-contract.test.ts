@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { APPROVED_SCHEMA_PROVENANCE } from './schema-provenance';
+import { validateSecretRefDeclarations } from '../../eai.config/deployment-contract';
 
 describe('eai.runtime.json', () => {
   it('declares the provider-neutral runtime contract expected by the CLI', async () => {
@@ -26,6 +27,35 @@ describe('eai.runtime.json', () => {
     expect(contract.secrets.required).toEqual(
       expect.arrayContaining(['AUTH_SECRET', 'ENTRA_CLIENT_SECRET']),
     );
+    expect(contract.secrets.declarations.required).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'AUTH_SECRET',
+          required: true,
+          secretRef: {
+            kind: 'tenant-infra-envelope',
+            name: 'AUTH_SECRET',
+          },
+        }),
+        expect.objectContaining({
+          name: 'ENTRA_CLIENT_SECRET',
+          required: true,
+          secretRef: {
+            kind: 'tenant-infra-envelope',
+            name: 'ENTRA_CLIENT_SECRET',
+          },
+        }),
+      ]),
+    );
+    expect(
+      validateSecretRefDeclarations(
+        contract.secrets.declarations,
+        'secrets.declarations',
+      ),
+    ).toEqual({
+      valid: true,
+      errors: [],
+    });
     expect(contract.endpoints).toMatchObject({
       health: '/health',
       authProviders: '/api/auth/providers',

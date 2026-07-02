@@ -14,6 +14,7 @@
     "compile": "tsc",
     "build:local": "dotenv -e .env.local -- next build",
     "check:route-exports": "node scripts/check-route-exports.mjs",
+    "eai:config:validate": "node scripts/validate-eai-config.cjs",
     "build": "npm run check:route-exports && next build",
     "build:object-types": "node scripts/generate-object-types-json.mjs",
     "start": "node server.js",

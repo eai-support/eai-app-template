@@ -44,7 +44,61 @@
   },
   "secrets": {
     "required": ["AUTH_SECRET", "ENTRA_CLIENT_SECRET"],
-    "optional": ["EAI_SERVICE_CLIENT_SECRET", "OBO_CLIENT_SECRET"]
+    "optional": ["EAI_SERVICE_CLIENT_SECRET", "OBO_CLIENT_SECRET"],
+    "declarations": {
+      "required": [
+        {
+          "name": "AUTH_SECRET",
+          "purpose": "auth",
+          "required": true,
+          "environments": ["dev", "test", "prod", "demo"],
+          "restartRequired": true,
+          "displayName": "Auth.js session signing secret",
+          "secretRef": {
+            "kind": "tenant-infra-envelope",
+            "name": "AUTH_SECRET"
+          }
+        },
+        {
+          "name": "ENTRA_CLIENT_SECRET",
+          "purpose": "auth",
+          "required": true,
+          "environments": ["dev", "test", "prod", "demo"],
+          "restartRequired": true,
+          "displayName": "Microsoft Entra client secret",
+          "secretRef": {
+            "kind": "tenant-infra-envelope",
+            "name": "ENTRA_CLIENT_SECRET"
+          }
+        }
+      ],
+      "optional": [
+        {
+          "name": "EAI_SERVICE_CLIENT_SECRET",
+          "purpose": "service-identity",
+          "required": false,
+          "environments": ["dev", "test", "prod", "demo"],
+          "restartRequired": true,
+          "displayName": "PublicAPI service identity client secret",
+          "secretRef": {
+            "kind": "tenant-infra-envelope",
+            "name": "EAI_SERVICE_CLIENT_SECRET"
+          }
+        },
+        {
+          "name": "OBO_CLIENT_SECRET",
+          "purpose": "service-identity",
+          "required": false,
+          "environments": ["dev", "test", "prod", "demo"],
+          "restartRequired": true,
+          "displayName": "Legacy OBO service identity client secret",
+          "secretRef": {
+            "kind": "tenant-infra-envelope",
+            "name": "OBO_CLIENT_SECRET"
+          }
+        }
+      ]
+    }
   },
   "auth": {
     "provider": "authjs",
