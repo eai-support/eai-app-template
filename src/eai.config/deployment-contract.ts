@@ -88,7 +88,7 @@ export const templateDeploymentContract: TemplateDeploymentContract = {
   deployment: {
     target: 'container-apps',
     healthPath: '/health',
-    readinessPath: '/health',
+    readinessPath: '/api/eai/readiness',
     containerPort: 3000,
     workflow: {
       name: 'EAI App Deployment',

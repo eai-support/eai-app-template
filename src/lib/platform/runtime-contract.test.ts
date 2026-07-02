@@ -58,6 +58,7 @@ describe('eai.runtime.json', () => {
     });
     expect(contract.endpoints).toMatchObject({
       health: '/health',
+      readiness: '/api/eai/readiness',
       authProviders: '/api/auth/providers',
       runtimeConfig: '/api/eai/config',
       bffBasePath: '/api/eai',

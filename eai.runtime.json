@@ -134,6 +134,7 @@
   },
   "endpoints": {
     "health": "/health",
+    "readiness": "/api/eai/readiness",
     "authProviders": "/api/auth/providers",
     "runtimeConfig": "/api/eai/config",
     "bffBasePath": "/api/eai",
@@ -151,6 +152,13 @@
         "path": "/health",
         "expectedStatus": 200,
         "category": "app_not_running"
+      },
+      {
+        "name": "readiness",
+        "method": "GET",
+        "path": "/api/eai/readiness",
+        "expectedStatus": 200,
+        "category": "config_missing"
       },
       {
         "name": "auth-providers",
