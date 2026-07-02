@@ -22,10 +22,15 @@ describe('eai.runtime.json', () => {
         'TENANT_KEYS',
         'ENTRA_CLIENT_ID',
         'AUTH_URL',
+        'EAI_ENVIRONMENT',
+        'EAI_CONFIG_HASH',
       ]),
     );
     expect(contract.secrets.required).toEqual(
       expect.arrayContaining(['AUTH_SECRET', 'ENTRA_CLIENT_SECRET']),
+    );
+    expect(contract.secrets.optional).toEqual(
+      expect.arrayContaining(['EAI_READINESS_PROBE_TOKEN']),
     );
     expect(contract.secrets.declarations.required).toEqual(
       expect.arrayContaining([
@@ -43,6 +48,18 @@ describe('eai.runtime.json', () => {
           secretRef: {
             kind: 'tenant-infra-envelope',
             name: 'ENTRA_CLIENT_SECRET',
+          },
+        }),
+      ]),
+    );
+    expect(contract.secrets.declarations.optional).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'EAI_READINESS_PROBE_TOKEN',
+          required: false,
+          secretRef: {
+            kind: 'tenant-infra-envelope',
+            name: 'EAI_READINESS_PROBE_TOKEN',
           },
         }),
       ]),

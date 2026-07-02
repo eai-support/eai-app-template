@@ -10,6 +10,8 @@ function readyEnv(): NodeJS.ProcessEnv {
     BASE_URL_PUBLIC_API: 'https://publicapi.example.test',
     ROUTING_BOOTSTRAP_PUBLIC_API_URL: 'https://publicapi.example.test',
     EAI_PRODUCT_SLUG: 'contract-test',
+    EAI_ENVIRONMENT: 'dev',
+    EAI_CONFIG_HASH: 'cfg-123',
     TENANT_KEYS: 'template',
     TENANT_TEMPLATE_ID: 'tenant-template',
     WORKFLOW_TEMPLATE_ID: 'workflow-template',

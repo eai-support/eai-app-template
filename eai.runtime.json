@@ -28,6 +28,8 @@
       "BASE_URL_PUBLIC_API",
       "ROUTING_BOOTSTRAP_PUBLIC_API_URL",
       "EAI_PRODUCT_SLUG",
+      "EAI_ENVIRONMENT",
+      "EAI_CONFIG_HASH",
       "TENANT_KEYS",
       "ENTRA_TENANT_NAME",
       "ENTRA_TENANT_ID",
@@ -44,7 +46,11 @@
   },
   "secrets": {
     "required": ["AUTH_SECRET", "ENTRA_CLIENT_SECRET"],
-    "optional": ["EAI_SERVICE_CLIENT_SECRET", "OBO_CLIENT_SECRET"],
+    "optional": [
+      "EAI_SERVICE_CLIENT_SECRET",
+      "OBO_CLIENT_SECRET",
+      "EAI_READINESS_PROBE_TOKEN"
+    ],
     "declarations": {
       "required": [
         {
@@ -95,6 +101,18 @@
           "secretRef": {
             "kind": "tenant-infra-envelope",
             "name": "OBO_CLIENT_SECRET"
+          }
+        },
+        {
+          "name": "EAI_READINESS_PROBE_TOKEN",
+          "purpose": "readiness-probe-auth",
+          "required": false,
+          "environments": ["dev", "test", "prod", "demo"],
+          "restartRequired": true,
+          "displayName": "TenantInfra readiness probe bearer token",
+          "secretRef": {
+            "kind": "tenant-infra-envelope",
+            "name": "EAI_READINESS_PROBE_TOKEN"
           }
         }
       ]
