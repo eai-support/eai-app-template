@@ -113,7 +113,7 @@ describe('readiness route', () => {
   });
 
   it('rejects probes without the configured bearer token', async () => {
-    process.env.EAI_READINESS_PROBE_TOKEN = 'probe-token';
+    process.env['EAI_READINESS_PROBE_TOKEN'] = 'probe-token';
 
     const response = await GET(readinessRequest());
     const body = await response.json();
@@ -123,7 +123,7 @@ describe('readiness route', () => {
   });
 
   it('accepts probes with the configured bearer token', async () => {
-    process.env.EAI_READINESS_PROBE_TOKEN = 'probe-token';
+    process.env['EAI_READINESS_PROBE_TOKEN'] = 'probe-token';
 
     const response = await GET(
       readinessRequest({ authorization: 'Bearer probe-token' }),
