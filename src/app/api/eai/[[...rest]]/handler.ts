@@ -11,14 +11,21 @@ export interface RouteContext {
   params: Promise<{ rest?: string[] }>;
 }
 
-const SERVER_TENANT_ID =
-  process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
-  process.env.EAI_TENANT_ID ||
-  process.env.TENANT_DEFAULT_ID;
-const PRODUCT_SLUG =
-  process.env.EAI_PRODUCT_SLUG ||
-  process.env.NEXT_PUBLIC_APP_NAME ||
-  'eai-app-template';
+function getServerTenantId(): string | undefined {
+  return (
+    process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
+    process.env.EAI_TENANT_ID ||
+    process.env.TENANT_DEFAULT_ID
+  );
+}
+
+function getProductSlug(): string {
+  return (
+    process.env.EAI_PRODUCT_SLUG ||
+    process.env.NEXT_PUBLIC_APP_NAME ||
+    'eai-app-template'
+  );
+}
 
 // Content types that should be treated as binary (not logged as text)
 const BINARY_CONTENT_TYPES = [
@@ -35,6 +42,22 @@ function isBinaryContentType(contentType: string | null): boolean {
   return BINARY_CONTENT_TYPES.some((type) =>
     contentType.toLowerCase().includes(type),
   );
+}
+
+function resolveTenantScopedPlatformPath(path: string, tenantId?: string): string {
+  if (!tenantId) return path;
+
+  const encodedTenantId = encodeURIComponent(tenantId);
+  if (path === 'v4/platform/users/by-email') {
+    return `v4/platform/tenants/${encodedTenantId}/users/by-email`;
+  }
+
+  const membershipMatch = path.match(/^v4\/platform\/users\/([^/]+)\/memberships$/);
+  if (membershipMatch?.[1]) {
+    return `v4/platform/tenants/${encodedTenantId}/users/${membershipMatch[1]}/memberships`;
+  }
+
+  return path;
 }
 
 async function proxyRequest(
@@ -63,9 +86,9 @@ async function proxyRequest(
       const resolved = await resolvePublicApiBaseUrl({
         accessToken: token,
         fallbackBaseUrl,
-        product: PRODUCT_SLUG,
+        product: getProductSlug(),
         currentAppHost: request.nextUrl.host,
-        requestedTenantId: SERVER_TENANT_ID,
+        requestedTenantId: getServerTenantId(),
       });
       baseUrl = resolved.baseUrl;
       console.log('[EAI Proxy] Using user token for:', path);
@@ -87,7 +110,10 @@ async function proxyRequest(
     }
 
     const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-    const targetPath = resolvePublicApiRoutePath(path);
+    const targetPath = resolveTenantScopedPlatformPath(
+      resolvePublicApiRoutePath(path),
+      getServerTenantId(),
+    );
     const targetUrl = new URL(targetPath, normalizedBaseUrl);
     console.log('[EAI Proxy] Target URL:', targetUrl.toString());
 
@@ -97,8 +123,9 @@ async function proxyRequest(
     });
 
     // Keep the tenant header server-authoritative so clients cannot spoof tenant context.
-    if (SERVER_TENANT_ID) {
-      headers.set('tenant', SERVER_TENANT_ID);
+    const serverTenantId = getServerTenantId();
+    if (serverTenantId) {
+      headers.set('tenant', serverTenantId);
     }
 
     const fetchOptions: RequestInit & { duplex?: 'half' } = {

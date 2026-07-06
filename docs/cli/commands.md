@@ -72,6 +72,16 @@ Use this immediately after a failed `eai` command. Prefer the JSON form for
 agent workflows because it includes diagnostics, fixes, retry limits, and
 mutation safety.
 
+For `MISSING_TENANT` or "Tenant context required for app tokens" on platform
+user lookup or membership prerequisite calls, use:
+
+```bash
+eai errors explain app_token_tenant_context_required --format json
+```
+
+Then retry through tenant-scoped V4 platform routes before changing tenant
+members, role definitions, Entra configuration, databases, or cloud portals.
+
 ---
 
 ## `eai update`

@@ -121,4 +121,29 @@ describe('EAI proxy v4 route-family routing', () => {
       expect.any(Object),
     );
   });
+
+  it('HP002 rewrites root platform user lookups to tenant-scoped v4 paths when app tenant is configured', async () => {
+    process.env.EAI_TENANT_ID = 'tenant-a';
+
+    await GET(
+      createRequest('v4/platform/users/by-email?email=jane@example.com'),
+      createContext('v4/platform/users/by-email'),
+    );
+    await GET(
+      createRequest('v4/platform/users/user-oid/memberships'),
+      createContext('v4/platform/users/user-oid/memberships'),
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://regional-api.example.com/public/v4/platform/tenants/tenant-a/users/by-email?email=jane%40example.com',
+      expect.any(Object),
+    );
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://regional-api.example.com/public/v4/platform/tenants/tenant-a/users/user-oid/memberships',
+      expect.any(Object),
+    );
+    expect(mockResolvePublicApiBaseUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ requestedTenantId: 'tenant-a' }),
+    );
+  });
 });
