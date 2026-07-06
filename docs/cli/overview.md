@@ -65,6 +65,18 @@ eai doctor --check-updates
 ```
 
 When calling PublicAPI directly through `eai publicapi`, use only `/v4/...` paths.
+For app-token or service-identity platform user lookups, use tenant-scoped
+routes like `/v4/platform/tenants/<tenant-id>/users/by-email?email=<email>` and
+`/v4/platform/tenants/<tenant-id>/users/<oid>/memberships`. If a root
+`/v4/platform/users/...` call reports `MISSING_TENANT` or "Tenant context
+required for app tokens", run:
+
+```bash
+eai errors explain app_token_tenant_context_required --format json
+```
+
+Do that before changing tenant members, role definitions, Entra configuration,
+databases, or cloud portals.
 
 ## Getting Started Workflow
 

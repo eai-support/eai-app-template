@@ -21,6 +21,17 @@ choosing how to use Enterprise AI platform services from the EAI App Template.
   stay server-side.
 - Prefer PublicAPI V4 routes. V3 route-family mapping is compatibility glue, not
   the pattern for new work.
+- For platform user lookup, membership prerequisite, tenant member, and
+  role-definition work from app-token or service-identity flows, use
+  tenant-scoped V4 platform routes:
+  `/v4/platform/tenants/<tenant-id>/users/by-email?email=<email>`,
+  `/v4/platform/tenants/<tenant-id>/users/<oid>/memberships`,
+  `/v4/platform/tenants/<tenant-id>/members`, and
+  `/v4/platform/tenants/<tenant-id>/role-definitions`. If root
+  `/v4/platform/users/...` calls return `MISSING_TENANT`, run
+  `eai errors explain app_token_tenant_context_required --format json` and fix
+  the route/context before changing tenant members, Entra, role definitions,
+  databases, or cloud portals.
 
 ## Service Selection Matrix
 
@@ -38,7 +49,7 @@ choosing how to use Enterprise AI platform services from the EAI App Template.
 | Index documents for RAG      | `useDocuments().ragIndex(documentId)`                                                    | `eai docs index <documentId>`                                                               | RAG indexing is document-service indexing, not an Object Type storage backend. |
 | Non-streaming chat           | `useChat(workflowId, stage).send(...)`                                                   | `eai chat send "message"`                                                                   | Requires tenant, workflow, stage, message, conversation ID, and params.        |
 | Streaming chat               | `useChat(workflowId, stage).stream(...)`                                                 | `eai chat stream "message"`                                                                 | Uses the stream BFF path `/api/eai/stream/...`.                                |
-| Identity/session             | server route, middleware, or auth helpers                                                | `eai whoami`, `eai tenant select`, `eai publicapi get /v4/identity/me`                      | Keep access tokens server-side in apps.                                        |
+| Identity/session             | server route, middleware, auth helpers, or tenant-scoped `client.platform` user helpers   | `eai whoami`, `eai tenant select`, `eai publicapi get /v4/identity/me`                      | Keep access tokens server-side in apps. For platform user/member prerequisites, use `/v4/platform/tenants/{tenantId}/...`. |
 | Advanced V4 route            | BFF route or approved server helper                                                      | `eai publicapi <method> /v4/...`                                                            | Use named SDK/CLI commands when available.                                     |
 
 ## Storage Backend Patterns

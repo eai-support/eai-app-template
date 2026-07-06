@@ -99,6 +99,23 @@ eai errors explain <code-or-reason> --format json
 
 Use `eai update --check` or `eai doctor --check-updates` when a command is missing, help looks stale, or the local CLI may be behind the published release. Direct PublicAPI calls through `eai publicapi` should use only `/v4/...` paths.
 
+If platform user lookup or membership prerequisite calls return
+`MISSING_TENANT`, `app_token_tenant_context_required`, or "Tenant context
+required for app tokens", explain that error before changing state:
+
+```bash
+eai errors explain app_token_tenant_context_required --format json
+```
+
+Then confirm the tenant with `eai whoami` and `eai tenant list --format json`
+and use tenant-scoped platform routes such as
+`/v4/platform/tenants/<tenant-id>/users/by-email?email=<email>`,
+`/v4/platform/tenants/<tenant-id>/users/<oid>/memberships`,
+`/v4/platform/tenants/<tenant-id>/members`, and
+`/v4/platform/tenants/<tenant-id>/role-definitions`. Do not start by changing
+tenant members, Entra configuration, role definitions, databases, or cloud
+portals.
+
 ## Tenant Data Plane Model
 
 - `postgresql`: canonical structured resource storage for most app data.
