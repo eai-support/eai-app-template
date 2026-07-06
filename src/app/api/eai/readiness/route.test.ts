@@ -76,7 +76,7 @@ describe('readiness route', () => {
   });
 
   it('returns 503 with sanitized failure categories when readiness fails', async () => {
-    delete process.env.AUTH_SECRET;
+    delete process.env['AUTH_SECRET'];
 
     const response = await GET(readinessRequest());
     const body = await response.json();
