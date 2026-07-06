@@ -23,6 +23,7 @@ function readyEnv(): NodeJS.ProcessEnv {
     AUTH_URL: 'https://contract-test.example.test',
     AUTH_TRUST_HOST: 'true',
     AUTH_SECRET: 'test-auth-secret',
+    EAI_READINESS_PROBE_TOKEN: 'probe-token',
   };
 }
 

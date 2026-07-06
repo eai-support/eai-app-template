@@ -46,7 +46,10 @@ function validateTenantInfraProbe(request: Request): Response | null {
   }
 
   const token = process.env[readinessProbeTokenEnvKey];
-  if (token && headers.get('authorization') !== `Bearer ${token}`) {
+  if (!token) {
+    return probeFailure('auth_misconfigured', 503);
+  }
+  if (headers.get('authorization') !== `Bearer ${token}`) {
     return probeFailure('auth_misconfigured', 401);
   }
 

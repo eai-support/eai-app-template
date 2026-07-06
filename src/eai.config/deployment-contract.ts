@@ -14,7 +14,7 @@ export interface SecretRef {
 
 export interface SecretRefDeclaration {
   name: string;
-  purpose: 'auth' | 'service-identity' | 'integration';
+  purpose: 'auth' | 'service-identity' | 'integration' | 'readiness-probe-auth';
   required: boolean;
   environments: DeploymentEnvironment[];
   restartRequired: boolean;
@@ -119,6 +119,18 @@ export const templateDeploymentContract: TemplateDeploymentContract = {
         secretRef: {
           kind: 'tenant-infra-envelope',
           name: 'ENTRA_CLIENT_SECRET',
+        },
+      },
+      {
+        name: 'EAI_READINESS_PROBE_TOKEN',
+        purpose: 'readiness-probe-auth',
+        required: true,
+        environments: ['dev', 'test', 'prod', 'demo'],
+        restartRequired: true,
+        displayName: 'TenantInfra readiness probe bearer token',
+        secretRef: {
+          kind: 'tenant-infra-envelope',
+          name: 'EAI_READINESS_PROBE_TOKEN',
         },
       },
     ],

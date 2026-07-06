@@ -45,11 +45,14 @@
     }
   },
   "secrets": {
-    "required": ["AUTH_SECRET", "ENTRA_CLIENT_SECRET"],
+    "required": [
+      "AUTH_SECRET",
+      "ENTRA_CLIENT_SECRET",
+      "EAI_READINESS_PROBE_TOKEN"
+    ],
     "optional": [
       "EAI_SERVICE_CLIENT_SECRET",
-      "OBO_CLIENT_SECRET",
-      "EAI_READINESS_PROBE_TOKEN"
+      "OBO_CLIENT_SECRET"
     ],
     "declarations": {
       "required": [
@@ -76,6 +79,18 @@
             "kind": "tenant-infra-envelope",
             "name": "ENTRA_CLIENT_SECRET"
           }
+        },
+        {
+          "name": "EAI_READINESS_PROBE_TOKEN",
+          "purpose": "readiness-probe-auth",
+          "required": true,
+          "environments": ["dev", "test", "prod", "demo"],
+          "restartRequired": true,
+          "displayName": "TenantInfra readiness probe bearer token",
+          "secretRef": {
+            "kind": "tenant-infra-envelope",
+            "name": "EAI_READINESS_PROBE_TOKEN"
+          }
         }
       ],
       "optional": [
@@ -101,18 +116,6 @@
           "secretRef": {
             "kind": "tenant-infra-envelope",
             "name": "OBO_CLIENT_SECRET"
-          }
-        },
-        {
-          "name": "EAI_READINESS_PROBE_TOKEN",
-          "purpose": "readiness-probe-auth",
-          "required": false,
-          "environments": ["dev", "test", "prod", "demo"],
-          "restartRequired": true,
-          "displayName": "TenantInfra readiness probe bearer token",
-          "secretRef": {
-            "kind": "tenant-infra-envelope",
-            "name": "EAI_READINESS_PROBE_TOKEN"
           }
         }
       ]
@@ -176,6 +179,15 @@
         "method": "GET",
         "path": "/api/eai/readiness",
         "expectedStatus": 200,
+        "headers": {
+          "x-eai-readiness-probe": "tenantinfra",
+          "x-eai-tenant-id": "${NEXT_PUBLIC_EAI_TENANT_ID}",
+          "x-eai-app-key": "${EAI_PRODUCT_SLUG}",
+          "x-eai-environment": "${EAI_ENVIRONMENT}",
+          "x-eai-config-hash": "${EAI_CONFIG_HASH}",
+          "authorization": "Bearer ${EAI_READINESS_PROBE_TOKEN}"
+        },
+        "requiresSecret": "EAI_READINESS_PROBE_TOKEN",
         "category": "config_missing"
       },
       {

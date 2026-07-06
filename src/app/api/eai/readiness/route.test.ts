@@ -1,5 +1,9 @@
 import { GET } from './route';
 
+const READINESS_PROBE_TOKEN_ENV = ['EAI', 'READINESS', 'PROBE', 'TOKEN'].join(
+  '_',
+);
+
 describe('readiness route', () => {
   const mutableGlobal = global as {
     Response?: typeof Response;
@@ -37,6 +41,7 @@ describe('readiness route', () => {
       AUTH_URL: 'https://contract-test.example.test',
       AUTH_TRUST_HOST: 'true',
       AUTH_SECRET: 'test-auth-secret',
+      [READINESS_PROBE_TOKEN_ENV]: 'probe-token',
     };
   });
 
@@ -57,6 +62,7 @@ describe('readiness route', () => {
         'x-eai-app-key': 'contract-test',
         'x-eai-environment': 'dev',
         'x-eai-config-hash': 'cfg-123',
+        authorization: 'Bearer probe-token',
         ...headers,
       }),
     } as Request;
@@ -113,23 +119,25 @@ describe('readiness route', () => {
   });
 
   it('rejects probes without the configured bearer token', async () => {
-    const readinessProbeTokenEnvKey = ['EAI', 'READINESS', 'PROBE', 'TOKEN'].join('_');
-    process.env[readinessProbeTokenEnvKey] = 'probe-token';
-
-    const response = await GET(readinessRequest());
+    const response = await GET(readinessRequest({ authorization: '' }));
     const body = await response.json();
 
     expect(response.status).toBe(401);
     expect(body.failureCategories).toEqual(['auth_misconfigured']);
   });
 
-  it('accepts probes with the configured bearer token', async () => {
-    const readinessProbeTokenEnvKey = ['EAI', 'READINESS', 'PROBE', 'TOKEN'].join('_');
-    process.env[readinessProbeTokenEnvKey] = 'probe-token';
+  it('rejects probes when the bearer token is not configured', async () => {
+    delete process.env[READINESS_PROBE_TOKEN_ENV];
 
-    const response = await GET(
-      readinessRequest({ authorization: 'Bearer probe-token' }),
-    );
+    const response = await GET(readinessRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.failureCategories).toEqual(['auth_misconfigured']);
+  });
+
+  it('accepts probes with the configured bearer token', async () => {
+    const response = await GET(readinessRequest());
     const body = await response.json();
 
     expect(response.status).toBe(200);

@@ -29,7 +29,10 @@ describe('eai.runtime.json', () => {
     expect(contract.secrets.required).toEqual(
       expect.arrayContaining(['AUTH_SECRET', 'ENTRA_CLIENT_SECRET']),
     );
-    expect(contract.secrets.optional).toEqual(
+    expect(contract.secrets.required).toEqual(
+      expect.arrayContaining(['EAI_READINESS_PROBE_TOKEN']),
+    );
+    expect(contract.secrets.optional).not.toEqual(
       expect.arrayContaining(['EAI_READINESS_PROBE_TOKEN']),
     );
     expect(contract.secrets.declarations.required).toEqual(
@@ -43,6 +46,14 @@ describe('eai.runtime.json', () => {
           },
         }),
         expect.objectContaining({
+          name: 'EAI_READINESS_PROBE_TOKEN',
+          required: true,
+          secretRef: {
+            kind: 'tenant-infra-envelope',
+            name: 'EAI_READINESS_PROBE_TOKEN',
+          },
+        }),
+        expect.objectContaining({
           name: 'ENTRA_CLIENT_SECRET',
           required: true,
           secretRef: {
@@ -52,16 +63,9 @@ describe('eai.runtime.json', () => {
         }),
       ]),
     );
-    expect(contract.secrets.declarations.optional).toEqual(
+    expect(contract.secrets.declarations.optional).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          name: 'EAI_READINESS_PROBE_TOKEN',
-          required: false,
-          secretRef: {
-            kind: 'tenant-infra-envelope',
-            name: 'EAI_READINESS_PROBE_TOKEN',
-          },
-        }),
+        expect.objectContaining({ name: 'EAI_READINESS_PROBE_TOKEN' }),
       ]),
     );
     expect(
@@ -87,5 +91,18 @@ describe('eai.runtime.json', () => {
       tenantName: 'EAI_SERVICE_TENANT_NAME',
     });
     expect(contract.schemaProvenance).toEqual(APPROVED_SCHEMA_PROVENANCE);
+    expect(contract.endpoints.smokeTests).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'readiness',
+          expectedStatus: 200,
+          headers: expect.objectContaining({
+            'x-eai-readiness-probe': 'tenantinfra',
+            authorization: 'Bearer ${EAI_READINESS_PROBE_TOKEN}',
+          }),
+          requiresSecret: 'EAI_READINESS_PROBE_TOKEN',
+        }),
+      ]),
+    );
   });
 });
