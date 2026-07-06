@@ -454,6 +454,11 @@ eai chat stream "Help me understand the asylum process"
 
 Document upload, classification, and RAG indexing.
 
+Use `eai docs` when the file is the subject of document processing or AI
+context. Use `eai resources file` when the file is an attachment to an existing
+ResourceAPI object. See
+[V4 Documents And Files](../platform/documents-and-files.md).
+
 ### `eai docs upload`
 
 ```bash

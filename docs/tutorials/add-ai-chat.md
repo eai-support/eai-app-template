@@ -185,7 +185,7 @@ export default function ChatPage() {
 ## Step 4: Add Document Upload For RAG
 
 Create a document upload component that feeds documents into the platform RAG
-index:
+index. This uses the v4 document workflow, not a standalone blob upload:
 
 ```tsx
 'use client';
@@ -202,10 +202,18 @@ export function DocumentUploader() {
     if (!file) return;
 
     setStatus('Uploading...');
-    const uploaded = await upload(file, { category: 'knowledge-source' });
+    const uploadResponse = await upload(file, { category: 'knowledge-source' });
+    const uploaded = await uploadResponse.json();
+    const documentId =
+      uploaded.documentId ||
+      uploaded.documents?.[0]?.documentId ||
+      uploaded.documents?.[0]?.document_id;
 
     setStatus('Indexing for RAG...');
-    await ragIndex(uploaded.documentId);
+    await ragIndex({
+      documentId,
+      documentScope: 'kb',
+    });
 
     setStatus(`Done. ${file.name} is now available to the workflow.`);
   }
@@ -219,6 +227,11 @@ export function DocumentUploader() {
   );
 }
 ```
+
+When the chat workflow needs the uploaded document, pass document IDs and
+business context in `params` or `runtime_context`. The workflow should answer
+from indexed document context, not from a raw storage URL. For the full decision
+tree, see [V4 Documents And Files](../platform/documents-and-files.md).
 
 ## Step 5: Wire It Into Config
 

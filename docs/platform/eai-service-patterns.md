@@ -134,6 +134,9 @@ Use ResourceAPI file routes when the file is a property of a ResourceAPI object.
 Use document upload/classification/RAG routes when the platform should process
 the document content.
 
+For the full decision tree, workflow steps, and AI-agent prompt guidance, see
+[V4 Documents And Files](./documents-and-files.md).
+
 ## eai-gofer Decision Rules
 
 When eai-gofer is generating or modifying an EAI app:
