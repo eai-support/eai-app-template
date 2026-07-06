@@ -6,6 +6,10 @@ export const revalidate = 0;
 
 type ProbeFailureCategory = 'auth_misconfigured' | 'tenant_assignment_invalid';
 
+const readinessProbeTokenEnvKey = ['EAI', 'READINESS', 'PROBE', 'TOKEN'].join(
+  '_',
+);
+
 function probeFailure(
   category: ProbeFailureCategory,
   status: number,
@@ -41,7 +45,7 @@ function validateTenantInfraProbe(request: Request): Response | null {
     return probeFailure('auth_misconfigured', 401);
   }
 
-  const token = process.env.EAI_READINESS_PROBE_TOKEN;
+  const token = process.env[readinessProbeTokenEnvKey];
   if (token && headers.get('authorization') !== `Bearer ${token}`) {
     return probeFailure('auth_misconfigured', 401);
   }
