@@ -125,6 +125,12 @@ portals.
 
 For the default scaffold, canonical runtime data remains in structured resource storage and search is a derived index. Prefer that model for new apps unless a resource type clearly needs `blob` or `documentdb`.
 
+For file upload, use the v4 documents workflow when the file should be
+processed, classified, indexed for RAG, or used by AI. Use ResourceAPI file
+properties when the file is an attachment to a typed business resource. Do not
+create standalone browser-visible blob upload paths for new apps. See
+`docs/platform/documents-and-files.md`.
+
 ## Common Local Workflow
 
 ```bash
