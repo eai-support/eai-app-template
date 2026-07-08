@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+.eai-build/
 
 # next.js
 /.next/
@@ -72,5 +73,3 @@ node_modules/
 # Log files
 *.log
 mcp_sharepoint.log
-
-
