@@ -16,12 +16,15 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, '..');
-const inputPath = join(projectRoot, 'src/eai.config/object-types.ts');
-const outputPath = join(projectRoot, 'src/eai.config/object-types.json');
-const provisioningOutputPath = join(
-  projectRoot,
-  'src/eai.config/object-types.provisioning.json',
-);
+const inputPath =
+  process.env.EAI_OBJECT_TYPES_INPUT_PATH ??
+  join(projectRoot, 'src/eai.config/object-types.ts');
+const outputPath =
+  process.env.EAI_OBJECT_TYPES_OUTPUT_PATH ??
+  join(projectRoot, 'src/eai.config/object-types.json');
+const provisioningOutputPath =
+  process.env.EAI_OBJECT_TYPES_PROVISIONING_OUTPUT_PATH ??
+  join(projectRoot, 'src/eai.config/object-types.provisioning.json');
 
 const BACKEND_ORDER = ['postgresql', 'documentdb', 'blob', 'search'];
 
@@ -132,6 +135,7 @@ for (const line of lines) {
   let cleanedLine = line
     .replace(/export\s+const\s+(\w+)\s*:\s*[^=]+=/, 'const $1 =')
     .replace(/^(\s*)const\s+(\w+)\s*:\s*[^=]+=/, '$1const $2 =')
+    .replace(/\s+as\s+const\b/g, '')
     .replace('export const', 'const')
     .replace('export default', 'const objectTypes =');
 
