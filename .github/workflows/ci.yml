@@ -52,6 +52,9 @@ jobs:
       - name: Source-unknown handoff evidence test
         run: npm run test:source-unknown-evidence
 
+      - name: Issue attachment moderation test
+        run: node --test tests/issue-attachment-moderation.test.cjs
+
       - name: Type check
         run: npm run typecheck
 
