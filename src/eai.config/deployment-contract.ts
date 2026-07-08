@@ -14,7 +14,7 @@ export interface SecretRef {
 
 export interface SecretRefDeclaration {
   name: string;
-  purpose: 'auth' | 'service-identity' | 'integration' | 'readiness-probe-auth';
+  purpose: 'auth' | 'integration' | 'readiness-probe-auth';
   required: boolean;
   environments: DeploymentEnvironment[];
   restartRequired: boolean;
@@ -134,32 +134,7 @@ export const templateDeploymentContract: TemplateDeploymentContract = {
         },
       },
     ],
-    optional: [
-      {
-        name: 'EAI_SERVICE_CLIENT_SECRET',
-        purpose: 'service-identity',
-        required: false,
-        environments: ['dev', 'test', 'prod', 'demo'],
-        restartRequired: true,
-        displayName: 'PublicAPI service identity client secret',
-        secretRef: {
-          kind: 'tenant-infra-envelope',
-          name: 'EAI_SERVICE_CLIENT_SECRET',
-        },
-      },
-      {
-        name: 'OBO_CLIENT_SECRET',
-        purpose: 'service-identity',
-        required: false,
-        environments: ['dev', 'test', 'prod', 'demo'],
-        restartRequired: true,
-        displayName: 'Legacy OBO service identity client secret',
-        secretRef: {
-          kind: 'tenant-infra-envelope',
-          name: 'OBO_CLIENT_SECRET',
-        },
-      },
-    ],
+    optional: [],
   },
 };
 

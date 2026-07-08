@@ -12,6 +12,9 @@ choosing how to use Enterprise AI platform services from the EAI App Template.
 
 - Browser code calls the app BFF at `/api/eai/...`; it does not call PublicAPI
   directly.
+- Tenant app data-plane access is signed-in-user/OBO access. Do not add app-only
+  `client_credentials` access for ordinary ResourceAPI reads, writes, files, or
+  search.
 - App code should prefer the template SDK and hooks before hand-written fetches.
 - CLI automation may call platform services through the authenticated `eai`
   command.
@@ -21,9 +24,9 @@ choosing how to use Enterprise AI platform services from the EAI App Template.
   stay server-side.
 - Prefer PublicAPI V4 routes. V3 route-family mapping is compatibility glue, not
   the pattern for new work.
-- For platform user lookup, membership prerequisite, tenant member, and
-  role-definition work from app-token or service-identity flows, use
-  tenant-scoped V4 platform routes:
+- For support/platform automation outside the tenant app runtime, platform user
+  lookup, membership prerequisite, tenant member, and role-definition work must
+  use tenant-scoped V4 platform routes:
   `/v4/platform/tenants/<tenant-id>/users/by-email?email=<email>`,
   `/v4/platform/tenants/<tenant-id>/users/<oid>/memberships`,
   `/v4/platform/tenants/<tenant-id>/members`, and

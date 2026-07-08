@@ -11,8 +11,7 @@ specific host.
 - PublicAPI access through the app BFF at `/api/eai`
 - tenant and workflow configuration from `/api/eai/config`
 - `/health` for host liveness
-- optional service identity for server-side PublicAPI calls without an end-user
-  session
+- signed-in-user/OBO access for tenant data-plane calls
 - declared smoke tests that prove the app is usable, not only running
 
 ## Validate Locally
@@ -24,7 +23,8 @@ eai deploy env --provider generic
 
 `eai runtime validate` checks that required env names and secrets are declared,
 tenant/workflow keys are consistent, Auth.js callback paths are valid, public
-endpoints are listed, and service identity requirements are explicit.
+endpoints are listed, and public endpoints do not claim anonymous server-side
+platform access.
 
 ## Validate After Deploy
 
@@ -36,8 +36,7 @@ The deploy doctor checks `/health`, `/api/auth/providers`,
 `/api/eai/config`, declared public endpoints, declared smoke tests, and the
 app's BFF/runtime reachability. It classifies failures as host/infrastructure,
 app not running, Auth.js config, Entra callback config, PublicAPI config,
-tenant/workflow config, service identity config, PublicAPI authorization, or app
-runtime errors.
+tenant/workflow config, PublicAPI authorization, or app runtime errors.
 
 ## Provider Examples
 
@@ -53,7 +52,7 @@ runtime errors.
 - VM or internal demo host: provide the same environment contract through the
   host process manager and run the same doctor command.
 
-For app-only PublicAPI access, prefer `EAI_SERVICE_CLIENT_ID`,
-`EAI_SERVICE_CLIENT_SECRET`, `EAI_SERVICE_TARGET_SCOPE`, and
-`EAI_SERVICE_TENANT_NAME`. Existing `OBO_*` aliases remain supported for
-backward compatibility.
+Tenant apps do not use app-only PublicAPI credentials for ordinary ResourceAPI
+or data-plane work. Require sign-in and use the `/api/eai` BFF/OBO path. For
+long-running or scheduled work, create a user-authorized platform workflow/job
+instead of giving the app a broad service identity.

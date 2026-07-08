@@ -5,7 +5,6 @@ import {
   RoutingResolutionError,
 } from '@/lib/platform/session-resolve';
 import { resolvePublicApiRoutePath } from '@/lib/platform/publicapi-route-family';
-import { getServiceAccessToken } from '@/lib/platform/service-token';
 
 export interface RouteContext {
   params: Promise<{ rest?: string[] }>;
@@ -79,7 +78,8 @@ async function proxyRequest(
     headers.delete('tenant');
     headers.delete('x-tenant-id');
 
-    // Try to get user token first, fallback to client credentials
+    // Tenant app data-plane access is always user-delegated. Background work
+    // should run through a user-requested platform workflow, not a broad app key.
     let token = await getAccessToken();
 
     if (token) {
@@ -94,15 +94,18 @@ async function proxyRequest(
       console.log('[EAI Proxy] Using user token for:', path);
       headers.set('Authorization', `Bearer ${token}`);
     } else {
-      console.log(
-        '[EAI Proxy] No user token available, using client credentials for:',
-        path,
+      console.log('[EAI Proxy] No user token available for:', path);
+      return new NextResponse(
+        JSON.stringify({
+          error: 'Authentication required',
+          message:
+            'EAI data-plane requests require a signed-in user session. Sign in and retry, or move background work into a user-authorized platform workflow.',
+        }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        },
       );
-      if (!baseUrl) {
-        throw new Error('BASE_URL_PUBLIC_API environment variable is not set');
-      }
-      token = await getServiceAccessToken();
-      headers.set('Authorization', `Bearer ${token}`);
     }
 
     if (!baseUrl) {
