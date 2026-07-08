@@ -55,7 +55,7 @@ The default contract requires:
 - PublicAPI access through the app BFF at `/api/eai`
 - tenant/workflow runtime configuration through `/api/eai/config`
 - `/health` for host-level liveness
-- optional service identity for server-side PublicAPI calls without an end-user session
+- signed-in-user/OBO access for tenant data-plane calls
 
 Validate the local contract and a deployed app with:
 
@@ -69,18 +69,17 @@ eai deploy doctor --url https://your-deployed-app.example.com
 healthy until Auth.js, runtime config, tenant/workflow values, and declared
 smoke tests pass.
 
-For app-only PublicAPI access, prefer the clear service identity names:
+## Tenant Data Access
 
-```text
-EAI_SERVICE_CLIENT_ID
-EAI_SERVICE_CLIENT_SECRET
-EAI_SERVICE_TARGET_SCOPE
-EAI_SERVICE_TENANT_NAME
-```
+Tenant app data access is user-delegated. Browser code calls the app BFF at
+`/api/eai/...`, and the BFF forwards to PublicAPI with the signed-in user's
+session token. PublicAPI, OPA/Authz, and ResourceAPI then evaluate the user,
+app, and tenant together.
 
-The runtime still recognises the older `OBO_CLIENT_ID`,
-`OBO_CLIENT_SECRET`, `OBO_TARGET_SCOPE`, and `OBO_TENANT_NAME` aliases for
-existing apps.
+Do not add app-only `client_credentials` access for normal ResourceAPI reads,
+writes, files, or search. If work must continue after the user leaves the page,
+have the user request a platform workflow/job and pass tenant, app, and user
+context into that workflow.
 
 ## AI Agent Workflow
 

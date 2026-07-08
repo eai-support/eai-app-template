@@ -1,6 +1,5 @@
 const mockGetAccessToken = jest.fn();
 const mockResolvePublicApiBaseUrl = jest.fn();
-const mockGetServiceAccessToken = jest.fn();
 
 jest.mock('next/server', () => ({
   NextResponse: class MockNextResponse {
@@ -20,10 +19,6 @@ jest.mock('next/server', () => ({
 
 jest.mock('@enterpriseaigroup/core/server', () => ({
   getAccessToken: () => mockGetAccessToken(),
-}));
-
-jest.mock('@/lib/platform/service-token', () => ({
-  getServiceAccessToken: () => mockGetServiceAccessToken(),
 }));
 
 jest.mock('@/lib/platform/session-resolve', () => {
@@ -72,13 +67,13 @@ describe('EAI proxy v4 route-family routing', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
+    jest.clearAllMocks();
     process.env = {
       ...originalEnv,
       BASE_URL_PUBLIC_API: 'https://fallback-api.example.com/public',
       EAI_PRODUCT_SLUG: 'eai-app-template',
     };
     mockGetAccessToken.mockResolvedValue('user-token');
-    mockGetServiceAccessToken.mockResolvedValue('client-token');
     mockResolvePublicApiBaseUrl.mockResolvedValue({
       baseUrl: 'https://regional-api.example.com/public',
       routing: {
@@ -145,5 +140,18 @@ describe('EAI proxy v4 route-family routing', () => {
     expect(mockResolvePublicApiBaseUrl).toHaveBeenCalledWith(
       expect.objectContaining({ requestedTenantId: 'tenant-a' }),
     );
+  });
+
+  it('HP003 refuses data-plane proxy requests without a signed-in user token', async () => {
+    mockGetAccessToken.mockResolvedValue(null);
+
+    const response = await GET(
+      createRequest('v4/data/resources/tenant-a/Application?limit=5'),
+      createContext('v4/data/resources/tenant-a/Application'),
+    );
+
+    expect(response.status).toBe(401);
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockResolvePublicApiBaseUrl).not.toHaveBeenCalled();
   });
 });

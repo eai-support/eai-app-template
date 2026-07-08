@@ -16,8 +16,8 @@
     "authjsEntraSignIn": true,
     "publicApiBffAccess": true,
     "tenantWorkflowConfiguration": true,
-    "serviceIdentity": "optional",
-    "publicAnonymousEndpointsRequireServerPlatformAccess": true
+    "serviceIdentity": false,
+    "publicAnonymousEndpointsRequireServerPlatformAccess": false
   },
   "environment": {
     "required": [
@@ -50,10 +50,7 @@
       "ENTRA_CLIENT_SECRET",
       "EAI_READINESS_PROBE_TOKEN"
     ],
-    "optional": [
-      "EAI_SERVICE_CLIENT_SECRET",
-      "OBO_CLIENT_SECRET"
-    ],
+    "optional": [],
     "declarations": {
       "required": [
         {
@@ -93,32 +90,7 @@
           }
         }
       ],
-      "optional": [
-        {
-          "name": "EAI_SERVICE_CLIENT_SECRET",
-          "purpose": "service-identity",
-          "required": false,
-          "environments": ["dev", "test", "prod", "demo"],
-          "restartRequired": true,
-          "displayName": "PublicAPI service identity client secret",
-          "secretRef": {
-            "kind": "tenant-infra-envelope",
-            "name": "EAI_SERVICE_CLIENT_SECRET"
-          }
-        },
-        {
-          "name": "OBO_CLIENT_SECRET",
-          "purpose": "service-identity",
-          "required": false,
-          "environments": ["dev", "test", "prod", "demo"],
-          "restartRequired": true,
-          "displayName": "Legacy OBO service identity client secret",
-          "secretRef": {
-            "kind": "tenant-infra-envelope",
-            "name": "OBO_CLIENT_SECRET"
-          }
-        }
-      ]
+      "optional": []
     }
   },
   "auth": {
@@ -131,27 +103,6 @@
     "bffBasePath": "/api/eai",
     "runtimeConfigEndpoint": "/api/eai/config",
     "tenantKeysEnv": "TENANT_KEYS"
-  },
-  "serviceIdentity": {
-    "requiredWhen": "server-side anonymous routes or background jobs call PublicAPI without an end-user session",
-    "preferred": {
-      "clientId": "EAI_SERVICE_CLIENT_ID",
-      "clientSecret": "EAI_SERVICE_CLIENT_SECRET",
-      "targetScope": "EAI_SERVICE_TARGET_SCOPE",
-      "tenantName": "EAI_SERVICE_TENANT_NAME"
-    },
-    "legacyAliases": {
-      "clientId": "OBO_CLIENT_ID",
-      "clientSecret": "OBO_CLIENT_SECRET",
-      "targetScope": "OBO_TARGET_SCOPE",
-      "tenantName": "OBO_TENANT_NAME"
-    },
-    "fallbackAliases": {
-      "clientId": "ENTRA_CLIENT_ID",
-      "clientSecret": "ENTRA_CLIENT_SECRET",
-      "targetScope": "ENTRA_SCOPES",
-      "tenantName": "ENTRA_TENANT_NAME"
-    }
   },
   "endpoints": {
     "health": "/health",
