@@ -80,7 +80,7 @@ async function proxyRequest(
 
     // Tenant app data-plane access is always user-delegated. Background work
     // should run through a user-requested platform workflow, not a broad app key.
-    let token = await getAccessToken();
+    const token = await getAccessToken();
 
     if (token) {
       const resolved = await resolvePublicApiBaseUrl({
