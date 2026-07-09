@@ -47,10 +47,10 @@ jest.mock('@/lib/platform/session-resolve', () => {
 
 import { GET } from './route';
 
-function createRequest(path: string) {
+function createRequest(path: string, init?: { headers?: HeadersInit }) {
   const url = `https://template.test/api/eai/${path}`;
   return {
-    headers: new Headers(),
+    headers: new Headers(init?.headers),
     method: 'GET',
     nextUrl: new URL(url),
     url,
@@ -153,5 +153,54 @@ describe('EAI proxy v4 route-family routing', () => {
     expect(response.status).toBe(401);
     expect(global.fetch).not.toHaveBeenCalled();
     expect(mockResolvePublicApiBaseUrl).not.toHaveBeenCalled();
+  });
+
+  it('HP004 forwards trace IDs, strips baggage, returns response IDs, and does not log response bodies', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const secretBody = JSON.stringify({ applicantName: 'Sensitive Person' });
+    const cloneText = jest.fn(async () => secretBody);
+    (global.fetch as jest.Mock).mockResolvedValue({
+      body: null,
+      clone: () => ({
+        text: cloneText,
+      }),
+      headers: new Headers({
+        'Content-Type': 'application/json',
+        'content-length': String(secretBody.length),
+      }),
+      status: 200,
+      statusText: 'OK',
+    });
+
+    const response = await GET(
+      createRequest('v4/data/resources/tenant-a/Application?limit=5', {
+        headers: {
+          baggage: 'tenant.id=tenant-a,user.email=person@example.com',
+          cookie: 'next-auth.session-token=browser',
+          traceparent:
+            '00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01',
+          tracestate: 'vendor=state',
+          'x-correlation-id': 'corr-template-1',
+          'x-request-id': 'req-template-1',
+        },
+      }),
+      createContext('v4/data/resources/tenant-a/Application'),
+    );
+
+    const [, fetchOptions] = (global.fetch as jest.Mock).mock.calls[0];
+    const headers = fetchOptions.headers as Headers;
+
+    expect(headers.get('baggage')).toBeNull();
+    expect(headers.get('cookie')).toBeNull();
+    expect(headers.get('traceparent')).toBe(
+      '00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01',
+    );
+    expect(headers.get('tracestate')).toBe('vendor=state');
+    expect(headers.get('x-request-id')).toBe('req-template-1');
+    expect(headers.get('x-correlation-id')).toBe('corr-template-1');
+    expect(response.headers.get('x-request-id')).toBe('req-template-1');
+    expect(response.headers.get('x-correlation-id')).toBe('corr-template-1');
+    expect(cloneText).not.toHaveBeenCalled();
+    expect(JSON.stringify(logSpy.mock.calls)).not.toContain('Sensitive Person');
   });
 });

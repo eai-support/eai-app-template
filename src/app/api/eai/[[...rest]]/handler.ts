@@ -10,6 +10,82 @@ export interface RouteContext {
   params: Promise<{ rest?: string[] }>;
 }
 
+interface TraceHeaderContext {
+  correlationId: string;
+  requestId: string;
+  traceparent: string | null;
+  tracestate: string | null;
+}
+
+const TRACEPARENT_PATTERN =
+  /^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/i;
+
+function validTraceparent(traceparent: string | null): string | null {
+  if (!traceparent) return null;
+  const match = traceparent.match(TRACEPARENT_PATTERN);
+  if (!match) return null;
+  const [, traceId, spanId] = match;
+  if (/^0+$/.test(traceId) || /^0+$/.test(spanId)) return null;
+  return traceparent;
+}
+
+function normalizeHeaderValue(value: string | null): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function deriveTraceHeaderContext(request: NextRequest): TraceHeaderContext {
+  const requestId =
+    normalizeHeaderValue(request.headers.get('x-request-id')) ??
+    globalThis.crypto?.randomUUID?.() ??
+    `req_${Date.now().toString(36)}`;
+  const correlationId =
+    normalizeHeaderValue(request.headers.get('x-correlation-id')) ?? requestId;
+  const traceparent = validTraceparent(request.headers.get('traceparent'));
+  return {
+    correlationId,
+    requestId,
+    traceparent,
+    tracestate: traceparent ? request.headers.get('tracestate') : null,
+  };
+}
+
+function stampTraceResponseHeaders(
+  headers: Headers,
+  traceContext: Pick<TraceHeaderContext, 'correlationId' | 'requestId'>,
+): Headers {
+  headers.set('x-request-id', traceContext.requestId);
+  headers.set('x-correlation-id', traceContext.correlationId);
+  return headers;
+}
+
+function jsonTraceHeaders(
+  traceContext: Pick<TraceHeaderContext, 'correlationId' | 'requestId'>,
+): Headers {
+  return stampTraceResponseHeaders(
+    new Headers({ 'Content-Type': 'application/json' }),
+    traceContext,
+  );
+}
+
+function applyTraceRequestHeaders(
+  headers: Headers,
+  traceContext: TraceHeaderContext,
+): void {
+  headers.delete('baggage');
+  headers.delete('traceparent');
+  headers.delete('tracestate');
+  headers.set('x-request-id', traceContext.requestId);
+  headers.set('x-correlation-id', traceContext.correlationId);
+  if (traceContext.traceparent) {
+    headers.set('traceparent', traceContext.traceparent);
+    if (traceContext.tracestate) {
+      headers.set('tracestate', traceContext.tracestate);
+    }
+  }
+}
+
 function getServerTenantId(): string | undefined {
   return (
     process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
@@ -63,20 +139,23 @@ async function proxyRequest(
   request: NextRequest,
   context: RouteContext,
 ): Promise<NextResponse> {
-  console.log('[EAI Proxy] Route hit:', request.method, request.url);
+  const traceContext = deriveTraceHeaderContext(request);
+  // Debug logs must never emit request/target URLs, paths, or tenant scope —
+  // those can carry tenant IDs, emails, or other sensitive query parameters.
+  console.log('[EAI Proxy] Route hit:', request.method);
   try {
     const params = await context.params;
-    console.log('[EAI Proxy] Params:', params);
     const path = params.rest?.join('/') || '';
     const fallbackBaseUrl = process.env.BASE_URL_PUBLIC_API;
     let baseUrl = fallbackBaseUrl;
-    console.log('[EAI Proxy] Path:', path, 'Base URL:', baseUrl);
 
     // Ensure baseUrl ends with / and path doesn't start with /
     const headers = new Headers(request.headers);
+    headers.delete('cookie');
     headers.delete('host');
     headers.delete('tenant');
     headers.delete('x-tenant-id');
+    applyTraceRequestHeaders(headers, traceContext);
 
     // Tenant app data-plane access is always user-delegated. Background work
     // should run through a user-requested platform workflow, not a broad app key.
@@ -91,10 +170,10 @@ async function proxyRequest(
         requestedTenantId: getServerTenantId(),
       });
       baseUrl = resolved.baseUrl;
-      console.log('[EAI Proxy] Using user token for:', path);
+      console.log('[EAI Proxy] Using user token');
       headers.set('Authorization', `Bearer ${token}`);
     } else {
-      console.log('[EAI Proxy] No user token available for:', path);
+      console.log('[EAI Proxy] No user token available');
       return new NextResponse(
         JSON.stringify({
           error: 'Authentication required',
@@ -103,7 +182,7 @@ async function proxyRequest(
         }),
         {
           status: 401,
-          headers: { 'Content-Type': 'application/json' },
+          headers: jsonTraceHeaders(traceContext),
         },
       );
     }
@@ -118,7 +197,6 @@ async function proxyRequest(
       getServerTenantId(),
     );
     const targetUrl = new URL(targetPath, normalizedBaseUrl);
-    console.log('[EAI Proxy] Target URL:', targetUrl.toString());
 
     // Preserve query params
     request.nextUrl.searchParams.forEach((value, key) => {
@@ -166,20 +244,16 @@ async function proxyRequest(
 
     const contentType = response.headers.get('content-type');
     const isBinary = isBinaryContentType(contentType);
-
-    // Only log text responses to avoid corrupting binary data
-    if (!isBinary) {
-      const clonedResponse = response.clone();
-      const responseData = await clonedResponse.text();
-      console.log('[EAI Proxy] Response status:', response.status);
-      console.log('[EAI Proxy] Response body:', responseData);
-    } else {
-      console.log('[EAI Proxy] Response status:', response.status);
+    console.log('[EAI Proxy] Response status:', response.status);
+    if (isBinary) {
       console.log('[EAI Proxy] Binary response, content-type:', contentType);
     }
 
     const responseHeaders = new Headers(response.headers);
     responseHeaders.delete('content-encoding');
+    responseHeaders.delete('content-length');
+    responseHeaders.delete('transfer-encoding');
+    stampTraceResponseHeaders(responseHeaders, traceContext);
 
     return new NextResponse(response.body, {
       status: response.status,
@@ -198,7 +272,7 @@ async function proxyRequest(
         }),
         {
           status: error.statusCode,
-          headers: { 'Content-Type': 'application/json' },
+          headers: jsonTraceHeaders(traceContext),
         },
       );
     }
@@ -218,7 +292,7 @@ async function proxyRequest(
       }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: jsonTraceHeaders(traceContext),
       },
     );
   }
