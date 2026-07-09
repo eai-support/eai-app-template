@@ -29,12 +29,19 @@ function validTraceparent(traceparent: string | null): string | null {
   return traceparent;
 }
 
+function normalizeHeaderValue(value: string | null): string | null {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function deriveTraceHeaderContext(request: NextRequest): TraceHeaderContext {
   const requestId =
-    request.headers.get('x-request-id') ??
+    normalizeHeaderValue(request.headers.get('x-request-id')) ??
     globalThis.crypto?.randomUUID?.() ??
     `req_${Date.now().toString(36)}`;
-  const correlationId = request.headers.get('x-correlation-id') ?? requestId;
+  const correlationId =
+    normalizeHeaderValue(request.headers.get('x-correlation-id')) ?? requestId;
   const traceparent = validTraceparent(request.headers.get('traceparent'));
   return {
     correlationId,
