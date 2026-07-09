@@ -140,14 +140,14 @@ async function proxyRequest(
   context: RouteContext,
 ): Promise<NextResponse> {
   const traceContext = deriveTraceHeaderContext(request);
-  console.log('[EAI Proxy] Route hit:', request.method, request.url);
+  // Debug logs must never emit request/target URLs, paths, or tenant scope —
+  // those can carry tenant IDs, emails, or other sensitive query parameters.
+  console.log('[EAI Proxy] Route hit:', request.method);
   try {
     const params = await context.params;
-    console.log('[EAI Proxy] Params:', params);
     const path = params.rest?.join('/') || '';
     const fallbackBaseUrl = process.env.BASE_URL_PUBLIC_API;
     let baseUrl = fallbackBaseUrl;
-    console.log('[EAI Proxy] Path:', path, 'Base URL:', baseUrl);
 
     // Ensure baseUrl ends with / and path doesn't start with /
     const headers = new Headers(request.headers);
@@ -170,10 +170,10 @@ async function proxyRequest(
         requestedTenantId: getServerTenantId(),
       });
       baseUrl = resolved.baseUrl;
-      console.log('[EAI Proxy] Using user token for:', path);
+      console.log('[EAI Proxy] Using user token');
       headers.set('Authorization', `Bearer ${token}`);
     } else {
-      console.log('[EAI Proxy] No user token available for:', path);
+      console.log('[EAI Proxy] No user token available');
       return new NextResponse(
         JSON.stringify({
           error: 'Authentication required',
@@ -197,7 +197,6 @@ async function proxyRequest(
       getServerTenantId(),
     );
     const targetUrl = new URL(targetPath, normalizedBaseUrl);
-    console.log('[EAI Proxy] Target URL:', targetUrl.toString());
 
     // Preserve query params
     request.nextUrl.searchParams.forEach((value, key) => {
