@@ -102,7 +102,7 @@ test('collect writes source-unknown handoff evidence and GitHub outputs', () => 
 test('workflow sends source metadata in deployment handoff', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   const handoffStep = workflow.match(
-    /- name: Request deployment handoff[\s\S]*?- name: Assert TenantInfra handoff remains pending/,
+    /- name: Request deployment handoff[\s\S]*?- name: Assert TenantInfra handoff submitted/,
   )?.[0];
 
   assert.ok(handoffStep, 'Request deployment handoff step must exist');
@@ -110,29 +110,31 @@ test('workflow sends source metadata in deployment handoff', () => {
   assert.match(handoffStep, /--workflow-run-id "\$GITHUB_RUN_ID"/);
 });
 
-test('assert-handoff-pending accepts pending TenantInfra handoff responses', () => {
+test('assert-handoff-submitted accepts pending and accepted TenantInfra handoff responses', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-handoff-'));
   try {
-    const responsePath = join(workDir, 'deployment-response.json');
-    writeFileSync(
-      responsePath,
-      JSON.stringify({
-        response: {
-          status: 'handoff_pending',
-          deploymentRequestId: 'source-unknown-deploy-1',
-          requiresTenantInfra: true,
-        },
-      }),
-    );
+    for (const status of ['handoff_pending', 'accepted']) {
+      const responsePath = join(workDir, `deployment-response-${status}.json`);
+      writeFileSync(
+        responsePath,
+        JSON.stringify({
+          response: {
+            status,
+            deploymentRequestId: 'source-unknown-deploy-1',
+            requiresTenantInfra: status === 'handoff_pending',
+          },
+        }),
+      );
 
-    const stdout = runEvidenceScript(['assert-handoff-pending', '--response', responsePath]);
-    assert.match(stdout, /^handoff_pending source-unknown-deploy-1/);
+      const stdout = runEvidenceScript(['assert-handoff-submitted', '--response', responsePath]);
+      assert.match(stdout, new RegExp(`^${status} source-unknown-deploy-1`));
+    }
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
 });
 
-test('assert-handoff-pending rejects completed or non-TenantInfra responses', () => {
+test('assert-handoff-submitted rejects completed or missing handoff responses', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-handoff-bad-'));
   try {
     const responsePath = join(workDir, 'deployment-response-bad.json');
@@ -149,13 +151,13 @@ test('assert-handoff-pending rejects completed or non-TenantInfra responses', ()
 
     const result = spawnSync(
       process.execPath,
-      [evidenceScript, 'assert-handoff-pending', '--response', responsePath],
+      [evidenceScript, 'assert-handoff-submitted', '--response', responsePath],
       { encoding: 'utf8' },
     );
     assert.equal(result.status, 1);
     assert.match(
       result.stderr,
-      /Expected deployment handoff status handoff_pending/,
+      /Expected deployment handoff status handoff_pending or accepted/,
     );
   } finally {
     rmSync(workDir, { recursive: true, force: true });
