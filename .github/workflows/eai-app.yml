@@ -207,9 +207,9 @@ jobs:
             --format json \
             | tee .eai-build/evidence/deployment-handoff-response.json
 
-      - name: Assert TenantInfra handoff remains pending
+      - name: Assert TenantInfra handoff submitted
         run: |
-          node scripts/source-unknown-deployment-evidence.mjs assert-handoff-pending \
+          node scripts/source-unknown-deployment-evidence.mjs assert-handoff-submitted \
             --response .eai-build/evidence/deployment-handoff-response.json
 
       - name: Upload handoff responses

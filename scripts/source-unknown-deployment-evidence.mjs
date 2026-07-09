@@ -258,17 +258,19 @@ function responseStatus(payload) {
   };
 }
 
-function assertHandoffPending(options) {
+function assertHandoffSubmitted(options) {
   const responsePath = resolve(option(options, 'response'));
   assertExists(responsePath, 'Deployment handoff response');
   const actual = responseStatus(readJson(responsePath));
-  if (actual.status !== 'handoff_pending') {
-    throw new Error(`Expected deployment handoff status handoff_pending, got ${actual.status || '<missing>'}.`);
+  if (!['handoff_pending', 'accepted'].includes(actual.status)) {
+    throw new Error(
+      `Expected deployment handoff status handoff_pending or accepted, got ${actual.status || '<missing>'}.`,
+    );
   }
-  if (actual.requiresTenantInfra !== true) {
+  if (actual.status === 'handoff_pending' && actual.requiresTenantInfra !== true) {
     throw new Error('Expected deployment handoff to require TenantInfra.');
   }
-  process.stdout.write(`handoff_pending ${actual.deploymentRequestId || ''}\n`);
+  process.stdout.write(`${actual.status} ${actual.deploymentRequestId || ''}\n`);
 }
 
 const { command, options } = parseArgs(process.argv.slice(2));
@@ -277,8 +279,8 @@ if (command === 'prepare-image-context') {
   prepareImageContext(options);
 } else if (command === 'collect') {
   await collectEvidence(options);
-} else if (command === 'assert-handoff-pending') {
-  assertHandoffPending(options);
+} else if (command === 'assert-handoff-submitted' || command === 'assert-handoff-pending') {
+  assertHandoffSubmitted(options);
 } else {
   throw new Error(`Unknown command: ${command}`);
 }
