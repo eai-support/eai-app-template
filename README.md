@@ -55,7 +55,7 @@ The default contract requires:
 - PublicAPI access through the app BFF at `/api/eai`
 - tenant/workflow runtime configuration through `/api/eai/config`
 - `/health` for host-level liveness
-- signed-in-user/OBO access for tenant data-plane calls
+- user-delegated access for tenant data-plane calls
 
 Validate the local contract and a deployed app with:
 
