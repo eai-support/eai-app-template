@@ -11,7 +11,7 @@ specific host.
 - PublicAPI access through the app BFF at `/api/eai`
 - tenant and workflow configuration from `/api/eai/config`
 - `/health` for host liveness
-- signed-in-user/OBO access for tenant data-plane calls
+- user-delegated access for tenant data-plane calls
 - declared smoke tests that prove the app is usable, not only running
 
 ## Validate Locally
@@ -53,6 +53,6 @@ tenant/workflow config, PublicAPI authorization, or app runtime errors.
   host process manager and run the same doctor command.
 
 Tenant apps do not use app-only PublicAPI credentials for ordinary ResourceAPI
-or data-plane work. Require sign-in and use the `/api/eai` BFF/OBO path. For
+or data-plane work. Require sign-in and use the `/api/eai` BFF path. For
 long-running or scheduled work, create a user-authorized platform workflow/job
 instead of giving the app a broad service identity.

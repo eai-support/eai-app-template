@@ -12,7 +12,7 @@ choosing how to use Enterprise AI platform services from the EAI App Template.
 
 - Browser code calls the app BFF at `/api/eai/...`; it does not call PublicAPI
   directly.
-- Tenant app data-plane access is signed-in-user/OBO access. Do not add app-only
+- Tenant app data-plane access is user-delegated access. Do not add app-only
   `client_credentials` access for ordinary ResourceAPI reads, writes, files, or
   search.
 - App code should prefer the template SDK and hooks before hand-written fetches.
