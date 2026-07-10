@@ -113,6 +113,18 @@ export interface ObjectTypeDefinition {
   actions: ActionDefinition[];
   /** Logical data storage backend; tenant connections resolve the physical store */
   storageBackend: StorageBackend;
+  /** Schema version understood by the platform Object Type publisher */
+  schemaVersion?: number;
+  /** Whether storage binding metadata is ready for ResourceAPI schema publish */
+  storageMetadataStatus?: 'draft' | 'ready';
+  /** App-owned storage binding metadata. Do not use shared ResourceAPI aliases. */
+  storageBinding?: {
+    sql?: {
+      databaseAlias: 'tenant-postgres';
+      tenantSchemaStrategy: 'per-tenant-schema';
+      tableName: string;
+    };
+  };
   /** Lifecycle status — only 'published' types are available via ResourceAPI */
   status: ObjectTypeStatus;
 }
@@ -121,12 +133,56 @@ export interface ObjectTypeDefinition {
 // Object Type Definitions
 // ---------------------------------------------------------------------------
 
+function tenantStorageScope(tenantId: string): string {
+  const scope =
+    tenantId
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '')
+      .slice(-12) || 'tenant';
+  return /^[a-z]/.test(scope) ? scope : `t${scope}`;
+}
+
+function storageNamePrefix(parts: string[], separator = '_'): string {
+  const replacement = separator === '-' ? '-' : '_';
+  return parts
+    .map((part) => String(part || '').toLowerCase().replace(/-/g, separator))
+    .join(separator)
+    .replace(/[^a-z0-9_-]+/g, replacement)
+    .replace(/^[_-]+|[_-]+$/g, '');
+}
+
+function appSqlStorage(logicalTableName: string) {
+  const tenantId = process.env.EAI_TENANT_ID || process.env.NEXT_PUBLIC_EAI_TENANT_ID || 'tenant';
+  const appKey =
+    process.env.EAI_APP_KEY ||
+    process.env.NEXT_PUBLIC_EAI_APP_KEY ||
+    process.env.NEXT_PUBLIC_APP_NAME ||
+    'template';
+  const tablePrefix =
+    process.env.EAI_STORAGE_TABLE_PREFIX ||
+    `${storageNamePrefix([tenantStorageScope(tenantId), appKey], '_')}_`;
+
+  return {
+    schemaVersion: 1,
+    storageBackend: 'postgresql' as const,
+    storageMetadataStatus: 'ready' as const,
+    storageBinding: {
+      sql: {
+        databaseAlias: 'tenant-postgres' as const,
+        tenantSchemaStrategy: 'per-tenant-schema' as const,
+        tableName: `${tablePrefix}${logicalTableName}`,
+      },
+    },
+  };
+}
+
 export const objectTypes: Record<string, ObjectTypeDefinition[]> = {
   template: [
     {
       name: 'Application',
       displayName: 'Application',
       description: 'A generic application or request submitted by a user',
+      ...appSqlStorage('applications'),
       properties: [
         {
           name: 'applicantName',
@@ -232,13 +288,13 @@ export const objectTypes: Record<string, ObjectTypeDefinition[]> = {
           ],
         },
       ],
-      storageBackend: 'postgresql',
       status: 'published',
     },
     {
       name: 'Document',
       displayName: 'Document',
       description: 'A file or document attached to an application',
+      ...appSqlStorage('documents'),
       properties: [
         {
           name: 'fileName',
@@ -296,13 +352,13 @@ export const objectTypes: Record<string, ObjectTypeDefinition[]> = {
           sideEffects: [{ type: 'set_field', field: 'isVerified', value: true }],
         },
       ],
-      storageBackend: 'postgresql',
       status: 'published',
     },
     {
       name: 'Notification',
       displayName: 'Notification',
       description: 'A notification sent to users about application status changes',
+      ...appSqlStorage('notifications'),
       properties: [
         {
           name: 'recipientEmail',
@@ -352,7 +408,6 @@ export const objectTypes: Record<string, ObjectTypeDefinition[]> = {
       ],
       linkTypes: [],
       actions: [],
-      storageBackend: 'postgresql',
       status: 'published',
     },
   ],

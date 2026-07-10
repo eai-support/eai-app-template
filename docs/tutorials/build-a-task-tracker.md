@@ -95,6 +95,7 @@ export const objectTypes = {
       name: 'Task',
       displayName: 'Task',
       description: 'A trackable unit of work',
+      ...appSqlStorage('tasks'),
       properties: [
         { name: 'title', type: 'text', required: true, indexed: true },
         { name: 'description', type: 'text', required: false },
@@ -145,12 +146,17 @@ export const objectTypes = {
           ],
         },
       ],
-      storageBackend: 'postgresql',
       status: 'published',
     },
   ],
 };
 ```
+
+`appSqlStorage('tasks')` is the template helper that produces the current
+tenant-app storage contract: `tenant-postgres` plus an app-owned table name. Do
+not replace it with `resourceapi-postgres` or a generic table name. After
+`eai app provision`, the helper uses the generated `.eai/storage-bindings.json`
+contract and local prefix env values written by the CLI.
 
 Validate, publish, and verify:
 
@@ -159,7 +165,8 @@ eai login
 eai tenant list --format json
 eai tenant select <tenant-slug>
 eai whoami
-eai types validate
+eai app provision task-tracker --tenant-id <tenant-id> --select --format json
+eai types validate --tenant-key task-tracker --tenant-id <tenant-id>
 eai types seed --tenant-key task-tracker --tenant-id <tenant-id> --format json
 eai types diff --tenant-key task-tracker --tenant-id <tenant-id>
 eai resources schema --tenant-id <tenant-id> --format json

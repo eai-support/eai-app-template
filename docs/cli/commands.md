@@ -168,6 +168,9 @@ Validates:
 - Property type correctness
 - Select type has `options` array
 - LinkType references valid target types
+- App-owned storage bindings for published Object Types. PostgreSQL tenant app
+  types must use `tenant-postgres`, not `resourceapi-postgres`, and table names
+  must use the app-owned prefix.
 
 ### `eai types seed`
 
@@ -204,6 +207,12 @@ eai types seed --dry-run
 # Seed to staging
 eai types seed --env staging
 ```
+
+For tenant apps, run `eai app provision <key> --tenant-id <tenant-id> --select
+--format json` before `types seed`. Provisioning establishes the allowed storage
+aliases and app-owned naming prefix that Object Type publishing validates, and
+writes the local `.eai/storage-bindings.json` contract used by the starter
+Object Type helpers.
 
 ### `eai types diff`
 
