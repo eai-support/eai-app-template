@@ -135,6 +135,18 @@ for (const line of lines) {
   let cleanedLine = line
     .replace(/export\s+const\s+(\w+)\s*:\s*[^=]+=/, 'const $1 =')
     .replace(/^(\s*)const\s+(\w+)\s*:\s*[^=]+=/, '$1const $2 =')
+    .replace(
+      /^(\s*)function\s+(\w+)\s*\(([^)]*)\)\s*(?::\s*[^{]+)?\{/,
+      (_, indent, name, params) => {
+        const cleanedParams = params
+          .split(',')
+          .map((param) => param.trim())
+          .filter(Boolean)
+          .map((param) => param.replace(/:\s*.+$/, ''))
+          .join(', ');
+        return `${indent}function ${name}(${cleanedParams}) {`;
+      },
+    )
     .replace(/\s+as\s+const\b/g, '')
     .replace('export const', 'const')
     .replace('export default', 'const objectTypes =');

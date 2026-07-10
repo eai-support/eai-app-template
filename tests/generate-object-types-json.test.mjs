@@ -64,3 +64,73 @@ export const objectTypes: Record<string, ObjectTypeDefinition[]> = {
     rmSync(workDir, { recursive: true, force: true });
   }
 });
+
+test('object type generator accepts typed helper functions used by the scaffold', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-object-types-generator-helpers-'));
+  try {
+    const inputPath = join(workDir, 'object-types.ts');
+    const outputPath = join(workDir, 'object-types.json');
+    const provisioningOutputPath = join(workDir, 'object-types.provisioning.json');
+
+    mkdirSync(dirname(inputPath), { recursive: true });
+    writeFileSync(
+      inputPath,
+      `
+export type StorageBackend = 'postgresql' | 'documentdb' | 'blob' | 'search';
+
+function tenantStorageScope(tenantId: string): string {
+  return tenantId.replace(/[^a-z0-9]+/g, '').slice(-12) || 'tenant';
+}
+
+function appSqlStorage(logicalTableName: string) {
+  const tenantId = process.env.EAI_TENANT_ID || 'tenant';
+  const tablePrefix = \`\${tenantStorageScope(tenantId)}_demo_\`;
+  return {
+    storageBackend: 'postgresql' as const,
+    status: 'published' as const,
+    storageBinding: {
+      sql: {
+        databaseAlias: 'tenant-postgres' as const,
+        tenantSchemaStrategy: 'per-tenant-schema' as const,
+        tableName: \`\${tablePrefix}\${logicalTableName}\`,
+      },
+    },
+  };
+}
+
+export const objectTypes = {
+  demo: [
+    {
+      name: 'DemoRecord',
+      displayName: 'Demo Record',
+      ...appSqlStorage('records'),
+      properties: [
+        { name: 'title', type: 'text' as const, required: true },
+      ] as const,
+    },
+  ],
+};
+`,
+    );
+
+    execFileSync(process.execPath, [generatorScript], {
+      env: {
+        ...process.env,
+        EAI_TENANT_ID: 'tenant-1234',
+        EAI_OBJECT_TYPES_INPUT_PATH: inputPath,
+        EAI_OBJECT_TYPES_OUTPUT_PATH: outputPath,
+        EAI_OBJECT_TYPES_PROVISIONING_OUTPUT_PATH: provisioningOutputPath,
+      },
+      stdio: 'pipe',
+    });
+
+    const objectTypes = JSON.parse(readFileSync(outputPath, 'utf8'));
+    assert.equal(objectTypes.demo[0].storageBinding.sql.databaseAlias, 'tenant-postgres');
+    assert.match(objectTypes.demo[0].storageBinding.sql.tableName, /demo_records$/);
+
+    const provisioning = JSON.parse(readFileSync(provisioningOutputPath, 'utf8'));
+    assert.deepEqual(provisioning[0].declaredBackends, ['postgresql']);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
