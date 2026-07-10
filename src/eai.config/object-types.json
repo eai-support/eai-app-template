@@ -4,6 +4,16 @@
       "name": "Application",
       "displayName": "Application",
       "description": "A generic application or request submitted by a user",
+      "schemaVersion": 1,
+      "storageBackend": "postgresql",
+      "storageMetadataStatus": "ready",
+      "storageBinding": {
+        "sql": {
+          "databaseAlias": "tenant-postgres",
+          "tenantSchemaStrategy": "per-tenant-schema",
+          "tableName": "tenant_template_applications"
+        }
+      },
       "properties": [
         {
           "name": "applicantName",
@@ -154,13 +164,22 @@
           ]
         }
       ],
-      "storageBackend": "postgresql",
       "status": "published"
     },
     {
       "name": "Document",
       "displayName": "Document",
       "description": "A file or document attached to an application",
+      "schemaVersion": 1,
+      "storageBackend": "postgresql",
+      "storageMetadataStatus": "ready",
+      "storageBinding": {
+        "sql": {
+          "databaseAlias": "tenant-postgres",
+          "tenantSchemaStrategy": "per-tenant-schema",
+          "tableName": "tenant_template_documents"
+        }
+      },
       "properties": [
         {
           "name": "fileName",
@@ -224,13 +243,22 @@
           ]
         }
       ],
-      "storageBackend": "postgresql",
       "status": "published"
     },
     {
       "name": "Notification",
       "displayName": "Notification",
       "description": "A notification sent to users about application status changes",
+      "schemaVersion": 1,
+      "storageBackend": "postgresql",
+      "storageMetadataStatus": "ready",
+      "storageBinding": {
+        "sql": {
+          "databaseAlias": "tenant-postgres",
+          "tenantSchemaStrategy": "per-tenant-schema",
+          "tableName": "tenant_template_notifications"
+        }
+      },
       "properties": [
         {
           "name": "recipientEmail",
@@ -289,7 +317,6 @@
       ],
       "linkTypes": [],
       "actions": [],
-      "storageBackend": "postgresql",
       "status": "published"
     }
   ]

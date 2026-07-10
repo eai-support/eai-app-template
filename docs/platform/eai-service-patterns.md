@@ -60,6 +60,17 @@ choosing how to use Enterprise AI platform services from the EAI App Template.
 Object Types declare a logical `storageBackend`; tenant connections resolve the
 physical store at runtime.
 
+Tenant apps must use app-owned storage bindings. For PostgreSQL-backed Object
+Types, use the `tenant-postgres` alias and an app-owned table name prefix. Do
+not use shared aliases such as `resourceapi-postgres`, and do not use generic
+table names such as `feed_items` or `records` without the tenant/app prefix.
+Run `eai app provision <key> --tenant-id <tenant-id> --select --format json`
+before publishing Object Types. The CLI writes the generated app storage
+contract to `.eai/storage-bindings.json` and updates safe local app/tenant
+prefix values in `.env.local`. Keep Object Types on the template helpers, then
+run `eai types validate --tenant-key <key> --tenant-id <tenant-id>` and `eai
+types seed --tenant-key <key> --tenant-id <tenant-id> --format json`.
+
 | Backend      | Use For                                                                                         | Do Not Use For                                     |
 | ------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | `postgresql` | canonical structured resources, status workflows, joins, history, aggregate/list/query behavior | large binary file contents                         |
