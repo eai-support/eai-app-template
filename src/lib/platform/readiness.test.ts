@@ -39,6 +39,19 @@ describe('runtime readiness contract', () => {
     expect(result.checks.every((check) => check.ok)).toBe(true);
   });
 
+  it('accepts TenantInfra runtime env names for tenant and app scope', () => {
+    const env = readyEnv();
+    delete env.NEXT_PUBLIC_EAI_TENANT_ID;
+    delete env.EAI_PRODUCT_SLUG;
+    env.EAI_TENANT_ID = 'tenant-template';
+    env.EAI_APP_KEY = 'contract-test';
+
+    const result = evaluateRuntimeReadiness(env);
+
+    expect(result.ok).toBe(true);
+    expect(result.failureCategories).toEqual([]);
+  });
+
   it('reports sanitized failure categories without returning secret values', () => {
     const env = readyEnv();
     delete env.AUTH_SECRET;

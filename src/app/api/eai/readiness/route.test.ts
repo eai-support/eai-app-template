@@ -143,4 +143,17 @@ describe('readiness route', () => {
     expect(response.status).toBe(200);
     expect(body.failureCategories).toEqual([]);
   });
+
+  it('accepts TenantInfra runtime env names for scope binding', async () => {
+    delete process.env['NEXT_PUBLIC_EAI_TENANT_ID'];
+    delete process.env['EAI_PRODUCT_SLUG'];
+    process.env['EAI_TENANT_ID'] = 'tenant-template';
+    process.env['EAI_APP_KEY'] = 'contract-test';
+
+    const response = await GET(readinessRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.failureCategories).toEqual([]);
+  });
 });

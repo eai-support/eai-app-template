@@ -38,6 +38,14 @@ function requireHeader(
   return !expected || headers.get(name) === expected;
 }
 
+function runtimeTenantId(): string | undefined {
+  return process.env.NEXT_PUBLIC_EAI_TENANT_ID || process.env.EAI_TENANT_ID;
+}
+
+function runtimeAppKey(): string | undefined {
+  return process.env.EAI_PRODUCT_SLUG || process.env.EAI_APP_KEY;
+}
+
 function validateTenantInfraProbe(request: Request): Response | null {
   const headers = request.headers;
 
@@ -54,12 +62,8 @@ function validateTenantInfraProbe(request: Request): Response | null {
   }
 
   const scopeMatches =
-    requireHeader(
-      headers,
-      'x-eai-tenant-id',
-      process.env.NEXT_PUBLIC_EAI_TENANT_ID,
-    ) &&
-    requireHeader(headers, 'x-eai-app-key', process.env.EAI_PRODUCT_SLUG) &&
+    requireHeader(headers, 'x-eai-tenant-id', runtimeTenantId()) &&
+    requireHeader(headers, 'x-eai-app-key', runtimeAppKey()) &&
     requireHeader(headers, 'x-eai-environment', process.env.EAI_ENVIRONMENT) &&
     requireHeader(headers, 'x-eai-config-hash', process.env.EAI_CONFIG_HASH);
 

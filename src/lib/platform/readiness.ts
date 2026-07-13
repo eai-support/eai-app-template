@@ -28,10 +28,8 @@ const REQUIRED_RUNTIME_ENV = [
   'NEXT_PUBLIC_APP_NAME',
   'APP_BASE_PATH',
   'NEXT_PUBLIC_APP_BASE_PATH',
-  'NEXT_PUBLIC_EAI_TENANT_ID',
   'BASE_URL_PUBLIC_API',
   'ROUTING_BOOTSTRAP_PUBLIC_API_URL',
-  'EAI_PRODUCT_SLUG',
   'EAI_ENVIRONMENT',
   'EAI_CONFIG_HASH',
   'TENANT_KEYS',
@@ -54,6 +52,12 @@ function missingEnv(env: NodeJS.ProcessEnv, names: string[]): string[] {
   return names.filter((name) => !env[name]);
 }
 
+function missingAnyEnv(env: NodeJS.ProcessEnv, groups: string[][]): string[] {
+  return groups.flatMap((group) =>
+    group.some((name) => env[name]) ? [] : [group.join('|')],
+  );
+}
+
 function envKeyForTenant(tenantKey: string): string {
   return tenantKey.toUpperCase().replace(/-/g, '_');
 }
@@ -71,7 +75,13 @@ function isHttpUrl(value: string | undefined): boolean {
 }
 
 function checkRuntimeEnv(env: NodeJS.ProcessEnv): ReadinessCheck {
-  const missing = missingEnv(env, REQUIRED_RUNTIME_ENV);
+  const missing = [
+    ...missingEnv(env, REQUIRED_RUNTIME_ENV),
+    ...missingAnyEnv(env, [
+      ['NEXT_PUBLIC_EAI_TENANT_ID', 'EAI_TENANT_ID'],
+      ['EAI_PRODUCT_SLUG', 'EAI_APP_KEY'],
+    ]),
+  ];
   return {
     name: 'runtime-env',
     ok: missing.length === 0,
