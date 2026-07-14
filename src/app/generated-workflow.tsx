@@ -271,10 +271,8 @@ export function GeneratedWorkflowPage({
       }
       await resources.executeAction(created.id, 'submit');
       setSubmitted(true);
-    } catch (error) {
-      setSubmitError(
-        error instanceof Error ? error.message : 'Submission failed.',
-      );
+    } catch {
+      setSubmitError('Submission failed. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
