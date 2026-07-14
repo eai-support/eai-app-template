@@ -1,4 +1,4 @@
-import { EAIPlatformClient } from '@enterpriseaigroup/platform-sdk';
+import { EAIPlatformClient, toObjectTypeSlug } from '@enterpriseaigroup/platform-sdk';
 
 export interface PlatformStatus {
   objectTypes: boolean;
@@ -6,6 +6,7 @@ export interface PlatformStatus {
   crud: boolean;
   aggregate: boolean;
   cursor: boolean;
+  identifierConsistency: boolean;
 }
 
 /**
@@ -26,6 +27,7 @@ export async function verifyPlatform(
     crud: false,
     aggregate: false,
     cursor: false,
+    identifierConsistency: false,
   };
 
   // Check 1: Object Type metadata is reachable
@@ -53,12 +55,25 @@ export async function verifyPlatform(
       object_types?: Array<{ name?: string; slug?: string }>;
     };
     const firstType = schema.objectTypes?.[0] || schema.object_types?.[0];
-    const firstSlug = firstType?.slug || firstType?.name;
-    if (firstSlug) {
-      const listResponse = await client.resources.list(firstSlug, { limit: 1 });
+    const schemaTypes = schema.objectTypes || schema.object_types || [];
+    status.identifierConsistency =
+      schemaTypes.length > 0 &&
+      schemaTypes.every((type) => {
+        if (typeof type?.name !== 'string' || !type.name.trim()) {
+          return false;
+        }
+        if (typeof type?.slug !== 'string' || !type.slug.trim()) {
+          return true;
+        }
+        return type.slug === toObjectTypeSlug(type.name);
+      });
+
+    const firstIdentifier = firstType?.name || firstType?.slug;
+    if (firstIdentifier) {
+      const listResponse = await client.resources.list(firstIdentifier, { limit: 1 });
       status.crud = Array.isArray(listResponse.docs);
 
-      const aggregateResponse = await client.resources.aggregate(firstSlug, {
+      const aggregateResponse = await client.resources.aggregate(firstIdentifier, {
         groupBy: ['id'],
         metrics: { count: { function: 'count' } },
         limit: 1,
@@ -74,6 +89,7 @@ export async function verifyPlatform(
     status.crud = false;
     status.aggregate = false;
     status.cursor = false;
+    status.identifierConsistency = false;
   }
 
   return status;

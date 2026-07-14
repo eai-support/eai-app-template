@@ -127,6 +127,19 @@ Updates require the current `version` for optimistic locking. The SDK retries
 safe conflict refreshes by default; callers can opt out when they need explicit
 conflict handling.
 
+Canonical identifier rule:
+
+- In app code, object types are named in PascalCase, for example `WatchTarget`
+  or `FeedItem`.
+- On v4 resource routes, those names are normalized to kebab-case slugs such as
+  `watch-target` and `feed-item`.
+- Do not hand-write `/v4/data/resources/.../<type>` paths in feature code.
+  Always go through `useResources`, `client.resources`, or the shared
+  `toObjectTypeSlug(...)` helper exported by the platform SDK.
+- If a repo introduces its own slugifier or mixes PascalCase and slug literals
+  by hand, treat that as identifier drift and fix it before debugging storage or
+  provisioning.
+
 ## Document Pattern
 
 Use the documents module when the file itself is the subject of platform

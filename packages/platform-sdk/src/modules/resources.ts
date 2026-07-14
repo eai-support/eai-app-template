@@ -35,6 +35,7 @@ import type {
 } from '../types';
 import { PlatformError } from '../errors';
 import { platformFetch } from '../client';
+import { toObjectTypeSlug } from '../object-types';
 
 export class ResourcesModule {
   constructor(
@@ -46,15 +47,8 @@ export class ResourcesModule {
     return `${this.baseUrl}/v4/data/resources`;
   }
 
-  private objectTypeSlug(objectType: string): string {
-    return objectType
-      .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-      .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
-      .toLowerCase();
-  }
-
   private resourceUrl(objectType: string, id?: string): string {
-    const slug = this.objectTypeSlug(objectType);
+    const slug = toObjectTypeSlug(objectType);
     const base = `${this.resourcesBaseUrl()}/${this.tenantId}/${slug}`;
     return id ? `${base}/${id}` : base;
   }
@@ -315,7 +309,7 @@ export class ResourcesModule {
     const body = {
       ...request,
       objectTypes: request.objectTypes?.map((type) =>
-        this.objectTypeSlug(type),
+        toObjectTypeSlug(type),
       ),
     };
     const response = await platformFetch(

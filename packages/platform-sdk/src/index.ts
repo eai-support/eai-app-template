@@ -13,6 +13,9 @@ export type { PlatformClientConfig } from './client';
 export { PlatformError } from './errors';
 export type { PlatformErrorDetails } from './errors';
 
+// Shared object-type helpers
+export { toObjectTypeSlug } from './object-types';
+
 // Types
 export type {
   Resource,
