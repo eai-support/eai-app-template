@@ -23,6 +23,8 @@ const config: Config = {
     watchPathIgnorePatterns: ['<rootDir>/.next/'],
     moduleNameMapper: {
         "^@/(.*)$": "<rootDir>/src/$1",
+        "^@enterpriseaigroup/platform-sdk$": "<rootDir>/packages/platform-sdk/src/index.ts",
+        "^@enterpriseaigroup/platform-sdk/(.*)$": "<rootDir>/packages/platform-sdk/src/$1",
         "^@presentation/(.*)$": "<rootDir>/src/app/(presentation)/$1",
         "^@presentation/hooks/(.*)$": "<rootDir>/src/app/(presentation)/hooks/$1",
         "^@presentation/pages/(.*)$": "<rootDir>/src/app/(presentation)/(pages)/$1",

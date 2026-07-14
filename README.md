@@ -147,6 +147,16 @@ eai resources schema --tenant-id <tenant-id> --format json
 eai verify calls --tenant-id <tenant-id> --resource-type application
 ```
 
+## Object Type Naming
+
+- Define object types in PascalCase in `src/eai.config/object-types.ts`.
+- Let the shared SDK normalize those names to kebab-case route slugs.
+- Use `useResources('WatchTarget')`, `client.resources.get('Campaign', id)`,
+  and related helpers instead of hand-writing `/v4/data/resources/...` paths.
+- If you need the slug explicitly, use the shared `toObjectTypeSlug(...)`
+  helper from `@enterpriseaigroup/platform-sdk` instead of creating a local
+  slugifier.
+
 ## App Router Guardrail
 
 - In `src/app/**/route.ts`, export only HTTP methods like `GET`, `POST`, `PUT`,
