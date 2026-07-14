@@ -1,4 +1,7 @@
-import { seedObjectTypes } from '@/lib/platform/seed-object-types';
+import {
+  objectTypePayload,
+  seedObjectTypes,
+} from '@/lib/platform/seed-object-types';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -57,5 +60,41 @@ describe('seedObjectTypes', () => {
       },
     ]);
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it.each(['owner_private', 'shared_private'] as const)(
+    'preserves %s ResourceAPI authorization on the wire',
+    (privacyClass) => {
+      const payload = objectTypePayload({
+        name: 'RatesReviewSubmission',
+        displayName: 'Rates Review Submission',
+        authorization: { privacyClass },
+        properties: [],
+        linkTypes: [],
+        actions: [],
+        storageBackend: 'postgresql',
+        status: 'published',
+      });
+
+      expect(JSON.parse(JSON.stringify(payload))).toMatchObject({
+        authorization: { privacyClass },
+      });
+    },
+  );
+
+  it('omits authorization on the wire when the type has no policy', () => {
+    const payload = objectTypePayload({
+      name: 'LegacySubmission',
+      displayName: 'Legacy Submission',
+      properties: [],
+      linkTypes: [],
+      actions: [],
+      storageBackend: 'postgresql',
+      status: 'published',
+    });
+
+    expect(JSON.parse(JSON.stringify(payload))).not.toHaveProperty(
+      'authorization',
+    );
   });
 });

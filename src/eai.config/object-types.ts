@@ -105,6 +105,8 @@ export interface ObjectTypeDefinition {
   displayName: string;
   /** Optional description */
   description?: string;
+  /** ResourceAPI record-level authorization policy. */
+  authorization?: { privacyClass: 'owner_private' | 'shared_private' };
   /** Field definitions */
   properties: PropertyDefinition[];
   /** Relationship definitions */

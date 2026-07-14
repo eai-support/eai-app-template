@@ -1,0 +1,23 @@
+{
+  "schema": "eai.test_coverage_map.v1",
+  "repositories": {
+    "eai-app-template": {
+      "intentional_skipped_tests": [],
+      "features": [
+        {
+          "id": "generated-app-object-type-seeding",
+          "description": "Generated apps seed tenant-scoped Object Types with owner-private and shared-private authorization metadata.",
+          "owned_paths": [
+            "src/eai.config/object-types.ts",
+            "src/lib/platform/seed-object-types.ts"
+          ],
+          "required_repo_tests": [
+            "src/lib/platform/seed-object-types.test.ts"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["adminportal-generated-app-builder-export"]
+        }
+      ]
+    }
+  }
+}
