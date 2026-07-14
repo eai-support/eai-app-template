@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '20'
 
 jobs:
   generate-lockfile:
