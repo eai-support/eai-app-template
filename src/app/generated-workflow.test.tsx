@@ -106,6 +106,7 @@ describe('GeneratedWorkflowPage', () => {
     const executeAction = jest.fn().mockResolvedValue({});
     mockUseResources.mockReturnValue({
       create,
+      get: jest.fn(),
       executeAction,
       uploadFile: jest.fn(),
     } as unknown as ReturnType<typeof useResources>);
@@ -134,5 +135,40 @@ describe('GeneratedWorkflowPage', () => {
       expect(executeAction).toHaveBeenCalledWith('submission-1', 'submit');
     });
     expect(screen.getByText('Your response has been submitted.')).toBeVisible();
+  });
+
+  it('retries a transient action failure against the same draft', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'submission-1' });
+    const executeAction = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('temporary'))
+      .mockResolvedValueOnce({});
+    const get = jest.fn().mockResolvedValue({ data: { status: 'draft' } });
+    mockUseResources.mockReturnValue({
+      create,
+      get,
+      executeAction,
+      uploadFile: jest.fn(),
+    } as unknown as ReturnType<typeof useResources>);
+
+    render(
+      <EAIConfigProvider
+        config={{ tenantId: 'tenant-a', store: {}, layout: {} }}
+      >
+        <GeneratedWorkflowPage workflow={workflow} />
+      </EAIConfigProvider>,
+    );
+
+    await userEvent.type(
+      screen.getByLabelText('Applicant email'),
+      'person@example.com',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    await screen.findByRole('alert');
+    await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await screen.findByText('Your response has been submitted.');
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(executeAction).toHaveBeenCalledTimes(2);
   });
 });

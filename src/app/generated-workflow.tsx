@@ -1,6 +1,6 @@
 'use client';
 
-import { type ComponentType, useMemo, useState } from 'react';
+import { type ComponentType, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Checkbox,
@@ -24,6 +24,8 @@ import {
   buildWorkflowDefinition,
   fieldName,
   isStepComplete,
+  selectOption,
+  submissionObjectTypeFor,
   type GeneratedWorkflowField,
   type GeneratedWorkflowState,
   type GeneratedWorkflowValues,
@@ -84,9 +86,9 @@ function GeneratedWorkflowFields({
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    {(field.options ?? []).map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
+                    {(field.options ?? []).map(selectOption).map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -100,7 +102,18 @@ function GeneratedWorkflowFields({
             );
           }
 
-          if (field.type === 'textarea' || field.type === 'smart_block') {
+          if (field.type === 'smart_block') {
+            return (
+              <div key={name} className='border-border space-y-1 border-l-2 pl-4'>
+                <p className='text-sm font-medium'>{label}</p>
+                <p className='text-muted-foreground text-sm'>
+                  {field.helpText || 'This step is completed automatically.'}
+                </p>
+              </div>
+            );
+          }
+
+          if (field.type === 'textarea') {
             return (
               <div key={name} className='space-y-2'>
                 <Label htmlFor={id}>{label}</Label>
@@ -223,8 +236,8 @@ export function GeneratedWorkflowPage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
-  const submissionObjectType =
-    workflow.submissionObjectType || 'GeneratedAppSubmission';
+  const draftId = useRef<string | null>(null);
+  const submissionObjectType = submissionObjectTypeFor(workflow);
   const resources = useResources<Record<string, unknown>>(
     submissionObjectType,
     config.tenantId,
@@ -254,24 +267,38 @@ export function GeneratedWorkflowPage({
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const created = await resources.create(
-        buildSubmissionData(workflow, values),
-      );
+      if (!draftId.current) {
+        const created = await resources.create(
+          buildSubmissionData(workflow, values),
+        );
+        draftId.current = created.id;
+      }
       for (const step of workflow.steps) {
         for (const [index, field] of (step.fields ?? []).entries()) {
           const name = fieldName(field, index);
           const value = values[name];
           if (field.type === 'file' && value instanceof File) {
-            await resources.uploadFile(created.id, name, value, {
+            await resources.uploadFile(draftId.current, name, value, {
               filename: value.name,
               contentType: value.type || undefined,
             });
           }
         }
       }
-      await resources.executeAction(created.id, 'submit');
+      await resources.executeAction(draftId.current, 'submit');
       setSubmitted(true);
     } catch {
+      if (draftId.current) {
+        try {
+          const existing = await resources.get(draftId.current);
+          if (existing.data?.status === 'submitted') {
+            setSubmitted(true);
+            return;
+          }
+        } catch {
+          // Keep the original generic error and retry the same draft next time.
+        }
+      }
       setSubmitError('Submission failed. Please try again.');
     } finally {
       setIsSubmitting(false);

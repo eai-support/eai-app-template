@@ -2,6 +2,7 @@ import {
   buildSubmissionData,
   buildWorkflowDefinition,
   isStepComplete,
+  submissionObjectTypeFor,
   type GeneratedWorkflowState,
 } from './generated-workflow';
 
@@ -24,7 +25,7 @@ const workflow: GeneratedWorkflowState = {
           name: 'priority',
           label: 'Priority',
           type: 'select',
-          options: ['Normal', 'Urgent'],
+          options: ['Normal', 'Urgent request'],
         },
       ],
     },
@@ -69,14 +70,59 @@ describe('generated workflow runtime', () => {
     expect(
       buildSubmissionData(workflow, {
         applicantEmail: 'person@example.com',
-        priority: 'Urgent',
+        priority: 'urgent-request',
       }),
     ).toEqual({
       status: 'draft',
       currentStep: 'intake',
-      payload: { applicantEmail: 'person@example.com', priority: 'Urgent' },
+      payload: {
+        applicantEmail: 'person@example.com',
+        priority: 'urgent-request',
+      },
       applicantEmail: 'person@example.com',
-      priority: 'Urgent',
+      priority: 'urgent-request',
     });
+  });
+
+  it('normalises legacy select labels and omits smart-block display state', () => {
+    expect(
+      buildSubmissionData(
+        {
+          ...workflow,
+          steps: [
+            {
+              ...workflow.steps[0],
+              fields: [
+                ...(workflow.steps[0].fields ?? []),
+                { name: 'analysis', type: 'smart_block' },
+              ],
+            },
+          ],
+        },
+        { priority: 'Urgent request', analysis: 'not resource data' },
+      ),
+    ).toMatchObject({
+      payload: { priority: 'urgent-request' },
+      priority: 'urgent-request',
+    });
+  });
+
+  it('accepts an explicit false answer for a required boolean field', () => {
+    expect(
+      isStepComplete(
+        {
+          id: 'check',
+          title: 'Check',
+          fields: [{ name: 'confirmed', type: 'boolean', required: true }],
+        },
+        { confirmed: false },
+      ),
+    ).toBe(true);
+  });
+
+  it('derives the legacy app-specific submission Object Type name', () => {
+    expect(
+      submissionObjectTypeFor({ ...workflow, submissionObjectType: undefined }),
+    ).toBe('RatesReviewSubmission');
   });
 });

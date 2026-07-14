@@ -41,7 +41,7 @@ export function isEmptyFieldValue(
   value: unknown,
 ): boolean {
   if (field.type === 'boolean' || field.type === 'checkbox') {
-    return value !== true;
+    return value === undefined || value === null;
   }
   return value === undefined || value === null || value === '';
 }
@@ -97,15 +97,62 @@ function serializableValue(value: unknown): unknown {
   return value;
 }
 
+function slugifyOption(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+}
+
+export function selectOption(option: string) {
+  return { label: option, value: slugifyOption(option) || option };
+}
+
+function resourceFieldValue(
+  field: GeneratedWorkflowField | undefined,
+  value: unknown,
+): unknown {
+  if (field?.type === 'smart_block') return undefined;
+  if (field?.type === 'select' && typeof value === 'string') {
+    const option = field.options
+      ?.map(selectOption)
+      .find((candidate) => candidate.value === value || candidate.label === value);
+    return option?.value ?? (slugifyOption(value) || value);
+  }
+  return serializableValue(value);
+}
+
+export function submissionObjectTypeFor(
+  workflow: GeneratedWorkflowState,
+): string {
+  if (workflow.submissionObjectType) return workflow.submissionObjectType;
+  const name = workflow.appKey
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join('');
+  return `${name || 'GeneratedApp'}Submission`;
+}
+
 export function buildSubmissionData(
   workflow: GeneratedWorkflowState,
   values: GeneratedWorkflowValues,
 ): Record<string, unknown> {
+  const fieldsByName = new Map<string, GeneratedWorkflowField>();
+  workflow.steps.forEach((step) =>
+    (step.fields ?? []).forEach((field, index) =>
+      fieldsByName.set(fieldName(field, index), field),
+    ),
+  );
   const payload = Object.fromEntries(
-    Object.entries(values).map(([key, value]) => [
-      key,
-      serializableValue(value),
-    ]),
+    Object.entries(values)
+      .map(([key, value]) => [
+        key,
+        resourceFieldValue(fieldsByName.get(key), value),
+      ])
+      .filter((entry) => entry[1] !== undefined),
   );
   const data: Record<string, unknown> = {
     status: 'draft',
@@ -116,7 +163,7 @@ export function buildSubmissionData(
   workflow.steps.forEach((step) => {
     (step.fields ?? []).forEach((field, index) => {
       const name = fieldName(field, index);
-      const value = values[name];
+      const value = resourceFieldValue(field, values[name]);
       if (
         value !== undefined &&
         !(typeof File !== 'undefined' && value instanceof File)
