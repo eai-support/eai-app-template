@@ -203,4 +203,24 @@ describe('EAI proxy v4 route-family routing', () => {
     expect(cloneText).not.toHaveBeenCalled();
     expect(JSON.stringify(logSpy.mock.calls)).not.toContain('Sensitive Person');
   });
+
+  it('HP005 forwards both tenant headers server-authoritatively for tenant-scoped resource calls', async () => {
+    process.env.EAI_TENANT_ID = 'tenant-a';
+
+    await GET(
+      createRequest('v4/data/resources/tenant-a/storage', {
+        headers: {
+          tenant: 'spoofed-tenant',
+          'x-tenant-id': 'spoofed-tenant',
+        },
+      }),
+      createContext('v4/data/resources/tenant-a/storage'),
+    );
+
+    const [, fetchOptions] = (global.fetch as jest.Mock).mock.calls[0];
+    const headers = fetchOptions.headers as Headers;
+
+    expect(headers.get('tenant')).toBe('tenant-a');
+    expect(headers.get('x-tenant-id')).toBe('tenant-a');
+  });
 });

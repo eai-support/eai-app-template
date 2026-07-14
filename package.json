@@ -49,7 +49,8 @@
     "test:playwright:report:ci": "playwright test --reporter dot --ci",
     "test:playwright:ui": "playwright test --ui",
     "test:playwright:ui:ci": "playwright test --ui --ci",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "diagnose:resource-storage": "node scripts/diagnose-resource-storage.mjs"
   },
   "dependencies": {
     "@enterpriseaigroup/core": "1.0.129",

@@ -207,6 +207,7 @@ async function proxyRequest(
     const serverTenantId = getServerTenantId();
     if (serverTenantId) {
       headers.set('tenant', serverTenantId);
+      headers.set('X-Tenant-Id', serverTenantId);
     }
 
     const fetchOptions: RequestInit & { duplex?: 'half' } = {
