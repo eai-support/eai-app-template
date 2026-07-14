@@ -52,7 +52,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@enterpriseaigroup/core": "*",
+    "@enterpriseaigroup/core": "^1.0.142",
     "@enterpriseaigroup/demo": "*",
     "@eslint/eslintrc": "^3",
     "@hookform/resolvers": "^5.0.1",
