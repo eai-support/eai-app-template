@@ -1,10 +1,13 @@
 import {
   buildSubmissionData,
   buildWorkflowDefinition,
+  fillableFields,
   isStepComplete,
   submissionObjectTypeFor,
+  withOwnerProjectionRetry,
   type GeneratedWorkflowState,
 } from './generated-workflow';
+import { PlatformError } from '@enterpriseaigroup/platform-sdk';
 
 const workflow: GeneratedWorkflowState = {
   appKey: 'rates-review',
@@ -107,6 +110,46 @@ describe('generated workflow runtime', () => {
     });
   });
 
+  it('keeps required smart blocks non-fillable and hides fields they replace', () => {
+    const fields = [
+      { id: 'manual-review', name: 'manualReview', required: true },
+      {
+        id: 'automated-review',
+        name: 'automatedReview',
+        type: 'smart_block',
+        required: true,
+        replaces: ['manual-review'],
+      },
+    ];
+
+    expect(fillableFields(fields)).toEqual([fields[1]]);
+    expect(
+      isStepComplete({ id: 'review', title: 'Review', fields }, {}),
+    ).toBe(true);
+  });
+
+  it('keeps file metadata in payload but omits the file property before upload', () => {
+    const file = new File(['evidence'], 'evidence.txt', { type: 'text/plain' });
+    const data = buildSubmissionData(
+      {
+        ...workflow,
+        steps: [
+          {
+            id: 'evidence',
+            title: 'Evidence',
+            fields: [{ name: 'evidence', type: 'file', required: true }],
+          },
+        ],
+      },
+      { evidence: file },
+    );
+
+    expect(data).not.toHaveProperty('evidence');
+    expect(data.payload).toEqual({
+      evidence: { name: 'evidence.txt', size: 8, type: 'text/plain' },
+    });
+  });
+
   it('accepts an explicit false answer for a required boolean field', () => {
     expect(
       isStepComplete(
@@ -124,5 +167,19 @@ describe('generated workflow runtime', () => {
     expect(
       submissionObjectTypeFor({ ...workflow, submissionObjectType: undefined }),
     ).toBe('RatesReviewSubmission');
+  });
+
+  it('bounds retries while owner-private access is being projected', async () => {
+    const operation = jest
+      .fn()
+      .mockRejectedValueOnce(
+        new PlatformError({ status: 403, code: 'FORBIDDEN', message: 'wait' }),
+      )
+      .mockResolvedValue('ok');
+    const sleep = jest.fn().mockResolvedValue(undefined);
+
+    await expect(withOwnerProjectionRetry(operation, sleep)).resolves.toBe('ok');
+    expect(operation).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledWith(100);
   });
 });

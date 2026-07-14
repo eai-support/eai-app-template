@@ -1,4 +1,5 @@
 import type { WorkflowConfig } from '@enterpriseaigroup/core';
+import { PlatformError } from '@enterpriseaigroup/platform-sdk';
 
 export interface GeneratedWorkflowField {
   id?: string;
@@ -8,6 +9,7 @@ export interface GeneratedWorkflowField {
   required?: boolean;
   helpText?: string;
   options?: string[];
+  replaces?: string[];
 }
 
 export interface GeneratedWorkflowStep {
@@ -28,6 +30,24 @@ export interface GeneratedWorkflowState {
 export type GeneratedWorkflowValues = Record<string, unknown>;
 
 export const GENERATED_WORKFLOW_FIELDS_COMPONENT = 'GeneratedWorkflowFields';
+
+const OWNER_PROJECTION_RETRY_DELAYS_MS = [100, 250, 500, 1000, 2000];
+
+export async function withOwnerProjectionRetry<T>(
+  operation: () => Promise<T>,
+  sleep: (milliseconds: number) => Promise<void> = (milliseconds) =>
+    new Promise((resolve) => setTimeout(resolve, milliseconds)),
+): Promise<T> {
+  for (const delay of OWNER_PROJECTION_RETRY_DELAYS_MS) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!(error instanceof PlatformError) || !error.isForbidden) throw error;
+      await sleep(delay);
+    }
+  }
+  return operation();
+}
 
 export function fieldName(
   field: GeneratedWorkflowField,
@@ -50,10 +70,26 @@ export function isStepComplete(
   step: GeneratedWorkflowStep,
   values: GeneratedWorkflowValues,
 ): boolean {
-  return (step.fields ?? []).every((field, index) => {
-    if (!field.required) return true;
+  return fillableFields(step.fields ?? []).every((field, index) => {
+    if (field.type === 'smart_block' || !field.required) return true;
     return !isEmptyFieldValue(field, values[fieldName(field, index)]);
   });
+}
+
+export function fillableFields(
+  fields: GeneratedWorkflowField[],
+): GeneratedWorkflowField[] {
+  const replaced = new Set(
+    fields
+      .filter((field) => field.type === 'smart_block')
+      .flatMap((field) => field.replaces ?? []),
+  );
+  return fields.filter(
+    (field) =>
+      field.type === 'smart_block' ||
+      !field.id ||
+      !replaced.has(field.id),
+  );
 }
 
 export function buildWorkflowDefinition(
@@ -78,7 +114,7 @@ export function buildWorkflowDefinition(
                   stepId: step.id,
                   title: step.title,
                   description: step.description,
-                  fields: step.fields ?? [],
+                  fields: fillableFields(step.fields ?? []),
                   isLastStep: stepIndex === workflow.steps.length - 1,
                 },
               },
@@ -142,7 +178,7 @@ export function buildSubmissionData(
 ): Record<string, unknown> {
   const fieldsByName = new Map<string, GeneratedWorkflowField>();
   workflow.steps.forEach((step) =>
-    (step.fields ?? []).forEach((field, index) =>
+    fillableFields(step.fields ?? []).forEach((field, index) =>
       fieldsByName.set(fieldName(field, index), field),
     ),
   );
@@ -161,12 +197,13 @@ export function buildSubmissionData(
   };
 
   workflow.steps.forEach((step) => {
-    (step.fields ?? []).forEach((field, index) => {
+    fillableFields(step.fields ?? []).forEach((field, index) => {
       const name = fieldName(field, index);
-      const value = resourceFieldValue(field, values[name]);
+      const rawValue = values[name];
+      const value = resourceFieldValue(field, rawValue);
       if (
         value !== undefined &&
-        !(typeof File !== 'undefined' && value instanceof File)
+        !(typeof File !== 'undefined' && rawValue instanceof File)
       ) {
         data[name] = value;
       }

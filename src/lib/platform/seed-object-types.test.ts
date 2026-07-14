@@ -1,4 +1,7 @@
-import { seedObjectTypes } from '@/lib/platform/seed-object-types';
+import {
+  objectTypePayload,
+  seedObjectTypes,
+} from '@/lib/platform/seed-object-types';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -57,5 +60,22 @@ describe('seedObjectTypes', () => {
       },
     ]);
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('preserves ResourceAPI authorization when publishing a generated type', () => {
+    expect(
+      objectTypePayload({
+        name: 'RatesReviewSubmission',
+        displayName: 'Rates Review Submission',
+        authorization: { privacyClass: 'owner_private' },
+        properties: [],
+        linkTypes: [],
+        actions: [],
+        storageBackend: 'postgresql',
+        status: 'published',
+      }),
+    ).toMatchObject({
+      authorization: { privacyClass: 'owner_private' },
+    });
   });
 });

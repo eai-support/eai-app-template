@@ -26,6 +26,7 @@ import {
   isStepComplete,
   selectOption,
   submissionObjectTypeFor,
+  withOwnerProjectionRetry,
   type GeneratedWorkflowField,
   type GeneratedWorkflowState,
   type GeneratedWorkflowValues,
@@ -272,20 +273,31 @@ export function GeneratedWorkflowPage({
           buildSubmissionData(workflow, values),
         );
         draftId.current = created.id;
+      } else {
+        const existing = await resources.get(draftId.current);
+        await resources.update(
+          draftId.current,
+          buildSubmissionData(workflow, values),
+          existing.version,
+        );
       }
       for (const step of workflow.steps) {
         for (const [index, field] of (step.fields ?? []).entries()) {
           const name = fieldName(field, index);
           const value = values[name];
           if (field.type === 'file' && value instanceof File) {
-            await resources.uploadFile(draftId.current, name, value, {
-              filename: value.name,
-              contentType: value.type || undefined,
-            });
+            await withOwnerProjectionRetry(() =>
+              resources.uploadFile(draftId.current!, name, value, {
+                filename: value.name,
+                contentType: value.type || undefined,
+              }),
+            );
           }
         }
       }
-      await resources.executeAction(draftId.current, 'submit');
+      await withOwnerProjectionRetry(() =>
+        resources.executeAction(draftId.current!, 'submit'),
+      );
       setSubmitted(true);
     } catch {
       if (draftId.current) {

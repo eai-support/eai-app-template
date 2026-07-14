@@ -143,10 +143,14 @@ describe('GeneratedWorkflowPage', () => {
       .fn()
       .mockRejectedValueOnce(new Error('temporary'))
       .mockResolvedValueOnce({});
-    const get = jest.fn().mockResolvedValue({ data: { status: 'draft' } });
+    const get = jest
+      .fn()
+      .mockResolvedValue({ data: { status: 'draft' }, version: 1 });
+    const update = jest.fn().mockResolvedValue({});
     mockUseResources.mockReturnValue({
       create,
       get,
+      update,
       executeAction,
       uploadFile: jest.fn(),
     } as unknown as ReturnType<typeof useResources>);
@@ -169,6 +173,64 @@ describe('GeneratedWorkflowPage', () => {
 
     await screen.findByText('Your response has been submitted.');
     expect(create).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(
+      'submission-1',
+      expect.objectContaining({ applicantEmail: 'person@example.com' }),
+      1,
+    );
     expect(executeAction).toHaveBeenCalledTimes(2);
+  });
+
+  it('creates the draft before uploading a required file and submitting', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'submission-file' });
+    const uploadFile = jest.fn().mockResolvedValue({});
+    const executeAction = jest.fn().mockResolvedValue({});
+    mockUseResources.mockReturnValue({
+      create,
+      get: jest.fn(),
+      uploadFile,
+      executeAction,
+    } as unknown as ReturnType<typeof useResources>);
+    const fileWorkflow: GeneratedWorkflowState = {
+      ...workflow,
+      steps: [
+        {
+          id: 'evidence',
+          title: 'Evidence',
+          fields: [
+            { name: 'evidence', label: 'Evidence', type: 'file', required: true },
+          ],
+        },
+      ],
+    };
+
+    render(
+      <EAIConfigProvider
+        config={{ tenantId: 'tenant-a', store: {}, layout: {} }}
+      >
+        <GeneratedWorkflowPage workflow={fileWorkflow} />
+      </EAIConfigProvider>,
+    );
+    const file = new File(['evidence'], 'evidence.txt', { type: 'text/plain' });
+    await userEvent.upload(screen.getByLabelText('Evidence'), file);
+    await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await screen.findByText('Your response has been submitted.');
+    expect(create).toHaveBeenCalledWith(
+      expect.not.objectContaining({ evidence: expect.anything() }),
+    );
+    expect(uploadFile).toHaveBeenCalledWith(
+      'submission-file',
+      'evidence',
+      file,
+      { filename: 'evidence.txt', contentType: 'text/plain' },
+    );
+    expect(executeAction).toHaveBeenCalledWith('submission-file', 'submit');
+    expect(create.mock.invocationCallOrder[0]).toBeLessThan(
+      uploadFile.mock.invocationCallOrder[0],
+    );
+    expect(uploadFile.mock.invocationCallOrder[0]).toBeLessThan(
+      executeAction.mock.invocationCallOrder[0],
+    );
   });
 });
