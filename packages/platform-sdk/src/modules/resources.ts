@@ -159,6 +159,9 @@ export class ResourcesModule {
     if (options?.where)
       url.searchParams.set('where', JSON.stringify(options.where));
     if (options?.cursor) url.searchParams.set('cursor', options.cursor);
+    if (options?.includeTotal !== undefined) {
+      url.searchParams.set('includeTotal', String(options.includeTotal));
+    }
 
     const response = await platformFetch(url.pathname + url.search);
     return response.json();

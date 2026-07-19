@@ -71,6 +71,22 @@ describe('ResourcesModule', () => {
       );
     });
 
+    it('forwards an explicit count-free policy', async () => {
+      mockOkResponse({ docs: [], totalDocs: null, page: 1, totalPages: null });
+
+      const response = await resources.list('Application', {
+        limit: 5,
+        includeTotal: false,
+      });
+
+      expect(response.totalDocs).toBeNull();
+      expect(response.totalPages).toBeNull();
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/application?limit=5&includeTotal=false',
+        undefined,
+      );
+    });
+
     it('uses the v4 data resource route for sorted project lists', async () => {
       mockOkResponse({
         docs: [],
