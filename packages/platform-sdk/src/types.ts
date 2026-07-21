@@ -28,10 +28,12 @@ export interface ResourceUpdate {
 
 export interface PaginatedResponse<T> {
   docs: T[];
-  totalDocs: number;
+  /** Null when the request disables exact totals. */
+  totalDocs: number | null;
   page: number;
   limit: number;
-  totalPages: number;
+  /** Null when the request disables exact totals. */
+  totalPages: number | null;
   hasNextPage: boolean;
   hasPrevPage: boolean;
   nextCursor?: string | null;
@@ -55,6 +57,8 @@ export interface ListOptions {
   sort?: string;
   where?: Record<string, unknown>;
   cursor?: string;
+  /** Omit to preserve the server's backward-compatible exact-count default. */
+  includeTotal?: boolean;
 }
 
 export interface AggregateMetricDefinition {
