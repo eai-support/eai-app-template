@@ -19,6 +19,7 @@ export { toObjectTypeSlug } from './object-types';
 // Types
 export type {
   Resource,
+  ResourceActionResult,
   ResourceUpdate,
   PaginatedResponse,
   ListOptions,

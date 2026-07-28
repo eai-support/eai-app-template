@@ -14,6 +14,7 @@ import type {
   BatchUpdateItem,
   RetryOptions,
   Resource,
+  ResourceActionResult,
   PaginatedResponse,
   ListOptions,
   QueryRequest,
@@ -239,6 +240,25 @@ export class ResourcesModule {
     retry?: RetryOptions,
   ): Promise<Resource<T>> {
     return this.retryingUpdate(objectType, id, data, version, retry);
+  }
+
+  /**
+   * Update from a resource or action result without copying its version into
+   * separate state that can become stale.
+   */
+  async updateFrom<T = Record<string, unknown>>(
+    objectType: string,
+    current: Pick<Resource<T>, 'id' | 'version'>,
+    data: T,
+    retry?: RetryOptions,
+  ): Promise<Resource<T>> {
+    return this.retryingUpdate(
+      objectType,
+      current.id,
+      data,
+      current.version,
+      retry,
+    );
   }
 
   /** Delete a resource by ID. */
@@ -469,13 +489,13 @@ export class ResourcesModule {
   }
 
   /** Execute a named action on a resource. */
-  async executeAction(
+  async executeAction<T = Record<string, unknown>>(
     objectType: string,
     id: string,
     action: string,
     params?: Record<string, unknown>,
-  ): Promise<Response> {
-    return platformFetch(
+  ): Promise<ResourceActionResult<T>> {
+    const response = await platformFetch(
       `${this.resourceUrl(objectType, id)}/actions/${action}`,
       {
         method: 'POST',
@@ -483,6 +503,7 @@ export class ResourcesModule {
         body: JSON.stringify({ params: params ?? {} }),
       },
     );
+    return response.json();
   }
 
   /** Get linked resources. */
