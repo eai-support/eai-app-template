@@ -120,7 +120,7 @@
     "npm": "^11.3.0",
     "pako": "^2.1.0",
     "path": "^0.12.7",
-    "postcss": "^8.5.3",
+    "postcss": "^8.5.18",
     "prettier": "^3.5.3",
     "prettier-plugin-tailwindcss": "^0.6.11",
     "react": "^18.3.1",
