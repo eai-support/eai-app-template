@@ -26,6 +26,15 @@ export interface ResourceUpdate {
   version: number;
 }
 
+export interface ResourceActionResult<T = Record<string, unknown>> {
+  id: string;
+  object_type: string;
+  action: string;
+  data: T;
+  /** The new version after the action mutation completes. */
+  version: number;
+}
+
 export interface PaginatedResponse<T> {
   docs: T[];
   /** Null when the request disables exact totals. */
