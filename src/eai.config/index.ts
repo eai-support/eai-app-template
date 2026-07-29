@@ -19,3 +19,5 @@ export const tenantConfigs: Record<string, typeof templateConfig> = {
   default: templateConfig,
   template: templateConfig,
 };
+
+export const workflowSnapshots: Record<string, unknown> = {};

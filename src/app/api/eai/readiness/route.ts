@@ -1,4 +1,5 @@
 import { evaluateRuntimeReadiness } from '@/lib/platform/readiness';
+import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -74,6 +75,7 @@ function validateTenantInfraProbe(request: Request): Response | null {
   return null;
 }
 
+/** Returns authenticated deployment checks plus bound workflow proof when configured. */
 export async function GET(request: Request): Promise<Response> {
   const probeFailureResponse = validateTenantInfraProbe(request);
   if (probeFailureResponse) {
@@ -81,9 +83,39 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const readiness = evaluateRuntimeReadiness();
+  const workflowRuntime = getGeneratedWorkflowRuntime();
+  const responseBody =
+    workflowRuntime.status === 'ready'
+      ? {
+          ...readiness,
+          runtimeBinding: {
+            workflowTemplate: {
+              digest: workflowRuntime.runtime.binding.workflowTemplate.digest,
+              title: workflowRuntime.runtime.binding.workflowTemplate.title,
+            },
+          },
+        }
+      : workflowRuntime.status === 'invalid'
+        ? {
+            ...readiness,
+            ok: false,
+            checks: [
+              ...readiness.checks,
+              {
+                name: 'generated-workflow-snapshot',
+                ok: false,
+                category: 'config_missing' as const,
+                missing: ['runtimeBinding.workflowTemplate.digest'],
+              },
+            ],
+            failureCategories: Array.from(
+              new Set([...readiness.failureCategories, 'config_missing']),
+            ).sort(),
+          }
+        : readiness;
 
-  return Response.json(readiness, {
-    status: readiness.ok ? 200 : 503,
+  return Response.json(responseBody, {
+    status: responseBody.ok ? 200 : 503,
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
     },
