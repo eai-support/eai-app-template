@@ -1,3 +1,6 @@
+import { ReadableStream } from 'node:stream/web';
+import { TextEncoder } from 'node:util';
+
 const mockPlatformFetch = jest.fn();
 const mockGetRuntime = jest.fn();
 const mockSetSubmissionSession = jest.fn();
@@ -41,6 +44,45 @@ jest.mock('@/lib/generated-workflow/submission-session', () => ({
 
 import { POST } from './route';
 
+function jsonRequest(value: unknown): Request {
+  const encoded = new TextEncoder().encode(JSON.stringify(value));
+  return {
+    headers: new Headers({ 'content-type': 'application/json' }),
+    body: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoded);
+        controller.close();
+      },
+    }),
+  } as unknown as Request;
+}
+
+function oversizedChunkedRequest(declaredLength?: string): Request {
+  const encoder = new TextEncoder();
+  const chunks = [
+    encoder.encode('{"device":"'),
+    encoder.encode('x'.repeat(256 * 1024)),
+    encoder.encode('"}'),
+  ];
+  let index = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index < chunks.length) {
+        controller.enqueue(chunks[index]);
+        index += 1;
+      } else {
+        controller.close();
+      }
+    },
+  });
+  const headers = new Headers({ 'content-type': 'application/json' });
+  if (declaredLength) headers.set('content-length', declaredLength);
+  return {
+    headers,
+    body,
+  } as unknown as Request;
+}
+
 describe('generated workflow anonymous submission BFF', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -69,10 +111,9 @@ describe('generated workflow anonymous submission BFF', () => {
   });
 
   it('calls only the managed-identity facade and issues browser ownership state', async () => {
-    const response = await POST({
-      headers: new Headers({ 'x-forwarded-for': '192.0.2.1' }),
-      json: async () => ({ device: 'Desktop' }),
-    } as never);
+    const request = jsonRequest({ device: 'Desktop' });
+    request.headers.set('x-forwarded-for', '192.0.2.1');
+    const response = await POST(request as never);
 
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toEqual({
@@ -108,12 +149,27 @@ describe('generated workflow anonymous submission BFF', () => {
   });
 
   it('rejects malformed device values before calling PublicAPI', async () => {
-    const response = await POST({
-      headers: new Headers(),
-      json: async () => ({ device: 'Watch' }),
-    } as never);
+    const response = await POST(jsonRequest({ device: 'Watch' }) as never);
 
     expect(response.status).toBe(400);
     expect(mockPlatformFetch).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['without Content-Length', undefined],
+    ['with a false-small Content-Length', '1'],
+  ])(
+    'rejects a chunked oversized anonymous JSON body %s',
+    async (_description, declaredLength) => {
+      const response = await POST(
+        oversizedChunkedRequest(declaredLength) as never,
+      );
+
+      expect(response.status).toBe(413);
+      await expect(response.json()).resolves.toEqual({
+        error: 'PAYLOAD_TOO_LARGE',
+      });
+      expect(mockPlatformFetch).not.toHaveBeenCalled();
+    },
+  );
 });

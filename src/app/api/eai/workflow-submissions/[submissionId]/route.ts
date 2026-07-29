@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import {
+  readBoundedJsonBody,
+  RequestBodyTooLargeError,
+} from '@/lib/generated-workflow/bounded-body';
+import {
   requestClientFingerprint,
   validateSubmissionPatch,
 } from '@/lib/generated-workflow/public-guards';
@@ -96,9 +100,24 @@ export async function PATCH(
   try {
     const route = await routeContext(request, context, 'update');
     if (!route) return notFound();
-    const parsed = validateSubmissionPatch(
-      await request.json().catch(() => null),
-    );
+    let body: unknown;
+    try {
+      body = await readBoundedJsonBody(request);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof RequestBodyTooLargeError
+              ? 'PAYLOAD_TOO_LARGE'
+              : 'INVALID_BODY',
+        },
+        {
+          status: error instanceof RequestBodyTooLargeError ? 413 : 400,
+          headers: NO_STORE_HEADERS,
+        },
+      );
+    }
+    const parsed = validateSubmissionPatch(body);
     if (!parsed.ok) {
       return NextResponse.json(
         { error: 'INVALID_BODY', message: parsed.message },

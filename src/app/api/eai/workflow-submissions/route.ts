@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import {
+  readBoundedJsonBody,
+  RequestBodyTooLargeError,
+} from '@/lib/generated-workflow/bounded-body';
 import { requestClientFingerprint } from '@/lib/generated-workflow/public-guards';
 import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
@@ -26,9 +30,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   const { runtime: workflowRuntime } = resolved;
 
-  const input = (await request.json().catch(() => null)) as {
-    device?: unknown;
-  } | null;
+  let input: { device?: unknown } | null;
+  try {
+    input = (await readBoundedJsonBody(request)) as {
+      device?: unknown;
+    } | null;
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof RequestBodyTooLargeError
+            ? 'PAYLOAD_TOO_LARGE'
+            : 'INVALID_BODY',
+      },
+      {
+        status: error instanceof RequestBodyTooLargeError ? 413 : 400,
+        headers: NO_STORE_HEADERS,
+      },
+    );
+  }
   if (
     !input ||
     typeof input.device !== 'string' ||
