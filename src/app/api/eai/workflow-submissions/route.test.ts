@@ -39,13 +39,11 @@ jest.mock('@/lib/generated-workflow/submission-session', () => ({
     mockSetSubmissionSession(...args),
 }));
 
-import { __resetGeneratedWorkflowRateLimit } from '@/lib/generated-workflow/public-guards';
 import { POST } from './route';
 
 describe('generated workflow anonymous submission BFF', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    __resetGeneratedWorkflowRateLimit();
     mockGetRuntime.mockReturnValue({
       status: 'ready',
       runtime: {
@@ -84,6 +82,7 @@ describe('generated workflow anonymous submission BFF', () => {
       tenantId: 'tenant-a',
       appKey: 'rates-review',
       path: '/submissions',
+      anonymousClientId: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
       init: {
         method: 'POST',
         body: expect.any(String),

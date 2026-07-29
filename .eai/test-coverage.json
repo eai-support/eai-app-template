@@ -55,6 +55,7 @@
             "src/app/api/eai/readiness/route.test.ts",
             "src/app/api/eai/workflow-submissions/route.test.ts",
             "src/components/generated-workflow/workflow-form.test.tsx",
+            "src/lib/generated-workflow/bounded-body.test.ts",
             "src/lib/generated-workflow/platform.test.ts",
             "src/lib/generated-workflow/public-guards.test.ts",
             "src/lib/generated-workflow/runtime-contract.test.ts",

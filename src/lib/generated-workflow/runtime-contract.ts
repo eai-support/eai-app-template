@@ -12,6 +12,54 @@ export interface GeneratedWorkflowField {
   replaces?: string[];
 }
 
+/** JSON-safe output kinds declared by a canonical guided block. */
+export type GeneratedWorkflowSmartBlockValueType =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'date'
+  | 'datetime'
+  | 'file'
+  | 'object'
+  | 'unknown';
+
+/** Source references resolved without executing platform-only builder adapters. */
+export type GeneratedWorkflowSourceBinding =
+  | { kind: 'workflow-field'; fieldId: string; stepId?: string }
+  | {
+      kind: 'block-output';
+      blockInstanceId: string;
+      outputName: string;
+    }
+  | { kind: 'step-output'; stepId: string; outputName: string }
+  | { kind: 'workflow-output'; workflowId: string; outputName: string }
+  | { kind: 'object-type'; objectType: string; field?: string }
+  | { kind: 'literal'; value: unknown };
+
+/** Named output persisted by a canonical guided block. */
+export interface GeneratedWorkflowSmartBlockOutput {
+  name: string;
+  valueType: GeneratedWorkflowSmartBlockValueType;
+  collection?: boolean;
+  required?: boolean;
+}
+
+/** Canonical reusable block embedded in an immutable respondent step. */
+export interface GeneratedWorkflowSmartBlockInstance {
+  id: string;
+  blockId: string;
+  order: number;
+  config: {
+    presentationConfig: Record<string, unknown>;
+    dataConfig: Record<string, unknown>;
+    businessLogic: Record<string, unknown>;
+    accessControl: Record<string, unknown>;
+    actionsConfig: Record<string, unknown>;
+  };
+  bindings: Record<string, GeneratedWorkflowSourceBinding>;
+  outputs?: GeneratedWorkflowSmartBlockOutput[];
+}
+
 /** Ordered respondent step stored in the immutable workflow snapshot. */
 export interface GeneratedWorkflowStep {
   id?: string;
@@ -19,6 +67,7 @@ export interface GeneratedWorkflowStep {
   name?: string;
   description?: string;
   fields?: GeneratedWorkflowField[];
+  blocks?: GeneratedWorkflowSmartBlockInstance[];
 }
 
 /** Canonical workflow bytes rendered by a generated deployment. */
@@ -91,12 +140,36 @@ export function generatedWorkflowSnapshotDigest(
 export function validateGeneratedWorkflowSnapshot(
   value: unknown,
 ): value is GeneratedWorkflowSnapshot {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    Array.isArray((value as GeneratedWorkflowSnapshot).steps) &&
-    (value as GeneratedWorkflowSnapshot).steps.length > 0,
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    !Array.isArray((value as GeneratedWorkflowSnapshot).steps) ||
+    (value as GeneratedWorkflowSnapshot).steps.length === 0
+  ) {
+    return false;
+  }
+  return (value as GeneratedWorkflowSnapshot).steps.every(
+    (step) =>
+      step &&
+      typeof step === 'object' &&
+      (!step.blocks ||
+        (Array.isArray(step.blocks) &&
+          step.blocks.every(
+            (block) =>
+              block &&
+              typeof block.id === 'string' &&
+              Boolean(block.id.trim()) &&
+              typeof block.blockId === 'string' &&
+              Boolean(block.blockId.trim()) &&
+              typeof block.order === 'number' &&
+              Number.isInteger(block.order) &&
+              block.config &&
+              typeof block.config === 'object' &&
+              block.bindings &&
+              typeof block.bindings === 'object' &&
+              (!block.outputs || Array.isArray(block.outputs)),
+          ))),
   );
 }
 

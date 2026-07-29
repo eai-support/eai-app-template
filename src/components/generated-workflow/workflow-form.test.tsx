@@ -84,4 +84,126 @@ describe('GeneratedWorkflowForm', () => {
       }),
     );
   });
+
+  it('renders canonical step blocks in order and persists declared outputs', async () => {
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        snapshot={{
+          steps: [
+            {
+              id: 'review',
+              title: 'Review',
+              fields: [],
+              blocks: [
+                {
+                  id: 'approval-1',
+                  blockId: 'approvals',
+                  order: 20,
+                  config: {
+                    presentationConfig: { title: 'Manager approval' },
+                    dataConfig: {},
+                    businessLogic: {},
+                    accessControl: {},
+                    actionsConfig: {},
+                  },
+                  bindings: {
+                    policy: { kind: 'literal', value: 'Rates policy' },
+                  },
+                  outputs: [
+                    {
+                      name: 'decision',
+                      valueType: 'string',
+                      required: true,
+                    },
+                  ],
+                },
+                {
+                  id: 'checklist-1',
+                  blockId: 'document-checklist',
+                  order: 10,
+                  config: {
+                    presentationConfig: { title: 'Required documents' },
+                    dataConfig: {},
+                    businessLogic: {},
+                    accessControl: {},
+                    actionsConfig: {},
+                  },
+                  bindings: {},
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    await screen.findByRole('button', { name: 'Submit' });
+    expect(
+      screen
+        .getByText('Required documents')
+        .compareDocumentPosition(screen.getByText('Manager approval')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    expect(
+      screen.getByText('Complete the required guided activity outputs.'),
+    ).toBeVisible();
+    fireEvent.change(screen.getByLabelText(/decision/), {
+      target: { value: 'approved' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => expect(screen.getByText('Submitted')).toBeVisible());
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      '/api/eai/workflow-submissions/submission-1',
+      expect.objectContaining({
+        body: expect.stringContaining(
+          '"__blocks":{"approval-1.decision":"approved"}',
+        ),
+      }),
+    );
+  });
+
+  it('fails visibly when a canonical block has no runtime adapter', async () => {
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        snapshot={{
+          steps: [
+            {
+              id: 'review',
+              title: 'Review',
+              blocks: [
+                {
+                  id: 'custom-1',
+                  blockId: 'customer.unsupported',
+                  order: 0,
+                  config: {
+                    presentationConfig: {},
+                    dataConfig: {},
+                    businessLogic: {},
+                    accessControl: {},
+                    actionsConfig: {},
+                  },
+                  bindings: {},
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(
+      await screen.findByText(/unsupported block “customer\.unsupported”/),
+    ).toBeVisible();
+    expect(
+      await screen.findByRole('button', { name: 'Submit' }),
+    ).toBeDisabled();
+    expect(screen.queryByText('Submitted')).not.toBeInTheDocument();
+  });
 });

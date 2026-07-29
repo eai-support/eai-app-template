@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import {
-  allowRequest,
-  requestClientIp,
+  requestClientFingerprint,
   validateSubmissionPatch,
 } from '@/lib/generated-workflow/public-guards';
 import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
@@ -39,19 +38,11 @@ async function routeContext(
   if (resolved.status !== 'ready') return null;
   const { submissionId } = await context.params;
   if (!SUBMISSION_ID_PATTERN.test(submissionId)) return null;
-  if (
-    !allowRequest(
-      `${operation}:${resolved.runtime.appKey}:${requestClientIp(
-        request.headers,
-      )}`,
-      120,
-      60_000,
-    )
-  ) {
-    return { rateLimited: true as const };
-  }
   return {
-    rateLimited: false as const,
+    anonymousClientId:
+      operation === 'update'
+        ? requestClientFingerprint(request.headers)
+        : undefined,
     runtime: resolved.runtime,
     submissionId,
   };
@@ -65,12 +56,6 @@ export async function GET(
   try {
     const route = await routeContext(request, context, 'read');
     if (!route) return notFound();
-    if (route.rateLimited) {
-      return NextResponse.json(
-        { error: 'RATE_LIMITED' },
-        { status: 429, headers: NO_STORE_HEADERS },
-      );
-    }
     const stored = await readOwnedSubmission({
       request,
       runtime: route.runtime,
@@ -111,12 +96,6 @@ export async function PATCH(
   try {
     const route = await routeContext(request, context, 'update');
     if (!route) return notFound();
-    if (route.rateLimited) {
-      return NextResponse.json(
-        { error: 'RATE_LIMITED' },
-        { status: 429, headers: NO_STORE_HEADERS },
-      );
-    }
     const parsed = validateSubmissionPatch(
       await request.json().catch(() => null),
     );
@@ -144,12 +123,19 @@ export async function PATCH(
       tenantId: route.runtime.tenantId,
       appKey: route.runtime.appKey,
       path: `/submissions/${encodeURIComponent(route.submissionId)}`,
+      anonymousClientId: route.anonymousClientId,
       init: {
         method: 'PATCH',
         body: JSON.stringify(parsed.value),
       },
     });
     if (!updateResponse.ok) {
+      if (updateResponse.status === 429) {
+        return NextResponse.json(
+          { error: 'RATE_LIMITED' },
+          { status: 429, headers: NO_STORE_HEADERS },
+        );
+      }
       console.error(
         '[generated-workflow] submission update failed:',
         updateResponse.status,

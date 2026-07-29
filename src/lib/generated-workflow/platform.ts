@@ -129,6 +129,7 @@ export async function generatedWorkflowPlatformFetch(args: {
   tenantId: string;
   appKey: string;
   path: string;
+  anonymousClientId?: string;
   init?: RequestInit;
 }): Promise<Response> {
   const headers = new Headers(args.init?.headers);
@@ -141,6 +142,9 @@ export async function generatedWorkflowPlatformFetch(args: {
     headers.set('Content-Type', 'application/json');
   }
   headers.set('Authorization', `Bearer ${await accessToken()}`);
+  if (args.anonymousClientId) {
+    headers.set('X-EAI-Anonymous-Client', args.anonymousClientId);
+  }
 
   return fetch(
     `${publicApiBaseUrl()}${runtimeFacadePath(

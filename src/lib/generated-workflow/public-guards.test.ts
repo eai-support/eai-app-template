@@ -1,14 +1,10 @@
 import {
-  __resetGeneratedWorkflowRateLimit,
-  allowRequest,
+  requestClientFingerprint,
+  requestClientIp,
   validateSubmissionPatch,
 } from './public-guards';
 
 describe('generated workflow public request guards', () => {
-  beforeEach(() => {
-    __resetGeneratedWorkflowRateLimit();
-  });
-
   it('accepts bounded autosave and completion fields', () => {
     expect(
       validateSubmissionPatch({
@@ -42,9 +38,12 @@ describe('generated workflow public request guards', () => {
     ).toMatchObject({ ok: false });
   });
 
-  it('limits repeated anonymous requests within the configured window', () => {
-    expect(allowRequest('client', 2, 60_000, 1_000)).toBe(true);
-    expect(allowRequest('client', 2, 60_000, 1_001)).toBe(true);
-    expect(allowRequest('client', 2, 60_000, 1_002)).toBe(false);
+  it('uses the proxy-appended address instead of a spoofed forwarded prefix', () => {
+    const headers = new Headers({
+      'x-forwarded-for': '198.51.100.88, 192.0.2.10',
+    });
+
+    expect(requestClientIp(headers)).toBe('192.0.2.10');
+    expect(requestClientFingerprint(headers)).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
 });

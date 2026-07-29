@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requestClientFingerprint } from '@/lib/generated-workflow/public-guards';
 import {
-  allowRequest,
-  requestClientIp,
-} from '@/lib/generated-workflow/public-guards';
+  readBoundedRequestBody,
+  RequestBodyTooLargeError,
+} from '@/lib/generated-workflow/bounded-body';
 import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 import {
@@ -44,18 +45,6 @@ export async function POST(
   if (resolved.status !== 'ready') return notFound();
   const { submissionId } = await context.params;
   if (!SUBMISSION_ID_PATTERN.test(submissionId)) return notFound();
-  if (
-    !allowRequest(
-      `file:${resolved.runtime.appKey}:${requestClientIp(request.headers)}`,
-      40,
-      60_000,
-    )
-  ) {
-    return NextResponse.json(
-      { error: 'RATE_LIMITED' },
-      { status: 429, headers: NO_STORE_HEADERS },
-    );
-  }
   const contentLength = request.headers.get('content-length');
   if (contentLength !== null && Number(contentLength) > MAX_REQUEST_BYTES) {
     return NextResponse.json(
@@ -65,7 +54,28 @@ export async function POST(
   }
 
   try {
-    const formData = await request.formData();
+    const contentType = request.headers.get('content-type');
+    if (!contentType?.toLowerCase().startsWith('multipart/form-data')) {
+      return NextResponse.json(
+        {
+          error: 'INVALID_UPLOAD',
+          message: 'A multipart form upload is required.',
+        },
+        { status: 400, headers: NO_STORE_HEADERS },
+      );
+    }
+    const boundedBody = await readBoundedRequestBody(
+      request,
+      MAX_REQUEST_BYTES,
+    );
+    const boundedRequestBody = new ArrayBuffer(boundedBody.byteLength);
+    new Uint8Array(boundedRequestBody).set(boundedBody);
+    const boundedRequest = new Request(request.url, {
+      method: 'POST',
+      headers: { 'content-type': contentType },
+      body: boundedRequestBody,
+    });
+    const formData = await boundedRequest.formData();
     const file = formData.get('file');
     const stepId = formData.get('stepId');
     const fieldId = formData.get('fieldId');
@@ -118,12 +128,19 @@ export async function POST(
       tenantId: resolved.runtime.tenantId,
       appKey: resolved.runtime.appKey,
       path: `/submissions/${encodeURIComponent(submissionId)}/files`,
+      anonymousClientId: requestClientFingerprint(request.headers),
       init: {
         method: 'POST',
         body: upstreamForm,
       },
     });
     if (!uploadResponse.ok) {
+      if (uploadResponse.status === 429) {
+        return NextResponse.json(
+          { error: 'RATE_LIMITED' },
+          { status: 429, headers: NO_STORE_HEADERS },
+        );
+      }
       console.error(
         '[generated-workflow] submission file upload failed:',
         uploadResponse.status,
@@ -148,6 +165,12 @@ export async function POST(
       { status: 201, headers: NO_STORE_HEADERS },
     );
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json(
+        { error: 'INVALID_UPLOAD', message: 'File is too large (max 10MB).' },
+        { status: 413, headers: NO_STORE_HEADERS },
+      );
+    }
     console.error(
       '[generated-workflow] submission file error:',
       error instanceof Error ? error.name : 'unknown',

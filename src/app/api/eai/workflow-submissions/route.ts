@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import {
-  allowRequest,
-  requestClientIp,
-} from '@/lib/generated-workflow/public-guards';
+import { requestClientFingerprint } from '@/lib/generated-workflow/public-guards';
 import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 import { setSubmissionSession } from '@/lib/generated-workflow/submission-session';
@@ -28,15 +25,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
   const { runtime: workflowRuntime } = resolved;
-  const clientIp = requestClientIp(request.headers);
-  if (
-    !allowRequest(`create:${workflowRuntime.appKey}:${clientIp}`, 30, 60_000)
-  ) {
-    return NextResponse.json(
-      { error: 'RATE_LIMITED' },
-      { status: 429, headers: NO_STORE_HEADERS },
-    );
-  }
 
   const input = (await request.json().catch(() => null)) as {
     device?: unknown;
@@ -60,6 +48,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       tenantId: workflowRuntime.tenantId,
       appKey: workflowRuntime.appKey,
       path: '/submissions',
+      anonymousClientId: requestClientFingerprint(request.headers),
       init: {
         method: 'POST',
         body: JSON.stringify({
@@ -73,6 +62,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
     if (!createResponse.ok) {
+      if (createResponse.status === 429) {
+        return NextResponse.json(
+          { error: 'RATE_LIMITED' },
+          { status: 429, headers: NO_STORE_HEADERS },
+        );
+      }
       console.error(
         '[generated-workflow] submission create failed:',
         createResponse.status,

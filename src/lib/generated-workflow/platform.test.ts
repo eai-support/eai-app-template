@@ -35,6 +35,7 @@ describe('generated workflow runtime facade client', () => {
       tenantId: 'tenant a',
       appKey: 'rates-review',
       path: '/submissions',
+      anonymousClientId: `sha256:${'a'.repeat(64)}`,
       init: {
         method: 'POST',
         body: JSON.stringify({ device: 'Desktop' }),
@@ -52,6 +53,9 @@ describe('generated workflow runtime facade client', () => {
     const headers = (global.fetch as jest.Mock).mock.calls[0][1]
       .headers as Headers;
     expect(headers.get('Authorization')).toBe('Bearer managed-identity-token');
+    expect(headers.get('X-EAI-Anonymous-Client')).toBe(
+      `sha256:${'a'.repeat(64)}`,
+    );
     expect(headers.get('tenant')).toBeNull();
   });
 });

@@ -10,6 +10,10 @@ import type {
 } from '@/lib/generated-workflow/runtime-contract';
 import { validateSubmissionFile } from '@/lib/generated-workflow/submission-files';
 import { GeneratedWorkflowFieldInput } from './field-input';
+import {
+  GeneratedWorkflowSmartBlock,
+  isSupportedGeneratedWorkflowBlock,
+} from './smart-block';
 
 interface GeneratedWorkflowFormProps {
   appKey: string;
@@ -38,11 +42,34 @@ function normalizeSteps(
       label: field.label || field.name || `Field ${fieldIndex + 1}`,
       type: field.type || 'text',
     })),
+    blocks: [...(step.blocks ?? [])].sort(
+      (left, right) =>
+        left.order - right.order || left.id.localeCompare(right.id),
+    ),
   }));
 }
 
 function fieldKey(stepId: string, fieldId: string): string {
   return `${stepId}.${fieldId}`;
+}
+
+function blockKey(stepId: string, blockId: string): string {
+  return `${stepId}.__blocks.${blockId}`;
+}
+
+function blockOutputValues(
+  data: Record<string, Record<string, unknown>>,
+  stepId: string,
+  blockId: string,
+): Record<string, unknown> {
+  const blockValues = data[stepId]?.__blocks;
+  if (!blockValues || typeof blockValues !== 'object') return {};
+  const prefix = `${blockId}.`;
+  return Object.fromEntries(
+    Object.entries(blockValues as Record<string, unknown>)
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, value]) => [key.slice(prefix.length), value]),
+  );
 }
 
 function submissionEndpoint(submissionId?: string, files = false): string {
@@ -164,6 +191,34 @@ export function GeneratedWorkflowForm({
     [],
   );
 
+  const setBlockOutputValue = useCallback(
+    (stepId: string, blockId: string, outputName: string, value: unknown) => {
+      setFormData((current) => {
+        const step = current[stepId] ?? {};
+        const existing =
+          step.__blocks && typeof step.__blocks === 'object'
+            ? (step.__blocks as Record<string, unknown>)
+            : {};
+        return {
+          ...current,
+          [stepId]: {
+            ...step,
+            __blocks: {
+              ...existing,
+              [`${blockId}.${outputName}`]: value,
+            },
+          },
+        };
+      });
+      setFieldErrors((current) => {
+        const next = { ...current };
+        delete next[blockKey(stepId, blockId)];
+        return next;
+      });
+    },
+    [],
+  );
+
   const validateStep = useCallback(
     (step: GeneratedWorkflowStep): boolean => {
       const errors: Record<string, string> = {};
@@ -177,6 +232,31 @@ export function GeneratedWorkflowForm({
           (value === undefined || value === null || value === '')
         ) {
           errors[fieldKey(stepId, fieldId)] = 'This field is required.';
+        }
+      }
+      for (const block of step.blocks ?? []) {
+        const stepId = step.id ?? '';
+        const key = blockKey(stepId, block.id);
+        if (!isSupportedGeneratedWorkflowBlock(block.blockId)) {
+          errors[key] = `Unsupported workflow block: ${block.blockId}`;
+          continue;
+        }
+        const values = blockOutputValues(formData, stepId, block.id);
+        const missingRequiredOutput = (block.outputs ?? []).some((output) => {
+          if (!output.required) return false;
+          if (
+            output.valueType === 'file' ||
+            output.valueType === 'object' ||
+            output.valueType === 'unknown' ||
+            output.collection
+          ) {
+            return true;
+          }
+          const value = values[output.name];
+          return value === undefined || value === null || value === '';
+        });
+        if (missingRequiredOutput) {
+          errors[key] = 'Complete the required guided activity outputs.';
         }
       }
       setFieldErrors(errors);
@@ -316,6 +396,10 @@ export function GeneratedWorkflowForm({
   }
 
   const isLastStep = currentStepIndex === steps.length - 1;
+  const currentStepHasUnsupportedBlocks =
+    currentStep?.blocks?.some(
+      (block) => !isSupportedGeneratedWorkflowBlock(block.blockId),
+    ) ?? false;
   return (
     <div className='min-h-svh overflow-y-auto bg-slate-50'>
       <header className='border-b border-slate-200 bg-white'>
@@ -410,6 +494,31 @@ export function GeneratedWorkflowForm({
                 </label>
               );
             })}
+            {currentStep?.blocks?.map((block) => {
+              const stepId = currentStep.id ?? '';
+              const key = blockKey(stepId, block.id);
+              return (
+                <div key={key}>
+                  <GeneratedWorkflowSmartBlock
+                    block={block}
+                    disabled={
+                      submitState === 'starting' || submitState === 'submitting'
+                    }
+                    formData={formData}
+                    stepId={stepId}
+                    values={blockOutputValues(formData, stepId, block.id)}
+                    onOutputChange={(outputName, value) =>
+                      setBlockOutputValue(stepId, block.id, outputName, value)
+                    }
+                  />
+                  {fieldErrors[key] ? (
+                    <span className='mt-1 block text-xs text-red-600'>
+                      {fieldErrors[key]}
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
 
           {isLastStep ? (
@@ -463,7 +572,8 @@ export function GeneratedWorkflowForm({
               disabled={
                 submitState === 'starting' ||
                 submitState === 'submitting' ||
-                Boolean(uploadingField)
+                Boolean(uploadingField) ||
+                currentStepHasUnsupportedBlocks
               }
               onClick={() => {
                 if (!currentStep || !validateStep(currentStep)) return;

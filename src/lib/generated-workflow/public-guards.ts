@@ -1,9 +1,9 @@
-const hits = new Map<string, number[]>();
+import { createHash } from 'node:crypto';
+import { isIP } from 'node:net';
+
 const MAX_FORM_DATA_CHARS = 256 * 1024;
 const MAX_TEXT_LENGTH = 200;
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const SWEEP_EVERY = 1000;
-let requestsSinceSweep = 0;
 
 /** Anonymous autosave fields accepted by the same-origin BFF. */
 export interface SubmissionPatch {
@@ -14,40 +14,21 @@ export interface SubmissionPatch {
   userEmail?: string;
 }
 
-/** Resolves the proxy-provided client address used only for local rate buckets. */
+/** Resolves the ACA-appended client address without trusting caller prefixes. */
 export function requestClientIp(headers: Headers): string {
-  return (
-    headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    headers.get('x-real-ip') ||
-    'unknown'
-  );
+  const forwarded = (headers.get('x-forwarded-for') ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => isIP(value) !== 0);
+  const realIp = headers.get('x-real-ip')?.trim() ?? '';
+  return forwarded.at(-1) || (isIP(realIp) ? realIp : 'unknown');
 }
 
-/** Applies a bounded per-instance abuse guard ahead of the PublicAPI facade. */
-export function allowRequest(
-  key: string,
-  limit: number,
-  windowMs: number,
-  now = Date.now(),
-): boolean {
-  const cutoff = now - windowMs;
-  requestsSinceSweep += 1;
-  if (requestsSinceSweep >= SWEEP_EVERY) {
-    requestsSinceSweep = 0;
-    for (const [bucketKey, times] of hits) {
-      if (times.length === 0 || times[times.length - 1]! <= cutoff) {
-        hits.delete(bucketKey);
-      }
-    }
-  }
-  const recent = (hits.get(key) ?? []).filter((time) => time > cutoff);
-  if (recent.length >= limit) {
-    hits.set(key, recent);
-    return false;
-  }
-  recent.push(now);
-  hits.set(key, recent);
-  return true;
+/** Produces the pseudonymous key enforced in PublicAPI's shared rate-limit store. */
+export function requestClientFingerprint(headers: Headers): string {
+  return `sha256:${createHash('sha256')
+    .update(requestClientIp(headers), 'utf8')
+    .digest('hex')}`;
 }
 
 /** Removes unknown fields and bounds anonymous autosave/completion payloads. */
@@ -115,9 +96,4 @@ export function validateSubmissionPatch(
     patch.userEmail = input.userEmail;
   }
   return { ok: true, value: patch };
-}
-
-export function __resetGeneratedWorkflowRateLimit(): void {
-  hits.clear();
-  requestsSinceSweep = 0;
 }
