@@ -1,4 +1,9 @@
 import { GET } from './route';
+import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
+
+jest.mock('@/lib/generated-workflow/runtime', () => ({
+  getGeneratedWorkflowRuntime: jest.fn(),
+}));
 
 const READINESS_PROBE_TOKEN_ENV = ['EAI', 'READINESS', 'PROBE', 'TOKEN'].join(
   '_',
@@ -43,6 +48,9 @@ describe('readiness route', () => {
       AUTH_SECRET: 'test-auth-secret',
       [READINESS_PROBE_TOKEN_ENV]: 'probe-token',
     };
+    (getGeneratedWorkflowRuntime as jest.Mock).mockReturnValue({
+      status: 'unconfigured',
+    });
   });
 
   afterEach(() => {
@@ -155,5 +163,30 @@ describe('readiness route', () => {
 
     expect(response.status).toBe(200);
     expect(body.failureCategories).toEqual([]);
+  });
+
+  it('includes the bound workflow digest and title for TenantInfra promotion', async () => {
+    (getGeneratedWorkflowRuntime as jest.Mock).mockReturnValue({
+      status: 'ready',
+      runtime: {
+        binding: {
+          workflowTemplate: {
+            digest: `sha256:${'a'.repeat(64)}`,
+            title: 'Rates Review',
+          },
+        },
+      },
+    });
+
+    const response = await GET(readinessRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.runtimeBinding).toEqual({
+      workflowTemplate: {
+        digest: `sha256:${'a'.repeat(64)}`,
+        title: 'Rates Review',
+      },
+    });
   });
 });
