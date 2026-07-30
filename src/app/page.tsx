@@ -55,8 +55,10 @@ export default async function Home() {
   await redirectToResolvedAppHost();
   const generatedWorkflow = getGeneratedWorkflowRuntime();
   if (generatedWorkflow.status === 'ready') {
-    const { appKey, binding, snapshot } = generatedWorkflow.runtime;
-    return <HomeClient generatedWorkflow={{ appKey, binding, snapshot }} />;
+    const { appKey, binding, branding, snapshot } = generatedWorkflow.runtime;
+    return (
+      <HomeClient generatedWorkflow={{ appKey, binding, branding, snapshot }} />
+    );
   }
   return (
     <HomeClient

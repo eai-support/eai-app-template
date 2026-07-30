@@ -48,6 +48,13 @@ describe('generated workflow runtime contract', () => {
         config: {
           tenantId: 'tenant-a',
           runtimeBinding: binding(),
+          generatedAppBranding: {
+            displayName: 'Acme Council',
+            primaryColor: '#123ABC',
+            secondaryColor: '#EDF4FF',
+            accentColor: '#F59E0B',
+            logoDataUrl: 'data:image/png;base64,cHVibGljLWxvZ28=',
+          },
         },
         snapshot,
       }),
@@ -58,7 +65,35 @@ describe('generated workflow runtime contract', () => {
         tenantId: 'tenant-a',
         binding: binding(),
         snapshot,
+        branding: {
+          displayName: 'Acme Council',
+          primaryColor: '#123ABC',
+          secondaryColor: '#EDF4FF',
+          accentColor: '#F59E0B',
+          logoDataUrl: 'data:image/png;base64,cHVibGljLWxvZ28=',
+        },
       },
+    });
+  });
+
+  it('drops unsafe optional branding without invalidating the workflow', () => {
+    const result = resolveGeneratedWorkflowRuntime({
+      appKey: 'rates-review',
+      config: {
+        tenantId: 'tenant-a',
+        runtimeBinding: binding(),
+        generatedAppBranding: {
+          displayName: 'Acme Council',
+          primaryColor: 'blue',
+          logoDataUrl: 'data:text/html;base64,PHNjcmlwdD4=',
+        },
+      },
+      snapshot,
+    });
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      runtime: { branding: { displayName: 'Acme Council' } },
     });
   });
 

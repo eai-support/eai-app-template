@@ -85,6 +85,29 @@ describe('GeneratedWorkflowForm', () => {
     );
   });
 
+  it('renders the exported company brand snapshot', async () => {
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        branding={{
+          displayName: 'Acme Council',
+          primaryColor: '#123ABC',
+          secondaryColor: '#EDF4FF',
+          accentColor: '#F59E0B',
+          logoDataUrl: 'data:image/png;base64,cHVibGljLWxvZ28=',
+        }}
+        snapshot={{ steps: [{ id: 'one', title: 'One', fields: [] }] }}
+      />,
+    );
+
+    expect(screen.getByText('Acme Council')).toBeVisible();
+    expect(screen.getByAltText('Acme Council logo')).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'Submit' })).toHaveStyle({
+      backgroundColor: '#123ABC',
+    });
+  });
+
   it('renders canonical step blocks in order and persists declared outputs', async () => {
     render(
       <GeneratedWorkflowForm
