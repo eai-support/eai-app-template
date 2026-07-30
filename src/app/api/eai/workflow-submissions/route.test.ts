@@ -145,6 +145,7 @@ describe('generated workflow anonymous submission BFF', () => {
       response,
       'submission-1',
       `sha256:${'a'.repeat(64)}`,
+      request,
     );
   });
 
