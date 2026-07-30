@@ -7,7 +7,11 @@ jest.mock('@enterpriseaigroup/demo', () => ({
 }));
 
 jest.mock('@/components/generated-workflow/workflow-form', () => ({
-  GeneratedWorkflowForm: () => <div>Generated workflow form</div>,
+  GeneratedWorkflowForm: ({
+    branding,
+  }: {
+    branding?: { displayName?: string };
+  }) => <div>{branding?.displayName ?? 'Generated workflow form'}</div>,
 }));
 
 describe('HomeClient generated workflow runtime', () => {
@@ -30,6 +34,7 @@ describe('HomeClient generated workflow runtime', () => {
               fileObjectType: 'submission-file',
             },
           },
+          branding: { displayName: 'Acme Council' },
           snapshot: { steps: [{ id: 'one', title: 'One', fields: [] }] },
         }}
       />,
@@ -41,7 +46,7 @@ describe('HomeClient generated workflow runtime', () => {
       `sha256:${'a'.repeat(64)}`,
     );
     expect(marker).toHaveAttribute('data-eai-workflow-title', 'Rates Review');
-    expect(screen.getByText('Generated workflow form')).toBeVisible();
+    expect(screen.getByText('Acme Council')).toBeVisible();
   });
 
   it('keeps the general template demo when no generated runtime is exported', () => {

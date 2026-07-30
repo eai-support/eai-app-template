@@ -77,6 +77,15 @@ export interface GeneratedWorkflowSnapshot {
   originalStepCount?: number;
 }
 
+/** Public company brand snapshot embedded in generated source at export time. */
+export interface GeneratedWorkflowBranding {
+  displayName?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  logoDataUrl?: string;
+}
+
 /** Source-controlled binding that authorizes one immutable template version. */
 export interface GeneratedAppRuntimeBinding {
   schemaVersion: 'eai.generated_app_runtime_binding.v1';
@@ -99,6 +108,7 @@ export interface GeneratedWorkflowRuntime {
   tenantId: string;
   binding: GeneratedAppRuntimeBinding;
   snapshot: GeneratedWorkflowSnapshot;
+  branding?: GeneratedWorkflowBranding;
 }
 
 /** Fail-closed resolution state while preserving an unbound generic template. */
@@ -109,6 +119,49 @@ export type GeneratedWorkflowRuntimeResolution =
 
 const APP_KEY_PATTERN = /^[a-z][a-z0-9-]{1,62}$/;
 const SHA256_DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const BRAND_COLOR_PATTERN = /^#[a-f0-9]{6}$/i;
+const BRAND_LOGO_DATA_URL_PATTERN =
+  /^data:image\/(?:png|jpeg|webp|svg\+xml);base64,[a-z0-9+/]+={0,2}$/i;
+const MAX_BRAND_LOGO_DATA_URL_LENGTH = 2_800_000;
+
+function optionalBrandString(
+  value: unknown,
+  maxLength: number,
+): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  return normalized && normalized.length <= maxLength ? normalized : undefined;
+}
+
+/** Drops unsafe optional brand values without invalidating the workflow binding. */
+export function normaliseGeneratedWorkflowBranding(
+  value: unknown,
+): GeneratedWorkflowBranding | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const color = (candidate: unknown) => {
+    const normalized = optionalBrandString(candidate, 7);
+    return normalized && BRAND_COLOR_PATTERN.test(normalized)
+      ? normalized
+      : undefined;
+  };
+  const logoDataUrl =
+    typeof record.logoDataUrl === 'string' &&
+    record.logoDataUrl.length <= MAX_BRAND_LOGO_DATA_URL_LENGTH &&
+    BRAND_LOGO_DATA_URL_PATTERN.test(record.logoDataUrl)
+      ? record.logoDataUrl
+      : undefined;
+  const branding: GeneratedWorkflowBranding = {
+    displayName: optionalBrandString(record.displayName, 100),
+    primaryColor: color(record.primaryColor),
+    secondaryColor: color(record.secondaryColor),
+    accentColor: color(record.accentColor),
+    logoDataUrl,
+  };
+  return Object.values(branding).some(Boolean) ? branding : undefined;
+}
 
 function stableStringify(value: unknown): string {
   if (Array.isArray(value)) {
@@ -213,6 +266,7 @@ export function resolveGeneratedWorkflowRuntime(args: {
   const config = args.config as {
     tenantId?: unknown;
     runtimeBinding?: unknown;
+    generatedAppBranding?: unknown;
   };
   if (config.runtimeBinding === undefined) {
     return { status: 'unconfigured' };
@@ -237,6 +291,9 @@ export function resolveGeneratedWorkflowRuntime(args: {
 
   const binding = config.runtimeBinding as GeneratedAppRuntimeBinding;
   const snapshot = args.snapshot as GeneratedWorkflowSnapshot;
+  const branding = normaliseGeneratedWorkflowBranding(
+    config.generatedAppBranding,
+  );
   if (
     generatedWorkflowSnapshotDigest(snapshot) !==
     binding.workflowTemplate.digest
@@ -254,6 +311,7 @@ export function resolveGeneratedWorkflowRuntime(args: {
       tenantId: config.tenantId as string,
       binding,
       snapshot,
+      ...(branding ? { branding } : {}),
     },
   };
 }
