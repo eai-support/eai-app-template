@@ -119,6 +119,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       response,
       created.submissionId,
       workflowRuntime.binding.workflowTemplate.digest,
+      request,
     );
     return response;
   } catch (error) {

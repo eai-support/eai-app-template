@@ -1,8 +1,10 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { NextRequest, NextResponse } from 'next/server';
 
-const COOKIE_NAME = 'eai_generated_workflow_submission';
+const LEGACY_COOKIE_NAME = 'eai_generated_workflow_submission';
+const COOKIE_NAME_PREFIX = `${LEGACY_COOKIE_NAME}_`;
 const MAX_SESSION_AGE_SECONDS = 7 * 24 * 60 * 60;
+const MAX_ACTIVE_SUBMISSION_COOKIES = 8;
 
 interface SubmissionSession {
   submissionId: string;
@@ -16,6 +18,13 @@ function sessionSecret(): string {
     throw new Error('Anonymous workflow submission secret is not configured.');
   }
   return secret;
+}
+
+function submissionCookieName(submissionId: string): string {
+  const identifier = createHash('sha256')
+    .update(submissionId, 'utf8')
+    .digest('base64url');
+  return `${COOKIE_NAME_PREFIX}${identifier}`;
 }
 
 function signature(payload: string): Buffer {
@@ -59,14 +68,47 @@ function decodeSession(value: string | undefined): SubmissionSession | null {
   }
 }
 
+function pruneSubmissionCookies(
+  response: NextResponse,
+  request: NextRequest,
+  activeCookieName: string,
+): void {
+  const validCookies = request.cookies
+    .getAll()
+    .filter(
+      (cookie) =>
+        cookie.name.startsWith(COOKIE_NAME_PREFIX) &&
+        cookie.name !== activeCookieName,
+    )
+    .flatMap((cookie, index) => {
+      const session = decodeSession(cookie.value);
+      if (!session) {
+        response.cookies.delete(cookie.name);
+        return [];
+      }
+      return [{ name: cookie.name, expiresAt: session.expiresAt, index }];
+    })
+    .sort(
+      (left, right) =>
+        right.expiresAt - left.expiresAt || right.index - left.index,
+    );
+
+  for (const cookie of validCookies.slice(MAX_ACTIVE_SUBMISSION_COOKIES - 1)) {
+    response.cookies.delete(cookie.name);
+  }
+}
+
 /** Issues an HttpOnly ownership capability for one anonymous submission. */
 export function setSubmissionSession(
   response: NextResponse,
   submissionId: string,
   workflowDigest: string,
+  request?: NextRequest,
 ): void {
+  const cookieName = submissionCookieName(submissionId);
+  if (request) pruneSubmissionCookies(response, request, cookieName);
   response.cookies.set({
-    name: COOKIE_NAME,
+    name: cookieName,
     value: encodeSession({
       submissionId,
       workflowDigest,
@@ -86,7 +128,10 @@ export function hasSubmissionSession(
   submissionId: string,
   workflowDigest: string,
 ): boolean {
-  const session = decodeSession(request.cookies.get(COOKIE_NAME)?.value);
+  const session = decodeSession(
+    request.cookies.get(submissionCookieName(submissionId))?.value ??
+      request.cookies.get(LEGACY_COOKIE_NAME)?.value,
+  );
   return Boolean(
     session &&
     session.submissionId === submissionId &&
