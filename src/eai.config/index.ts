@@ -15,6 +15,16 @@
 
 import templateConfig from './default';
 
+export {
+  APP_CAPABILITY_SCHEMA,
+  templateCapabilityRequirements,
+} from './capabilities';
+export type {
+  AppCapabilityKind,
+  AppCapabilityRequirement,
+  AppCapabilityRequirements,
+} from './capabilities';
+
 export const tenantConfigs: Record<string, typeof templateConfig> = {
   default: templateConfig,
   template: templateConfig,

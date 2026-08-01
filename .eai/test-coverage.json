@@ -5,6 +5,28 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "generated-app-capability-bindings",
+          "description": "Generated apps declare logical workflow, prompt, model, and integration requirements while PublicAPI resolves tenant-owned bindings at runtime.",
+          "owned_paths": [
+            "src/eai.config/capabilities.ts",
+            "src/eai.config/default.ts",
+            "src/eai.config/index.ts",
+            "src/lib/platform/capability-bindings.ts"
+          ],
+          "required_repo_tests": [
+            "src/eai.config/capabilities.test.ts",
+            "src/lib/platform/capability-bindings.test.ts"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["publicapi-platform"],
+          "required_deployed_contracts": [
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/platform-lifecycle/publicapi-v4-capability-connections.spec.ts"
+            }
+          ]
+        },
+        {
           "id": "generated-app-object-type-seeding",
           "description": "Generated apps seed tenant-scoped Object Types with owner-private and shared-private authorization metadata.",
           "owned_paths": [
