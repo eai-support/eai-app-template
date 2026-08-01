@@ -80,4 +80,18 @@ describe('PlatformModule', () => {
       },
     );
   });
+
+  it('looks up platform users through tenant-scoped v4 routes', async () => {
+    await platform.getUserByEmail('tenant/a', 'jane@example.com');
+    await platform.getUserMemberships('tenant/a', 'user/oid');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/eai/v4/platform/tenants/tenant%2Fa/users/by-email?email=jane%40example.com',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/eai/v4/platform/tenants/tenant%2Fa/users/user%2Foid/memberships',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
 });

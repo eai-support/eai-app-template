@@ -71,6 +71,22 @@ describe('ResourcesModule', () => {
       );
     });
 
+    it('forwards an explicit count-free policy', async () => {
+      mockOkResponse({ docs: [], totalDocs: null, page: 1, totalPages: null });
+
+      const response = await resources.list('Application', {
+        limit: 5,
+        includeTotal: false,
+      });
+
+      expect(response.totalDocs).toBeNull();
+      expect(response.totalPages).toBeNull();
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/application?limit=5&includeTotal=false',
+        undefined,
+      );
+    });
+
     it('uses the v4 data resource route for sorted project lists', async () => {
       mockOkResponse({
         docs: [],
@@ -209,6 +225,29 @@ describe('ResourcesModule', () => {
         },
       );
     });
+
+    it('updates from an action result using the post-action version', async () => {
+      const actionResult = {
+        id: '123',
+        object_type: 'application',
+        action: 'submit',
+        data: { status: 'submitted' },
+        version: 4,
+      };
+      const data = { status: 'submitted', reviewNote: 'checked' };
+      mockOkResponse({ ...actionResult, data, version: 5 });
+
+      await resources.updateFrom('Application', actionResult, data);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/application/123',
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data, version: 4 }),
+        },
+      );
+    });
   });
 
   describe('delete', () => {
@@ -226,9 +265,16 @@ describe('ResourcesModule', () => {
 
   describe('executeAction', () => {
     it('sends POST to action endpoint with params wrapper', async () => {
-      mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+      const actionResult = {
+        id: '123',
+        object_type: 'application',
+        action: 'submit',
+        data: { status: 'submitted' },
+        version: 2,
+      };
+      mockOkResponse(actionResult);
 
-      await resources.executeAction('Application', '123', 'submit', {
+      const result = await resources.executeAction('Application', '123', 'submit', {
         note: 'test',
       });
 
@@ -240,10 +286,17 @@ describe('ResourcesModule', () => {
           body: JSON.stringify({ params: { note: 'test' } }),
         },
       );
+      expect(result).toEqual(actionResult);
     });
 
     it('sends empty params when none provided', async () => {
-      mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+      mockOkResponse({
+        id: '123',
+        object_type: 'application',
+        action: 'submit',
+        data: { status: 'submitted' },
+        version: 2,
+      });
 
       await resources.executeAction('Application', '123', 'submit');
 

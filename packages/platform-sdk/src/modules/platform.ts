@@ -382,12 +382,19 @@ export class PlatformModule {
     );
   }
 
-  getUserMemberships<T = Record<string, unknown>>(oid: string) {
-    return this.json<T>(`/users/${this.encode(oid)}/memberships`);
+  getUserMemberships<T = Record<string, unknown>>(
+    tenantId: string,
+    oid: string,
+  ) {
+    return this.json<T>(
+      `/tenants/${this.encode(tenantId)}/users/${this.encode(oid)}/memberships`,
+    );
   }
 
-  getUserByEmail<T = Record<string, unknown>>(email: string) {
-    return this.json<T>('/users/by-email', { params: { email } });
+  getUserByEmail<T = Record<string, unknown>>(tenantId: string, email: string) {
+    return this.json<T>(`/tenants/${this.encode(tenantId)}/users/by-email`, {
+      params: { email },
+    });
   }
 
   submitSupportContact(body: Record<string, unknown>) {

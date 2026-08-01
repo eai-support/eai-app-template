@@ -14,6 +14,7 @@
     "compile": "tsc",
     "build:local": "dotenv -e .env.local -- next build",
     "check:route-exports": "node scripts/check-route-exports.mjs",
+    "eai:config:validate": "node scripts/validate-eai-config.cjs",
     "build": "npm run check:route-exports && next build",
     "build:object-types": "node scripts/generate-object-types-json.mjs",
     "start": "node server.js",
@@ -31,6 +32,8 @@
     "lint-staged": "lint-staged",
     "eslint": "eslint .",
     "test": "jest",
+    "test:source-unknown-evidence": "node --test tests/source-unknown-deployment-evidence.test.mjs",
+    "test:object-types-generator": "node --test tests/generate-object-types-json.test.mjs",
     "prepare": "if [ \"$HUSKY\" != \"0\" ]; then husky; fi",
     "test:unit": "jest --watchAll --passWithNoTests",
     "test:unit:ci": "jest --ci --bail --passWithNoTests",
@@ -46,10 +49,11 @@
     "test:playwright:report:ci": "playwright test --reporter dot --ci",
     "test:playwright:ui": "playwright test --ui",
     "test:playwright:ui:ci": "playwright test --ui --ci",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "diagnose:resource-storage": "node scripts/diagnose-resource-storage.mjs"
   },
   "dependencies": {
-    "@enterpriseaigroup/core": "*",
+    "@enterpriseaigroup/core": "1.0.129",
     "@enterpriseaigroup/demo": "*",
     "@eslint/eslintrc": "^3",
     "@hookform/resolvers": "^5.0.1",
@@ -151,5 +155,11 @@
     "@playwright/test": "^1.57.0",
     "playwright": "^1.57.0",
     "postcss-cli": "^11.0.1"
+  },
+  "overrides": {
+    "@azure/abort-controller": "2.1.2",
+    "@azure/core-util": "1.13.1",
+    "@azure/logger": "1.3.0",
+    "@typespec/ts-http-runtime": "0.3.2"
   }
 }

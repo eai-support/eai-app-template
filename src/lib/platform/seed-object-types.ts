@@ -7,7 +7,7 @@ export interface SeedResult {
   message?: string;
 }
 
-function objectTypePayload(
+export function objectTypePayload(
   type: (typeof objectTypes)[keyof typeof objectTypes][number],
   tenantId?: string,
 ) {
@@ -15,6 +15,7 @@ function objectTypePayload(
     name: type.name,
     displayName: type.displayName,
     description: type.description,
+    authorization: type.authorization,
     properties: type.properties,
     linkTypes: type.linkTypes,
     actions: type.actions,

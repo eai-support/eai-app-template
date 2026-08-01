@@ -12,6 +12,9 @@ choosing how to use Enterprise AI platform services from the EAI App Template.
 
 - Browser code calls the app BFF at `/api/eai/...`; it does not call PublicAPI
   directly.
+- Tenant app data-plane access is user-delegated access. Do not add app-only
+  `client_credentials` access for ordinary ResourceAPI reads, writes, files, or
+  search.
 - App code should prefer the template SDK and hooks before hand-written fetches.
 - CLI automation may call platform services through the authenticated `eai`
   command.
@@ -21,6 +24,17 @@ choosing how to use Enterprise AI platform services from the EAI App Template.
   stay server-side.
 - Prefer PublicAPI V4 routes. V3 route-family mapping is compatibility glue, not
   the pattern for new work.
+- For support/platform automation outside the tenant app runtime, platform user
+  lookup, membership prerequisite, tenant member, and role-definition work must
+  use tenant-scoped V4 platform routes:
+  `/v4/platform/tenants/<tenant-id>/users/by-email?email=<email>`,
+  `/v4/platform/tenants/<tenant-id>/users/<oid>/memberships`,
+  `/v4/platform/tenants/<tenant-id>/members`, and
+  `/v4/platform/tenants/<tenant-id>/role-definitions`. If root
+  `/v4/platform/users/...` calls return `MISSING_TENANT`, run
+  `eai errors explain app_token_tenant_context_required --format json` and fix
+  the route/context before changing tenant members, Entra, role definitions,
+  databases, or cloud portals.
 
 ## Service Selection Matrix
 
@@ -38,13 +52,24 @@ choosing how to use Enterprise AI platform services from the EAI App Template.
 | Index documents for RAG      | `useDocuments().ragIndex(documentId)`                                                    | `eai docs index <documentId>`                                                               | RAG indexing is document-service indexing, not an Object Type storage backend. |
 | Non-streaming chat           | `useChat(workflowId, stage).send(...)`                                                   | `eai chat send "message"`                                                                   | Requires tenant, workflow, stage, message, conversation ID, and params.        |
 | Streaming chat               | `useChat(workflowId, stage).stream(...)`                                                 | `eai chat stream "message"`                                                                 | Uses the stream BFF path `/api/eai/stream/...`.                                |
-| Identity/session             | server route, middleware, or auth helpers                                                | `eai whoami`, `eai tenant select`, `eai publicapi get /v4/identity/me`                      | Keep access tokens server-side in apps.                                        |
+| Identity/session             | server route, middleware, auth helpers, or tenant-scoped `client.platform` user helpers   | `eai whoami`, `eai tenant select`, `eai publicapi get /v4/identity/me`                      | Keep access tokens server-side in apps. For platform user/member prerequisites, use `/v4/platform/tenants/{tenantId}/...`. |
 | Advanced V4 route            | BFF route or approved server helper                                                      | `eai publicapi <method> /v4/...`                                                            | Use named SDK/CLI commands when available.                                     |
 
 ## Storage Backend Patterns
 
 Object Types declare a logical `storageBackend`; tenant connections resolve the
 physical store at runtime.
+
+Tenant apps must use app-owned storage bindings. For PostgreSQL-backed Object
+Types, use the `tenant-postgres` alias and an app-owned table name prefix. Do
+not use shared aliases such as `resourceapi-postgres`, and do not use generic
+table names such as `feed_items` or `records` without the tenant/app prefix.
+Run `eai app provision <key> --tenant-id <tenant-id> --select --format json`
+before publishing Object Types. The CLI writes the generated app storage
+contract to `.eai/storage-bindings.json` and updates safe local app/tenant
+prefix values in `.env.local`. Keep Object Types on the template helpers, then
+run `eai types validate --tenant-key <key> --tenant-id <tenant-id>` and `eai
+types seed --tenant-key <key> --tenant-id <tenant-id> --format json`.
 
 | Backend      | Use For                                                                                         | Do Not Use For                                     |
 | ------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------- |
@@ -102,6 +127,19 @@ Updates require the current `version` for optimistic locking. The SDK retries
 safe conflict refreshes by default; callers can opt out when they need explicit
 conflict handling.
 
+Canonical identifier rule:
+
+- In app code, object types are named in PascalCase, for example `WatchTarget`
+  or `FeedItem`.
+- On v4 resource routes, those names are normalized to kebab-case slugs such as
+  `watch-target` and `feed-item`.
+- Do not hand-write `/v4/data/resources/.../<type>` paths in feature code.
+  Always go through `useResources`, `client.resources`, or the shared
+  `toObjectTypeSlug(...)` helper exported by the platform SDK.
+- If a repo introduces its own slugifier or mixes PascalCase and slug literals
+  by hand, treat that as identifier drift and fix it before debugging storage or
+  provisioning.
+
 ## Document Pattern
 
 Use the documents module when the file itself is the subject of platform
@@ -122,6 +160,9 @@ await ragIndex(uploadedDocumentId);
 Use ResourceAPI file routes when the file is a property of a ResourceAPI object.
 Use document upload/classification/RAG routes when the platform should process
 the document content.
+
+For the full decision tree, workflow steps, and AI-agent prompt guidance, see
+[V4 Documents And Files](./documents-and-files.md).
 
 ## eai-gofer Decision Rules
 

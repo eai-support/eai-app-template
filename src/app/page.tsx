@@ -8,6 +8,7 @@ import {
   resolvePublicApiBaseUrl,
   RoutingResolutionError,
 } from '@/lib/platform/session-resolve';
+import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 
 const SERVER_TENANT_ID =
   process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
@@ -25,7 +26,8 @@ async function redirectToResolvedAppHost(): Promise<void> {
   }
 
   const allHeaders = await headers();
-  const currentAppHost = allHeaders.get('x-forwarded-host') || allHeaders.get('host');
+  const currentAppHost =
+    allHeaders.get('x-forwarded-host') || allHeaders.get('host');
 
   try {
     const { routing } = await resolvePublicApiBaseUrl({
@@ -48,7 +50,23 @@ async function redirectToResolvedAppHost(): Promise<void> {
   }
 }
 
+/** Renders immutable generated workflows while retaining the generic template fallback. */
 export default async function Home() {
   await redirectToResolvedAppHost();
-  return <HomeClient />;
+  const generatedWorkflow = getGeneratedWorkflowRuntime();
+  if (generatedWorkflow.status === 'ready') {
+    const { appKey, binding, branding, snapshot } = generatedWorkflow.runtime;
+    return (
+      <HomeClient generatedWorkflow={{ appKey, binding, branding, snapshot }} />
+    );
+  }
+  return (
+    <HomeClient
+      runtimeError={
+        generatedWorkflow.status === 'invalid'
+          ? 'WORKFLOW_SNAPSHOT_INVALID'
+          : undefined
+      }
+    />
+  );
 }

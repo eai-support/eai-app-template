@@ -72,6 +72,16 @@ Use this immediately after a failed `eai` command. Prefer the JSON form for
 agent workflows because it includes diagnostics, fixes, retry limits, and
 mutation safety.
 
+For `MISSING_TENANT` or "Tenant context required for app tokens" on platform
+user lookup or membership prerequisite calls, use:
+
+```bash
+eai errors explain app_token_tenant_context_required --format json
+```
+
+Then retry through tenant-scoped V4 platform routes before changing tenant
+members, role definitions, Entra configuration, databases, or cloud portals.
+
 ---
 
 ## `eai update`
@@ -158,6 +168,9 @@ Validates:
 - Property type correctness
 - Select type has `options` array
 - LinkType references valid target types
+- App-owned storage bindings for published Object Types. PostgreSQL tenant app
+  types must use `tenant-postgres`, not `resourceapi-postgres`, and table names
+  must use the app-owned prefix.
 
 ### `eai types seed`
 
@@ -194,6 +207,12 @@ eai types seed --dry-run
 # Seed to staging
 eai types seed --env staging
 ```
+
+For tenant apps, run `eai app provision <key> --tenant-id <tenant-id> --select
+--format json` before `types seed`. Provisioning establishes the allowed storage
+aliases and app-owned naming prefix that Object Type publishing validates, and
+writes the local `.eai/storage-bindings.json` contract used by the starter
+Object Type helpers.
 
 ### `eai types diff`
 
@@ -443,6 +462,11 @@ eai chat stream "Help me understand the asylum process"
 ## `eai docs`
 
 Document upload, classification, and RAG indexing.
+
+Use `eai docs` when the file is the subject of document processing or AI
+context. Use `eai resources file` when the file is an attachment to an existing
+ResourceAPI object. See
+[V4 Documents And Files](../platform/documents-and-files.md).
 
 ### `eai docs upload`
 

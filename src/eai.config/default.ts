@@ -6,9 +6,21 @@
  * Copy this as a starting point for your own app.
  */
 
-import { defineConfig } from '@enterpriseaigroup/core/config/server';
+import {
+  defineConfig,
+  type EAIConfig,
+} from '@enterpriseaigroup/core/config/server';
 
-const templateConfig = defineConfig({
+import {
+  templateDeploymentContract,
+  type TemplateDeploymentContract,
+} from './deployment-contract';
+
+type TemplateConfig = EAIConfig & {
+  deploymentContract: TemplateDeploymentContract;
+};
+
+const templateConfigSource = {
   // ==========================================================================
   // IDENTITY
   // ==========================================================================
@@ -30,6 +42,11 @@ const templateConfig = defineConfig({
   features: {
     enableTenantSwitching: false,
   },
+
+  // ==========================================================================
+  // DEPLOYMENT CONTRACT
+  // ==========================================================================
+  deploymentContract: templateDeploymentContract,
 
   // ==========================================================================
   // API
@@ -106,7 +123,8 @@ const templateConfig = defineConfig({
           priority: 1,
           props: {
             title: 'Welcome to the Demo Template',
-            description: 'This is a config-driven UI system. Components are defined in configuration and rendered automatically.',
+            description:
+              'This is a config-driven UI system. Components are defined in configuration and rendered automatically.',
             actionLabel: 'Get Started',
             className: 'max-w-2xl mx-auto',
           },
@@ -137,6 +155,8 @@ const templateConfig = defineConfig({
       ],
     },
   },
-});
+} satisfies TemplateConfig;
+
+const templateConfig = defineConfig(templateConfigSource) as TemplateConfig;
 
 export default templateConfig;

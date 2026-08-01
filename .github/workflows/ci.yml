@@ -46,8 +46,17 @@ jobs:
       - name: Build object types
         run: npm run build:object-types
 
+      - name: Object type generator regression test
+        run: npm run test:object-types-generator
+
       - name: Unit tests
         run: npm run test:unit:ci
+
+      - name: Source-unknown handoff evidence test
+        run: npm run test:source-unknown-evidence
+
+      - name: Issue attachment moderation test
+        run: node --test tests/issue-attachment-moderation.test.cjs
 
       - name: Type check
         run: npm run typecheck

@@ -67,7 +67,7 @@ The default contract requires:
 - PublicAPI access through the app BFF at `/api/eai`
 - tenant/workflow runtime configuration through `/api/eai/config`
 - `/health` for host-level liveness
-- optional service identity for server-side PublicAPI calls without an end-user session
+- user-delegated access for tenant data-plane calls
 
 Validate the local contract and a deployed app with:
 
@@ -81,18 +81,17 @@ eai deploy doctor --url https://your-deployed-app.example.com
 healthy until Auth.js, runtime config, tenant/workflow values, and declared
 smoke tests pass.
 
-For app-only PublicAPI access, prefer the clear service identity names:
+## Tenant Data Access
 
-```text
-EAI_SERVICE_CLIENT_ID
-EAI_SERVICE_CLIENT_SECRET
-EAI_SERVICE_TARGET_SCOPE
-EAI_SERVICE_TENANT_NAME
-```
+Tenant app data access is user-delegated. Browser code calls the app BFF at
+`/api/eai/...`, and the BFF forwards to PublicAPI with the signed-in user's
+session token. PublicAPI, OPA/Authz, and ResourceAPI then evaluate the user,
+app, and tenant together.
 
-The runtime still recognises the older `OBO_CLIENT_ID`,
-`OBO_CLIENT_SECRET`, `OBO_TARGET_SCOPE`, and `OBO_TENANT_NAME` aliases for
-existing apps.
+Do not add app-only `client_credentials` access for normal ResourceAPI reads,
+writes, files, or search. If work must continue after the user leaves the page,
+have the user request a platform workflow/job and pass tenant, app, and user
+context into that workflow.
 
 ## AI Agent Workflow
 
@@ -111,6 +110,23 @@ eai errors explain <code-or-reason> --format json
 
 Use `eai update --check` or `eai doctor --check-updates` when a command is missing, help looks stale, or the local CLI may be behind the published release. Direct PublicAPI calls through `eai publicapi` should use only `/v4/...` paths.
 
+If platform user lookup or membership prerequisite calls return
+`MISSING_TENANT`, `app_token_tenant_context_required`, or "Tenant context
+required for app tokens", explain that error before changing state:
+
+```bash
+eai errors explain app_token_tenant_context_required --format json
+```
+
+Then confirm the tenant with `eai whoami` and `eai tenant list --format json`
+and use tenant-scoped platform routes such as
+`/v4/platform/tenants/<tenant-id>/users/by-email?email=<email>`,
+`/v4/platform/tenants/<tenant-id>/users/<oid>/memberships`,
+`/v4/platform/tenants/<tenant-id>/members`, and
+`/v4/platform/tenants/<tenant-id>/role-definitions`. Do not start by changing
+tenant members, Entra configuration, role definitions, databases, or cloud
+portals.
+
 ## Tenant Data Plane Model
 
 - `postgresql`: canonical structured resource storage for most app data.
@@ -119,6 +135,12 @@ Use `eai update --check` or `eai doctor --check-updates` when a command is missi
 - `search`: derived search/vector projection only, never the system of record.
 
 For the default scaffold, canonical runtime data remains in structured resource storage and search is a derived index. Prefer that model for new apps unless a resource type clearly needs `blob` or `documentdb`.
+
+For file upload, use the v4 documents workflow when the file should be
+processed, classified, indexed for RAG, or used by AI. Use ResourceAPI file
+properties when the file is an attachment to a typed business resource. Do not
+create standalone browser-visible blob upload paths for new apps. See
+`docs/platform/documents-and-files.md`.
 
 ## Common Local Workflow
 
@@ -136,6 +158,16 @@ eai types diff --tenant-key template --tenant-id <tenant-id>
 eai resources schema --tenant-id <tenant-id> --format json
 eai verify calls --tenant-id <tenant-id> --resource-type application
 ```
+
+## Object Type Naming
+
+- Define object types in PascalCase in `src/eai.config/object-types.ts`.
+- Let the shared SDK normalize those names to kebab-case route slugs.
+- Use `useResources('WatchTarget')`, `client.resources.get('Campaign', id)`,
+  and related helpers instead of hand-writing `/v4/data/resources/...` paths.
+- If you need the slug explicitly, use the shared `toObjectTypeSlug(...)`
+  helper from `@enterpriseaigroup/platform-sdk` instead of creating a local
+  slugifier.
 
 ## App Router Guardrail
 

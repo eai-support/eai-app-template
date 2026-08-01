@@ -14,6 +14,7 @@ import type {
   BatchUpdateItem,
   RetryOptions,
   Resource,
+  ResourceActionResult,
   PaginatedResponse,
   ListOptions,
   QueryRequest,
@@ -35,6 +36,7 @@ import type {
 } from '../types';
 import { PlatformError } from '../errors';
 import { platformFetch } from '../client';
+import { toObjectTypeSlug } from '../object-types';
 
 export class ResourcesModule {
   constructor(
@@ -46,15 +48,8 @@ export class ResourcesModule {
     return `${this.baseUrl}/v4/data/resources`;
   }
 
-  private objectTypeSlug(objectType: string): string {
-    return objectType
-      .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-      .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
-      .toLowerCase();
-  }
-
   private resourceUrl(objectType: string, id?: string): string {
-    const slug = this.objectTypeSlug(objectType);
+    const slug = toObjectTypeSlug(objectType);
     const base = `${this.resourcesBaseUrl()}/${this.tenantId}/${slug}`;
     return id ? `${base}/${id}` : base;
   }
@@ -165,6 +160,9 @@ export class ResourcesModule {
     if (options?.where)
       url.searchParams.set('where', JSON.stringify(options.where));
     if (options?.cursor) url.searchParams.set('cursor', options.cursor);
+    if (options?.includeTotal !== undefined) {
+      url.searchParams.set('includeTotal', String(options.includeTotal));
+    }
 
     const response = await platformFetch(url.pathname + url.search);
     return response.json();
@@ -244,6 +242,25 @@ export class ResourcesModule {
     return this.retryingUpdate(objectType, id, data, version, retry);
   }
 
+  /**
+   * Update from a resource or action result without copying its version into
+   * separate state that can become stale.
+   */
+  async updateFrom<T = Record<string, unknown>>(
+    objectType: string,
+    current: Pick<Resource<T>, 'id' | 'version'>,
+    data: T,
+    retry?: RetryOptions,
+  ): Promise<Resource<T>> {
+    return this.retryingUpdate(
+      objectType,
+      current.id,
+      data,
+      current.version,
+      retry,
+    );
+  }
+
   /** Delete a resource by ID. */
   async delete(objectType: string, id: string): Promise<void> {
     await platformFetch(this.resourceUrl(objectType, id), {
@@ -315,7 +332,7 @@ export class ResourcesModule {
     const body = {
       ...request,
       objectTypes: request.objectTypes?.map((type) =>
-        this.objectTypeSlug(type),
+        toObjectTypeSlug(type),
       ),
     };
     const response = await platformFetch(
@@ -472,13 +489,13 @@ export class ResourcesModule {
   }
 
   /** Execute a named action on a resource. */
-  async executeAction(
+  async executeAction<T = Record<string, unknown>>(
     objectType: string,
     id: string,
     action: string,
     params?: Record<string, unknown>,
-  ): Promise<Response> {
-    return platformFetch(
+  ): Promise<ResourceActionResult<T>> {
+    const response = await platformFetch(
       `${this.resourceUrl(objectType, id)}/actions/${action}`,
       {
         method: 'POST',
@@ -486,6 +503,7 @@ export class ResourcesModule {
         body: JSON.stringify({ params: params ?? {} }),
       },
     );
+    return response.json();
   }
 
   /** Get linked resources. */
