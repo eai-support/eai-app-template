@@ -12,11 +12,16 @@
             "src/eai.config/capabilities.generated.json",
             "src/eai.config/default.ts",
             "src/eai.config/index.ts",
-            "src/lib/platform/capability-bindings.ts"
+            "src/lib/platform/capability-bindings.ts",
+            "src/hooks/useChat.ts",
+            "packages/platform-sdk/src/modules/chat.ts",
+            "packages/platform-sdk/src/types.ts"
           ],
           "required_repo_tests": [
             "src/eai.config/capabilities.test.ts",
-            "src/lib/platform/capability-bindings.test.ts"
+            "src/lib/platform/capability-bindings.test.ts",
+            "src/hooks/useChat.test.tsx",
+            "packages/platform-sdk/__tests__/chat.test.ts"
           ],
           "required_ci_checks": ["validate"],
           "required_cross_service_surfaces": ["publicapi-platform"],

@@ -37,6 +37,12 @@ export class ChatModule {
       conversation_id: conversationId,
       params: params || {},
     };
+    if (options.appKey !== undefined) {
+      body.appKey = options.appKey;
+    }
+    if (options.logicalAlias !== undefined) {
+      body.logicalAlias = options.logicalAlias;
+    }
     const optionalFields = [
       'runtime_context',
       'message_history',
