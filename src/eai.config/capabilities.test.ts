@@ -92,8 +92,7 @@ describe('templateCapabilityRequirements', () => {
         requirements: [
           {
             ...requirement,
-            description:
-              'Resolved as 40795709-be42-4fa5-879b-aec8c3f9b3c3.',
+            description: 'Resolved as 40795709-be42-4fa5-879b-aec8c3f9b3c3.',
           },
         ],
       }),

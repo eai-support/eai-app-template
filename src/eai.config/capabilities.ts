@@ -56,7 +56,10 @@ const SUPPORTED_APP_CAPABILITIES = new Set<AppCapabilityKind>([
 
 function normalizeLogicalKey(value: unknown, field: string): string {
   const normalized = typeof value === 'string' ? value.trim() : '';
-  if (!LOGICAL_KEY_PATTERN.test(normalized) || RAW_RECORD_ID_PATTERN.test(normalized)) {
+  if (
+    !LOGICAL_KEY_PATTERN.test(normalized) ||
+    RAW_RECORD_ID_PATTERN.test(normalized)
+  ) {
     throw new Error(`${field} must be a logical key`);
   }
   return normalized;
@@ -75,7 +78,9 @@ function normalizeLogicalList(
   const normalized = value.map((item, index) => {
     const logicalReference = typeof item === 'string' ? item.trim() : '';
     const wildcard = logicalReference.endsWith('*');
-    const logicalKey = wildcard ? logicalReference.slice(0, -1) : logicalReference;
+    const logicalKey = wildcard
+      ? logicalReference.slice(0, -1)
+      : logicalReference;
     return `${normalizeLogicalKey(logicalKey, `${field}[${index}]`)}${wildcard ? '*' : ''}`;
   });
   if (new Set(normalized).size !== normalized.length) {
@@ -116,7 +121,11 @@ export function validateAppCapabilityRequirements(
   const aliases = new Set<string>();
   const requirements: AppCapabilityRequirement[] = [];
   for (const [index, candidate] of manifest.requirements.entries()) {
-    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    if (
+      !candidate ||
+      typeof candidate !== 'object' ||
+      Array.isArray(candidate)
+    ) {
       throw new Error(`capability requirement ${index} must be an object`);
     }
     const requirement = candidate as Record<string, unknown>;
@@ -147,16 +156,22 @@ export function validateAppCapabilityRequirements(
         requirement.capability as AppCapabilityKind,
       )
     ) {
-      throw new Error(`capability requirement ${index} has an unknown capability`);
+      throw new Error(
+        `capability requirement ${index} has an unknown capability`,
+      );
     }
     if (typeof requirement.required !== 'boolean') {
-      throw new Error(`capability requirement ${index} required must be boolean`);
+      throw new Error(
+        `capability requirement ${index} required must be boolean`,
+      );
     }
     if (
       typeof requirement.description !== 'string' ||
       !requirement.description.trim()
     ) {
-      throw new Error(`capability requirement ${index} description is required`);
+      throw new Error(
+        `capability requirement ${index} description is required`,
+      );
     }
     const compatibleProviders = normalizeLogicalList(
       requirement.compatibleProviders,
@@ -194,5 +209,6 @@ export function validateAppCapabilityRequirements(
 }
 
 /** Validated source artifact overwritten by CLI, NCB, or Gofer generation. */
-export const templateCapabilityRequirements =
-  validateAppCapabilityRequirements(generatedCapabilityRequirements);
+export const templateCapabilityRequirements = validateAppCapabilityRequirements(
+  generatedCapabilityRequirements,
+);
