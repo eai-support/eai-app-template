@@ -6,9 +6,10 @@
       "features": [
         {
           "id": "generated-app-capability-bindings",
-          "description": "Generated apps declare logical workflow, prompt, model, and integration requirements while PublicAPI resolves tenant-owned bindings at runtime.",
+          "description": "Generated apps load and validate source-controlled workflow, AI, integration, and content requirements while PublicAPI resolves tenant-owned bindings at runtime.",
           "owned_paths": [
             "src/eai.config/capabilities.ts",
+            "src/eai.config/capabilities.generated.json",
             "src/eai.config/default.ts",
             "src/eai.config/index.ts",
             "src/lib/platform/capability-bindings.ts"
