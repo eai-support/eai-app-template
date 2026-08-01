@@ -128,4 +128,76 @@ describe('templateCapabilityRequirements', () => {
       }),
     ).toThrow('must not contain duplicate logical keys');
   });
+
+  it('enforces the PublicAPI capability manifest wire limits', () => {
+    const requirement = templateCapabilityRequirements.requirements[0];
+    const requirements = Array.from({ length: 100 }, (_, index) => ({
+      ...requirement,
+      alias: index === 0 ? `a${'b'.repeat(119)}` : `requirement-${index}`,
+      description: index === 0 ? 'x'.repeat(500) : requirement.description,
+      compatibleProviders:
+        index === 0
+          ? Array.from(
+              { length: 20 },
+              (__, itemIndex) => `provider-${itemIndex}`,
+            )
+          : undefined,
+    }));
+
+    expect(
+      validateAppCapabilityRequirements({
+        schemaVersion: APP_CAPABILITY_SCHEMA,
+        appKey: `a${'b'.repeat(119)}`,
+        requirements,
+      }).requirements,
+    ).toHaveLength(100);
+
+    const overLimitCases = [
+      { appKey: `a${'b'.repeat(120)}`, requirements: [requirement] },
+      {
+        appKey: 'generated-app',
+        requirements: [...requirements, { ...requirement, alias: 'extra' }],
+      },
+      {
+        appKey: 'generated-app',
+        requirements: [{ ...requirement, alias: `a${'b'.repeat(120)}` }],
+      },
+      {
+        appKey: 'generated-app',
+        requirements: [{ ...requirement, capability: `c${'d'.repeat(160)}` }],
+      },
+      {
+        appKey: 'generated-app',
+        requirements: [{ ...requirement, description: 'x'.repeat(501) }],
+      },
+      {
+        appKey: 'generated-app',
+        requirements: [
+          {
+            ...requirement,
+            compatibleAssetTypes: Array.from(
+              { length: 21 },
+              (__, index) => `asset-${index}`,
+            ),
+          },
+        ],
+      },
+    ];
+    const errors = [
+      'at most 120 characters',
+      'at most 100 items',
+      'at most 120 characters',
+      'at most 160 characters',
+      'at most 500 characters',
+      'at most 20 items',
+    ];
+    overLimitCases.forEach((manifest, index) => {
+      expect(() =>
+        validateAppCapabilityRequirements({
+          schemaVersion: APP_CAPABILITY_SCHEMA,
+          ...manifest,
+        }),
+      ).toThrow(errors[index]);
+    });
+  });
 });

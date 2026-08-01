@@ -54,8 +54,15 @@ const SUPPORTED_APP_CAPABILITIES = new Set<AppCapabilityKind>([
   'workflows.runtime',
 ]);
 
-function normalizeLogicalKey(value: unknown, field: string): string {
+function normalizeLogicalKey(
+  value: unknown,
+  field: string,
+  maxLength?: number,
+): string {
   const normalized = typeof value === 'string' ? value.trim() : '';
+  if (maxLength !== undefined && normalized.length > maxLength) {
+    throw new Error(`${field} must be at most ${maxLength} characters`);
+  }
   if (
     !LOGICAL_KEY_PATTERN.test(normalized) ||
     RAW_RECORD_ID_PATTERN.test(normalized)
@@ -74,6 +81,9 @@ function normalizeLogicalList(
   }
   if (!Array.isArray(value)) {
     throw new Error(`${field} must be an array of logical keys`);
+  }
+  if (value.length > 20) {
+    throw new Error(`${field} must contain at most 20 items`);
   }
   const normalized = value.map((item, index) => {
     const logicalReference = typeof item === 'string' ? item.trim() : '';
@@ -110,12 +120,18 @@ export function validateAppCapabilityRequirements(
   const appKey = normalizeLogicalKey(
     manifest.appKey,
     'capabilityRequirements.appKey',
+    120,
   );
   if (
     !Array.isArray(manifest.requirements) ||
     manifest.requirements.length < 1
   ) {
     throw new Error('capabilityRequirements.requirements cannot be empty');
+  }
+  if (manifest.requirements.length > 100) {
+    throw new Error(
+      'capabilityRequirements.requirements must contain at most 100 items',
+    );
   }
 
   const aliases = new Set<string>();
@@ -145,17 +161,18 @@ export function validateAppCapabilityRequirements(
     const alias = normalizeLogicalKey(
       requirement.alias,
       `capability requirement ${index} alias`,
+      120,
     );
     if (aliases.has(alias)) {
       throw new Error(`duplicate capability alias: ${alias}`);
     }
     aliases.add(alias);
-    if (
-      typeof requirement.capability !== 'string' ||
-      !SUPPORTED_APP_CAPABILITIES.has(
-        requirement.capability as AppCapabilityKind,
-      )
-    ) {
+    const capability = normalizeLogicalKey(
+      requirement.capability,
+      `capability requirement ${index} capability`,
+      160,
+    );
+    if (!SUPPORTED_APP_CAPABILITIES.has(capability as AppCapabilityKind)) {
       throw new Error(
         `capability requirement ${index} has an unknown capability`,
       );
@@ -173,6 +190,11 @@ export function validateAppCapabilityRequirements(
         `capability requirement ${index} description is required`,
       );
     }
+    if (requirement.description.trim().length > 500) {
+      throw new Error(
+        `capability requirement ${index} description must be at most 500 characters`,
+      );
+    }
     const compatibleProviders = normalizeLogicalList(
       requirement.compatibleProviders,
       `capability requirement ${index} compatibleProviders`,
@@ -183,7 +205,7 @@ export function validateAppCapabilityRequirements(
     );
     requirements.push({
       alias,
-      capability: requirement.capability as AppCapabilityKind,
+      capability: capability as AppCapabilityKind,
       required: requirement.required,
       description: requirement.description.trim(),
       ...(compatibleProviders ? { compatibleProviders } : {}),
