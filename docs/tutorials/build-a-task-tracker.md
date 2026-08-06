@@ -19,7 +19,7 @@ A task tracker with:
 ## Prerequisites
 
 - Node.js 18+ installed
-- `eai` CLI installed (`npm install -g @eai-tools/cli`)
+- `eai` CLI installed (`npm install -g @enterpriseai/cli`)
 - Authenticated with `eai login`
 
 ## Step 1: Scaffold the Project

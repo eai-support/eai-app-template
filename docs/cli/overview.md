@@ -10,8 +10,8 @@ The Enterprise AI CLI (`eai`) is the supported operator workflow for tenant-scop
 ## Installation
 
 ```bash
-npm config set @eai-tools:registry https://eai-support.github.io/eai/registry/ --location=user
-npm install -g @eai-tools/cli
+npm config set @enterpriseai:registry https://eai-support.github.io/eai/registry/ --location=user
+npm install -g @enterpriseai/cli
 ```
 
 Verify installation:

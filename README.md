@@ -27,8 +27,8 @@ npm run dev
 Then connect the project to a real tenant:
 
 ```bash
-npm config set @eai-tools:registry https://eai-support.github.io/eai/registry/ --location=user
-npm install -g @eai-tools/cli
+npm config set @enterpriseai:registry https://eai-support.github.io/eai/registry/ --location=user
+npm install -g @enterpriseai/cli
 eai update --check
 eai login
 eai tenant list --format json
