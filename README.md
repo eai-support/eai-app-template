@@ -2,7 +2,7 @@
 
 A production-ready Next.js template for building tenant-scoped applications on the Enterprise AI platform.
 
-**[Documentation](https://eai-tools.github.io/eai-app-docs/)** | **[Package Registry](https://enterpriseaigroup.github.io/enterpriseai-packages/)** | **[Mirror Repo](https://github.com/eai-tools/eai-app-template)**
+**[Documentation](https://eai-support.github.io/eai-app-docs/)** | **[Package Registry](https://enterpriseaigroup.github.io/enterpriseai-packages/)** | **[Mirror Repo](https://github.com/eai-support/eai-app-template)**
 
 ## What This Template Assumes
 
@@ -17,7 +17,7 @@ A production-ready Next.js template for building tenant-scoped applications on t
 ## Quick Start
 
 ```bash
-git clone https://github.com/eai-tools/eai-app-template.git my-app
+git clone https://github.com/eai-support/eai-app-template.git my-app
 cd my-app
 npm install
 cp .env.example .env.local
@@ -27,7 +27,7 @@ npm run dev
 Then connect the project to a real tenant:
 
 ```bash
-npm config set @eai-tools:registry https://eai-tools.github.io/eai/registry/ --location=user
+npm config set @eai-tools:registry https://eai-support.github.io/eai/registry/ --location=user
 npm install -g @eai-tools/cli
 eai update --check
 eai login
@@ -186,7 +186,7 @@ The `@enterpriseaigroup/*` packages are served from a public registry. The inclu
 
 ## Documentation
 
-Full documentation is available at **https://eai-tools.github.io/eai-app-docs/**, covering:
+Full documentation is available at **https://eai-support.github.io/eai-app-docs/**, covering:
 
 - Getting started and onboarding
 - CLI usage and tenant workflows
