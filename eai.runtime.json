@@ -1,5 +1,5 @@
 {
-  "$schema": "https://eai-tools.github.io/eai/schemas/eai.runtime.schema.json",
+  "$schema": "https://eai-support.github.io/eai/schemas/eai.runtime.schema.json",
   "schemaVersion": 1,
   "name": "eai-app-template",
   "runtime": {

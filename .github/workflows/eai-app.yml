@@ -104,7 +104,7 @@ jobs:
         run: npm install --no-save lightningcss-linux-x64-gnu@1.30.2 @tailwindcss/oxide-linux-x64-gnu@4.1.18
 
       - name: Install EAI CLI
-        run: npm install -g @eai-tools/cli
+        run: npm install -g @enterpriseai/cli
 
       - name: Build object types
         run: npm run build:object-types
