@@ -2,6 +2,7 @@
   "template": [
     {
       "name": "Application",
+      "slug": "application",
       "displayName": "Application",
       "description": "A generic application or request submitted by a user",
       "schemaVersion": 1,
@@ -168,6 +169,7 @@
     },
     {
       "name": "Document",
+      "slug": "document",
       "displayName": "Document",
       "description": "A file or document attached to an application",
       "schemaVersion": 1,
@@ -247,6 +249,7 @@
     },
     {
       "name": "Notification",
+      "slug": "notification",
       "displayName": "Notification",
       "description": "A notification sent to users about application status changes",
       "schemaVersion": 1,

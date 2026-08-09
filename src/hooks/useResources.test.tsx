@@ -1,4 +1,5 @@
 import { renderHook } from '@testing-library/react';
+import { createResourceRouting } from '@enterpriseaigroup/platform-sdk';
 
 import { useResources } from './useResources';
 
@@ -32,7 +33,7 @@ describe('useResources', () => {
     await result.current.list({ limit: 1 });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      '/api/eai/v4/data/resources/env-tenant/project?limit=1',
+      `${createResourceRouting({ baseUrl: '/api/eai', tenantId: 'env-tenant' }).collection('Project')}?limit=1`,
       undefined,
     );
   });
@@ -46,7 +47,7 @@ describe('useResources', () => {
     await result.current.list({ limit: 1 });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      '/api/eai/v4/data/resources/explicit-tenant/project?limit=1',
+      `${createResourceRouting({ baseUrl: '/api/eai', tenantId: 'explicit-tenant' }).collection('Project')}?limit=1`,
       undefined,
     );
   });
@@ -58,7 +59,10 @@ describe('useResources', () => {
     await result.current.search({ query: 'smoke', limit: 1 });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      '/api/eai/v4/data/resources/env-tenant/search',
+      createResourceRouting({
+        baseUrl: '/api/eai',
+        tenantId: 'env-tenant',
+      }).search(),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

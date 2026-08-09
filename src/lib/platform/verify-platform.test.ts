@@ -29,7 +29,7 @@ describe('verifyPlatform', () => {
     jest.clearAllMocks();
   });
 
-  it('checks identifier consistency and probes CRUD using the object type name', async () => {
+  it('checks identifier consistency and probes CRUD using only the object type slug', async () => {
     mockListObjectTypes.mockResolvedValue({ docs: [{ id: 'type-1' }] });
     mockGetSchema.mockResolvedValue({
       objectTypes: [{ name: 'WatchTarget', slug: 'watch-target' }],
@@ -47,8 +47,8 @@ describe('verifyPlatform', () => {
       cursor: true,
       identifierConsistency: true,
     });
-    expect(mockList).toHaveBeenCalledWith('WatchTarget', { limit: 1 });
-    expect(mockAggregate).toHaveBeenCalledWith('WatchTarget', {
+    expect(mockList).toHaveBeenCalledWith('watch-target', { limit: 1 });
+    expect(mockAggregate).toHaveBeenCalledWith('watch-target', {
       groupBy: ['id'],
       metrics: { count: { function: 'count' } },
       limit: 1,
@@ -66,5 +66,23 @@ describe('verifyPlatform', () => {
     const result = await verifyPlatform('tenant-a');
 
     expect(result.identifierConsistency).toBe(false);
+  });
+
+  it('reports legacy derivation drift without falling back to a name lookup', async () => {
+    mockListObjectTypes.mockResolvedValue({ docs: [{ id: 'type-1' }] });
+    mockGetSchema.mockResolvedValue({
+      objectTypes: [{ name: 'GitHubConnection', slug: 'github-connection' }],
+    });
+    mockList.mockResolvedValue({ docs: [], nextCursor: null });
+    mockAggregate.mockResolvedValue({ rows: [] });
+
+    const result = await verifyPlatform('tenant-a');
+
+    expect(result.identifierConsistency).toBe(false);
+    expect(mockList).toHaveBeenCalledWith('github-connection', { limit: 1 });
+    expect(mockAggregate).toHaveBeenCalledWith(
+      'github-connection',
+      expect.any(Object),
+    );
   });
 });

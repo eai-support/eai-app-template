@@ -1,9 +1,26 @@
 import { toObjectTypeSlug } from '../src/object-types';
 
 describe('toObjectTypeSlug', () => {
-  it('converts PascalCase names to kebab-case slugs', () => {
-    expect(toObjectTypeSlug('WatchTarget')).toBe('watch-target');
-  });
+  // Mirrors the ordered normative vectors in
+  // .specify/specs/039-canonical-object-type-routing/evidence/contract-seed-review.json.
+  it.each([
+    ['FeedItem', 'feed-item', true],
+    ['APIKey', 'api-key', true],
+    ['HTTPFeedItem', 'http-feed-item', true],
+    ['V2FeedItem', 'v2-feed-item', true],
+    ['GitHubConnection', 'git-hub-connection', true],
+    ['Sent_Post', 'sent-post', false],
+    ['  Feed  Item  ', 'feed-item', false],
+    ['Draft--Item', 'draft-item', false],
+    ['operations', 'operations', false],
+    ['', '', false],
+    ['---', '', false],
+  ])(
+    'derives %s as %s (manifest name valid: %s)',
+    (input, expectedSlug) => {
+      expect(toObjectTypeSlug(input)).toBe(expectedSlug);
+    },
+  );
 
   it('handles consecutive capitals, underscores, spaces, and repeated separators', () => {
     expect(toObjectTypeSlug('APIKey')).toBe('api-key');

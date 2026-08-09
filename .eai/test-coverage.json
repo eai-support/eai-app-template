@@ -5,6 +5,29 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "canonical-object-type-routing",
+          "description": "The template validates exact Object Type name/slug pairs and routes every SDK resource identifier through the canonical v1 slug owner.",
+          "owned_paths": [
+            "packages/platform-sdk/src/resource-routing.ts",
+            "packages/platform-sdk/src/object-types.ts",
+            "packages/platform-sdk/src/modules/resources.ts",
+            "packages/platform-sdk/src/types.ts",
+            "scripts/generate-object-types-json.mjs",
+            "src/eai.config/object-types.ts",
+            "src/eai.config/object-types.json",
+            "src/eai.config/object-types.provisioning.json",
+            "src/lib/platform/verify-platform.ts"
+          ],
+          "required_repo_tests": [
+            "packages/platform-sdk/__tests__/object-types.test.ts",
+            "packages/platform-sdk/__tests__/resources.test.ts",
+            "tests/generate-object-types-json.test.mjs",
+            "src/lib/platform/verify-platform.test.ts"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["backend"]
+        },
+        {
           "id": "generated-app-object-type-seeding",
           "description": "Generated apps seed tenant-scoped Object Types with owner-private and shared-private authorization metadata.",
           "owned_paths": [
