@@ -30,15 +30,32 @@ const NAME_PATTERN = /^[A-Z][A-Za-z0-9]*$/;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const RESERVED_SLUGS = new Set(['operations', 'query', 'search', 'storage']);
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 0x2f) end -= 1;
+  return value.slice(0, end);
+}
+
+function isAsciiWhitespace(code: number): boolean {
+  return code === 0x20 || (code >= 0x09 && code <= 0x0d);
+}
+
+function trimAsciiWhitespace(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && isAsciiWhitespace(value.charCodeAt(start))) start += 1;
+  while (end > start && isAsciiWhitespace(value.charCodeAt(end - 1))) end -= 1;
+  return value.slice(start, end);
+}
+
 /** Return the resource route-family root without adding dynamic segments. */
 export function resourceRoutesBaseUrl(baseUrl: string): string {
-  return `${baseUrl.replace(/\/+$/, '')}/v4/data/resources`;
+  return `${trimTrailingSlashes(baseUrl)}/v4/data/resources`;
 }
 
 /** Implements the ordered eai.object-type-routing/v1 derivation algorithm. */
 export function deriveObjectTypeSlugV1(value: string): string {
-  return value
-    .replace(/^[\t\n\v\f\r ]+|[\t\n\v\f\r ]+$/g, '')
+  return trimAsciiWhitespace(value)
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
     .replace(/[\t\n\v\f\r ]+|_+/g, '-')
