@@ -34,13 +34,16 @@ eai login
 eai tenant list --format json
 eai tenant select <tenant-slug>
 eai whoami
+eai app provision <app-key> --tenant-id <tenant-id> --format json
 eai types validate
-eai types seed --tenant-key template --tenant-id <tenant-id> --format json
 eai types diff --tenant-key template --tenant-id <tenant-id>
+eai types seed --tenant-key template --tenant-id <tenant-id> --format json
 eai resources schema --tenant-id <tenant-id> --format json
 ```
 
-The `types seed` step should converge cleanly. If `types diff` still shows drift, stop and fix the object types before continuing.
+Review the pre-seed `types diff`, then seed the intended definitions. Re-run
+`types diff` after seeding when you need convergence evidence; any remaining
+drift must be understood before continuing.
 
 ## Runtime Contract
 
@@ -69,6 +72,16 @@ eai deploy doctor --url https://your-deployed-app.example.com
 healthy until Auth.js, runtime config, tenant/workflow values, and declared
 smoke tests pass.
 
+The readiness smoke test remains authenticated. The deploy-doctor process and
+the deployed runtime must receive matching values for
+`EAI_READINESS_PROBE_TOKEN`, `NEXT_PUBLIC_EAI_TENANT_ID`, `EAI_PRODUCT_SLUG`,
+`EAI_ENVIRONMENT`, and `EAI_CONFIG_HASH`. Inject the probe token through the
+operator or CI secret environment; do not put it on the command line or commit
+it. The CLI resolves the contract's `${ENV_NAME}` header values only in memory,
+sends them to the declared endpoint, and does not include them in output. If a
+required value is absent, doctor does not send an unauthenticated request and
+reports missing probe configuration instead of PublicAPI authorization failure.
+
 ## Tenant Data Access
 
 Tenant app data access is user-delegated. Browser code calls the app BFF at
@@ -80,6 +93,16 @@ Do not add app-only `client_credentials` access for normal ResourceAPI reads,
 writes, files, or search. If work must continue after the user leaves the page,
 have the user request a platform workflow/job and pass tenant, app, and user
 context into that workflow.
+
+These credentials and identities have different purposes:
+
+- Auth.js uses the app registration's confidential-client secret to complete
+  interactive sign-in and establish the user's server-side session.
+- The BFF uses the signed-in user's delegated token for tenant-scoped PublicAPI
+  calls; PublicAPI evaluates the user, app client, and tenant together.
+- An app-only/service identity is optional and separate. Generic tenant apps do
+  not need one for normal data-plane access, and `eai app provision` must not
+  create one merely to repair an interactive login.
 
 ## AI Agent Workflow
 
