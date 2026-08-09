@@ -36,7 +36,21 @@ The deploy doctor checks `/health`, `/api/auth/providers`,
 `/api/eai/config`, declared public endpoints, declared smoke tests, and the
 app's BFF/runtime reachability. It classifies failures as host/infrastructure,
 app not running, Auth.js config, Entra callback config, PublicAPI config,
-tenant/workflow config, PublicAPI authorization, or app runtime errors.
+tenant/workflow config, missing authenticated-probe configuration, local BFF
+authorization, PublicAPI authorization, or app runtime errors.
+
+The `/api/eai/readiness` smoke test is intentionally protected. Configure the
+same `EAI_READINESS_PROBE_TOKEN`, tenant ID, app key, environment, and config
+hash in the deployed runtime and in the environment of the operator or CI job
+running deploy doctor. The runtime contract maps these values to request
+headers. The CLI resolves `${ENV_NAME}` references in memory and never writes
+resolved values to deploy-doctor output or artifacts.
+
+If a required probe value is unavailable, deploy doctor does not make a
+predictably unauthenticated request. It reports `authenticated_probe_not_available`
+or `config_missing`; a missing probe credential is not evidence of a tenant or
+PublicAPI authorization failure. Supply secrets through a CI secret store or
+the invoking process environment, not as command-line arguments.
 
 ## Provider Examples
 
@@ -56,3 +70,9 @@ Tenant apps do not use app-only PublicAPI credentials for ordinary ResourceAPI
 or data-plane work. Require sign-in and use the `/api/eai` BFF path. For
 long-running or scheduled work, create a user-authorized platform workflow/job
 instead of giving the app a broad service identity.
+
+Auth.js confidential-client credentials support interactive sign-in; they are
+not an app-only data-plane identity. After sign-in, the BFF forwards the user's
+delegated access token to PublicAPI. A separate app-only/service identity is
+optional and must be introduced only for a reviewed workload that cannot use a
+user-authorized platform workflow.
