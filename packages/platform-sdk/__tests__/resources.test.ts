@@ -103,7 +103,6 @@ describe('ResourcesModule', () => {
         undefined,
       );
     });
-
   });
 
   describe('object type management', () => {
@@ -274,9 +273,14 @@ describe('ResourcesModule', () => {
       };
       mockOkResponse(actionResult);
 
-      const result = await resources.executeAction('Application', '123', 'submit', {
-        note: 'test',
-      });
+      const result = await resources.executeAction(
+        'Application',
+        '123',
+        'submit',
+        {
+          note: 'test',
+        },
+      );
 
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/eai/v4/data/resources/test-tenant/application/123/actions/submit',
@@ -341,7 +345,7 @@ describe('ResourcesModule', () => {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target_id: '456', target_type: 'Document' }),
+          body: JSON.stringify({ target_id: '456', target_type: 'document' }),
         },
       );
     });
@@ -376,7 +380,7 @@ describe('ResourcesModule', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            object_types: ['Application'],
+            object_types: ['application'],
             where: { Application: { status: { equals: 'draft' } } },
             limit: 50,
           }),
@@ -609,7 +613,10 @@ describe('ResourcesModule', () => {
     });
 
     it('reads SAS and index status from file helper endpoints', async () => {
-      mockOkResponse({ url: 'https://example.test/sas', expiresInSeconds: 900 });
+      mockOkResponse({
+        url: 'https://example.test/sas',
+        expiresInSeconds: 900,
+      });
       await resources.getFileSas('PlanningDocument', 'res-1', 'file', {
         expiresInSeconds: 900,
       });
@@ -696,6 +703,163 @@ describe('ResourcesModule', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/eai/v4/data/resources/test-tenant/api-key/1',
         undefined,
+      );
+    });
+  });
+
+  describe('routing contract coverage', () => {
+    it('encodes dynamic segments exactly once and transports only canonical slugs', async () => {
+      mockOkResponse({});
+      await resources.executeAction('FeedItem', 'record/a b', 'publish/now');
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/record%2Fa%20b/actions/publish%2Fnow',
+        expect.objectContaining({ method: 'POST' }),
+      );
+
+      mockOkResponse({});
+      await resources.createLink(
+        'FeedItem',
+        'record/a b',
+        'related items',
+        'target/1',
+        'APIKey',
+      );
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/record%2Fa%20b/links/related%20items',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            target_id: 'target/1',
+            target_type: 'api-key',
+          }),
+        }),
+      );
+    });
+
+    it('routes every remaining finite resource operation through canonical references', async () => {
+      mockOkResponse({});
+      await resources.stream('FeedItem');
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/stream',
+        undefined,
+      );
+
+      mockOkResponse({});
+      await resources.batchImport('FeedItem', [{ data: { title: 'one' } }]);
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/batch/import',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ items: [{ data: { title: 'one' } }] }),
+        }),
+      );
+
+      mockOkResponse({});
+      await resources.getPermissions('FeedItem', 'record/1');
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/record%2F1/permissions',
+        undefined,
+      );
+
+      mockOkResponse({});
+      await resources.grantShare('FeedItem', 'record/1', {
+        subject_id: 'user/1',
+        role: 'viewer',
+      });
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/record%2F1/shares',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ subject_id: 'user/1', role: 'viewer' }),
+        }),
+      );
+
+      mockOkResponse({});
+      await resources.revokeShare(
+        'FeedItem',
+        'record/1',
+        'viewer/admin',
+        'user/1',
+      );
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/record%2F1/shares/viewer%2Fadmin/user%2F1',
+        { method: 'DELETE' },
+      );
+
+      mockOkResponse({});
+      await resources.attachParent(
+        'FeedItem',
+        'record/1',
+        'APIKey',
+        'parent/1',
+      );
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/record%2F1/parents',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            parent_object_type: 'api-key',
+            parent_id: 'parent/1',
+          }),
+        }),
+      );
+
+      mockOkResponse({});
+      await resources.detachParent(
+        'FeedItem',
+        'record/1',
+        'APIKey',
+        'parent/1',
+      );
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/record%2F1/parents/api-key/parent%2F1',
+        { method: 'DELETE' },
+      );
+
+      mockOkResponse({});
+      await resources.downloadFile('FeedItem', 'record/1', 'source/file');
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/record%2F1/files/source%2Ffile',
+        undefined,
+      );
+
+      mockOkResponse({ deleted: true });
+      await resources.deleteFile('FeedItem', 'record/1', 'source/file');
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/record%2F1/files/source%2Ffile',
+        { method: 'DELETE' },
+      );
+
+      mockOkResponse({});
+      await resources.retryFileIngestion('FeedItem', 'record/1', 'source/file');
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/feed-item/record%2F1/files/source%2Ffile/retry',
+        { method: 'POST' },
+      );
+
+      mockOkResponse({});
+      await resources.deleteObjectType('object/type/1');
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/object-types/object%2Ftype%2F1',
+        { method: 'DELETE' },
+      );
+
+      mockOkResponse({});
+      await resources.query({ object_types: ['FeedItem'], limit: 1 });
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/query',
+        expect.objectContaining({
+          body: JSON.stringify({ object_types: ['feed-item'], limit: 1 }),
+        }),
+      );
+
+      mockOkResponse({ results: [], totalResults: 0 });
+      await resources.query({ objectTypes: ['APIKey'], limit: 1 });
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        '/api/eai/v4/data/resources/test-tenant/query',
+        expect.objectContaining({
+          body: JSON.stringify({ objectTypes: ['api-key'], limit: 1 }),
+        }),
       );
     });
   });

@@ -49,7 +49,7 @@ export class EAIPlatformClient {
       config.streamBaseUrl || `${appBasePath}/api/eai/stream`;
   }
 
-  /** CRUD operations on resources via /v4/data/resources/* */
+  /** CRUD operations through the canonical v4 resource routing owner. */
   get resources(): ResourcesModule {
     if (!this._resources) {
       this._resources = new ResourcesModule(this.baseUrl, this.tenantId);

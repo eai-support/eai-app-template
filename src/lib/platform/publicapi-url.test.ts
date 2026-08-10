@@ -2,6 +2,7 @@ import {
   buildPublicApiUrl,
   normalizePublicApiBaseUrl,
 } from '@/lib/platform/publicapi-url';
+import { createResourceRouting } from '@enterpriseaigroup/platform-sdk';
 
 describe('publicApi URL helper', () => {
   it('HP001 strips legacy version suffixes before appending v4 paths', () => {
@@ -14,15 +15,15 @@ describe('publicApi URL helper', () => {
   });
 
   it('HP002 preserves relative app base paths when building URLs', () => {
+    const objectTypesPath = createResourceRouting({
+      baseUrl: '',
+      tenantId: 'unused',
+    }).objectTypes();
     expect(
-      buildPublicApiUrl(
-        '/my-template/api/eai/v3',
-        '/v4/data/resources/object-types',
-        {
-          limit: 1,
-        },
-      ),
-    ).toBe('/my-template/api/eai/v4/data/resources/object-types?limit=1');
+      buildPublicApiUrl('/my-template/api/eai/v3', objectTypesPath, {
+        limit: 1,
+      }),
+    ).toBe(`/my-template/api/eai${objectTypesPath}?limit=1`);
   });
 
   it('HP003 preserves absolute PublicAPI origins when building URLs', () => {

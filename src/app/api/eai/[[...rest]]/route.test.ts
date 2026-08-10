@@ -46,6 +46,7 @@ jest.mock('@/lib/platform/session-resolve', () => {
 });
 
 import { GET } from './route';
+import { resourceRoutesBaseUrl } from '@enterpriseaigroup/platform-sdk';
 
 function createRequest(path: string, init?: { headers?: HeadersInit }) {
   const url = `https://template.test/api/eai/${path}`;
@@ -112,7 +113,7 @@ describe('EAI proxy v4 route-family routing', () => {
     );
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://regional-api.example.com/public/v4/data/resources/tenant-a/Application?limit=5',
+      `${resourceRoutesBaseUrl('https://regional-api.example.com/public')}/tenant-a/Application?limit=5`,
       expect.any(Object),
     );
   });

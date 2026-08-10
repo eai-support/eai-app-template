@@ -8,6 +8,7 @@ describe('storage provisioning summary', () => {
     const summary = summarizeTenantStorageProvisioning('template', [
       {
         name: 'Document',
+        slug: 'document',
         displayName: 'Document',
         properties: [],
         linkTypes: [],
@@ -17,6 +18,7 @@ describe('storage provisioning summary', () => {
       },
       {
         name: 'Transcript',
+        slug: 'transcript',
         displayName: 'Transcript',
         properties: [],
         linkTypes: [],
@@ -41,6 +43,7 @@ describe('storage provisioning summary', () => {
       template: [
         {
           name: 'KnowledgeProjection',
+          slug: 'knowledge-projection',
           displayName: 'Knowledge Projection',
           properties: [],
           linkTypes: [],

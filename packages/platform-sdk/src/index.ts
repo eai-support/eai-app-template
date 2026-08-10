@@ -13,8 +13,21 @@ export type { PlatformClientConfig } from './client';
 export { PlatformError } from './errors';
 export type { PlatformErrorDetails } from './errors';
 
-// Shared object-type helpers
+// Shared object-type helpers and the sole v4 resource-routing owner.
 export { toObjectTypeSlug } from './object-types';
+export {
+  OBJECT_TYPE_ROUTING_CONTRACT,
+  ObjectTypeRoutingError,
+  assertObjectTypeSlug,
+  createResourceRouting,
+  deriveObjectTypeSlugV1,
+  resourceRoutesBaseUrl,
+} from './resource-routing';
+export type {
+  ObjectTypeReference,
+  ObjectTypeSlug,
+  ResourceRouting,
+} from './resource-routing';
 
 // Types
 export type {

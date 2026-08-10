@@ -2,6 +2,7 @@ import {
   objectTypePayload,
   seedObjectTypes,
 } from '@/lib/platform/seed-object-types';
+import { createResourceRouting } from '@enterpriseaigroup/platform-sdk';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -35,16 +36,18 @@ describe('seedObjectTypes', () => {
 
   it('HP001 seeds object types through basePath-aware PublicAPI v4 URLs', async () => {
     const results = await seedObjectTypes('template', 'tenant-a');
+    const objectTypesUrl = createResourceRouting({
+      baseUrl: '/my-template/api/eai',
+      tenantId: 'tenant-a',
+    }).objectTypes();
 
     expect(results.every((result) => result.status === 'created')).toBe(true);
     expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /^\/my-template\/api\/eai\/v4\/data\/resources\/object-types\?/,
-      ),
+      expect.stringMatching(new RegExp(`^${objectTypesUrl}\\?`)),
       undefined,
     );
     expect(mockFetch).toHaveBeenCalledWith(
-      '/my-template/api/eai/v4/data/resources/object-types',
+      objectTypesUrl,
       expect.objectContaining({ method: 'POST' }),
     );
   });
@@ -67,6 +70,7 @@ describe('seedObjectTypes', () => {
     (privacyClass) => {
       const payload = objectTypePayload({
         name: 'RatesReviewSubmission',
+        slug: 'rates-review-submission',
         displayName: 'Rates Review Submission',
         authorization: { privacyClass },
         properties: [],
@@ -85,6 +89,7 @@ describe('seedObjectTypes', () => {
   it('omits authorization on the wire when the type has no policy', () => {
     const payload = objectTypePayload({
       name: 'LegacySubmission',
+      slug: 'legacy-submission',
       displayName: 'Legacy Submission',
       properties: [],
       linkTypes: [],
