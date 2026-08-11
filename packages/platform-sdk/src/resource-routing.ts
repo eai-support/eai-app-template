@@ -29,6 +29,7 @@ export class ObjectTypeRoutingError extends Error {
 const NAME_PATTERN = /^[A-Z][A-Za-z0-9]*$/;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const RESERVED_SLUGS = new Set(['operations', 'query', 'search', 'storage']);
+const ESTABLISHED_NAME_SLUGS = new Map([['GitHubConnection', 'github-connection']]);
 
 function trimTrailingSlashes(value: string): string {
   let end = value.length;
@@ -55,7 +56,11 @@ export function resourceRoutesBaseUrl(baseUrl: string): string {
 
 /** Implements the ordered eai.object-type-routing/v1 derivation algorithm. */
 export function deriveObjectTypeSlugV1(value: string): string {
-  return trimAsciiWhitespace(value)
+  const normalizedName = trimAsciiWhitespace(value);
+  const establishedSlug = ESTABLISHED_NAME_SLUGS.get(normalizedName);
+  if (establishedSlug) return establishedSlug;
+
+  return normalizedName
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
     .replace(/[\t\n\v\f\r ]+|_+/g, '-')
