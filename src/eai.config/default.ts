@@ -54,9 +54,9 @@ const templateConfigSource = {
   api: {
     // Prefix with NEXT_PUBLIC_APP_BASE_PATH so client-side fetches from
     // the platform SDK go through Next.js basePath (e.g.
-    // `/my-app/api/eai/v3/...`). Without this, raw fetch() hits
-    // `/api/eai/v3/...` and 404s under basePath. No-op when empty.
-    baseUrl: `${(process.env.NEXT_PUBLIC_APP_BASE_PATH ?? '').replace(/\/+$/, '')}/api/eai/v3`,
+    // `/my-app/api/eai/v4/...`). Without this, raw fetch() hits
+    // `/api/eai/v4/...` and 404s under basePath. No-op when empty.
+    baseUrl: `${(process.env.NEXT_PUBLIC_APP_BASE_PATH ?? '').replace(/\/+$/, '')}/api/eai`,
     endpoints: {},
   },
 

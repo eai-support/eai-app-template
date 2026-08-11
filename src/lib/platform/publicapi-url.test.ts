@@ -5,10 +5,7 @@ import {
 import { createResourceRouting } from '@enterpriseaigroup/platform-sdk';
 
 describe('publicApi URL helper', () => {
-  it('HP001 strips legacy version suffixes before appending v4 paths', () => {
-    expect(normalizePublicApiBaseUrl('/my-template/api/eai/v3')).toBe(
-      '/my-template/api/eai',
-    );
+  it('HP001 strips v4 suffixes before appending v4 paths', () => {
     expect(normalizePublicApiBaseUrl('/my-template/api/eai/v4/')).toBe(
       '/my-template/api/eai',
     );
@@ -20,7 +17,7 @@ describe('publicApi URL helper', () => {
       tenantId: 'unused',
     }).objectTypes();
     expect(
-      buildPublicApiUrl('/my-template/api/eai/v3', objectTypesPath, {
+      buildPublicApiUrl('/my-template/api/eai/v4', objectTypesPath, {
         limit: 1,
       }),
     ).toBe(`/my-template/api/eai${objectTypesPath}?limit=1`);

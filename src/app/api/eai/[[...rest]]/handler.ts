@@ -4,7 +4,10 @@ import {
   resolvePublicApiBaseUrl,
   RoutingResolutionError,
 } from '@/lib/platform/session-resolve';
-import { resolvePublicApiRoutePath } from '@/lib/platform/publicapi-route-family';
+import {
+  resolvePublicApiRoutePath,
+  UnsupportedPublicApiRouteError,
+} from '@/lib/platform/publicapi-route-family';
 
 export interface RouteContext {
   params: Promise<{ rest?: string[] }>;
@@ -270,6 +273,19 @@ async function proxyRequest(
           error: 'Routing resolution failed',
           message: error.message,
           details: error.responseBody,
+        }),
+        {
+          status: error.statusCode,
+          headers: jsonTraceHeaders(traceContext),
+        },
+      );
+    }
+
+    if (error instanceof UnsupportedPublicApiRouteError) {
+      return new NextResponse(
+        JSON.stringify({
+          error: 'Legacy PublicAPI route retired',
+          message: error.message,
         }),
         {
           status: error.statusCode,
