@@ -36,11 +36,15 @@ const BACKEND_ORDER = ['postgresql', 'documentdb', 'blob', 'search'];
 const NAME_PATTERN = /^[A-Z][A-Za-z0-9]*$/;
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const RESERVED_SLUGS = new Set(['operations', 'query', 'search', 'storage']);
+const ESTABLISHED_NAME_SLUGS = new Map([['GitHubConnection', 'github-connection']]);
 const checkOnly = process.argv.includes('--check');
 
 function deriveObjectTypeSlugV1(value) {
-  return value
-    .trim()
+  const normalizedName = value.trim();
+  const establishedSlug = ESTABLISHED_NAME_SLUGS.get(normalizedName);
+  if (establishedSlug) return establishedSlug;
+
+  return normalizedName
     .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
     .replace(/[\s_]+/g, '-')
