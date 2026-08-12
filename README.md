@@ -106,6 +106,21 @@ These credentials and identities have different purposes:
 
 ## AI Agent Workflow
 
+Projects created with `eai init` include current Gofer assets for GitHub
+Copilot, Claude, Codex, Grok Build, and Gemini-compatible AI workspaces. Detect
+and open an installed workspace with:
+
+```bash
+eai start --check
+eai start
+```
+
+Detection reads installed application and command metadata only. The final
+start action is the user's approval for the selected provider to read the
+project and use the provider account. The first conversation starts with the
+business outcome, uses the public `eai` skill, and pauses for approval of the
+business specification before implementation continues.
+
 When an AI agent is working in this template, it should use the EAI CLI as the source of truth instead of guessing command shapes:
 
 ```bash
