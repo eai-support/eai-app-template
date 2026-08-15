@@ -18,7 +18,15 @@
 // ---------------------------------------------------------------------------
 
 /** Supported field types for object type properties */
-export type FieldType = 'text' | 'number' | 'boolean' | 'date' | 'select' | 'json' | 'file' | 'relationship';
+export type FieldType =
+  | 'text'
+  | 'number'
+  | 'boolean'
+  | 'date'
+  | 'select'
+  | 'json'
+  | 'file'
+  | 'relationship';
 
 /** A select option for fields of type 'select' */
 export interface SelectOption {
@@ -45,7 +53,11 @@ export interface PropertyDefinition {
 }
 
 /** Cardinality for relationships between object types */
-export type Cardinality = 'one-to-one' | 'one-to-many' | 'many-to-one' | 'many-to-many';
+export type Cardinality =
+  | 'one-to-one'
+  | 'one-to-many'
+  | 'many-to-one'
+  | 'many-to-many';
 
 /** A relationship link between two object types */
 export interface LinkTypeDefinition {
@@ -101,6 +113,8 @@ export type ObjectTypeStatus = 'draft' | 'published' | 'deprecated';
 export interface ObjectTypeDefinition {
   /** PascalCase name (Configurator auto-generates kebab-case slug) */
   name: string;
+  /** Checked-in v1 transport identifier derived exactly from name. */
+  slug: string;
   /** Human-friendly display label */
   displayName: string;
   /** Optional description */
@@ -147,14 +161,21 @@ function tenantStorageScope(tenantId: string): string {
 function storageNamePrefix(parts: string[], separator = '_'): string {
   const replacement = separator === '-' ? '-' : '_';
   return parts
-    .map((part) => String(part || '').toLowerCase().replace(/-/g, separator))
+    .map((part) =>
+      String(part || '')
+        .toLowerCase()
+        .replace(/-/g, separator),
+    )
     .join(separator)
     .replace(/[^a-z0-9_-]+/g, replacement)
     .replace(/^[_-]+|[_-]+$/g, '');
 }
 
 function appSqlStorage(logicalTableName: string) {
-  const tenantId = process.env.EAI_TENANT_ID || process.env.NEXT_PUBLIC_EAI_TENANT_ID || 'tenant';
+  const tenantId =
+    process.env.EAI_TENANT_ID ||
+    process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
+    'tenant';
   const appKey =
     process.env.EAI_APP_KEY ||
     process.env.NEXT_PUBLIC_EAI_APP_KEY ||
@@ -182,6 +203,7 @@ export const objectTypes: Record<string, ObjectTypeDefinition[]> = {
   template: [
     {
       name: 'Application',
+      slug: 'application',
       displayName: 'Application',
       description: 'A generic application or request submitted by a user',
       ...appSqlStorage('applications'),
@@ -294,6 +316,7 @@ export const objectTypes: Record<string, ObjectTypeDefinition[]> = {
     },
     {
       name: 'Document',
+      slug: 'document',
       displayName: 'Document',
       description: 'A file or document attached to an application',
       ...appSqlStorage('documents'),
@@ -351,15 +374,19 @@ export const objectTypes: Record<string, ObjectTypeDefinition[]> = {
           displayName: 'Verify Document',
           requiredRole: 'tenant-builder',
           validationRules: {},
-          sideEffects: [{ type: 'set_field', field: 'isVerified', value: true }],
+          sideEffects: [
+            { type: 'set_field', field: 'isVerified', value: true },
+          ],
         },
       ],
       status: 'published',
     },
     {
       name: 'Notification',
+      slug: 'notification',
       displayName: 'Notification',
-      description: 'A notification sent to users about application status changes',
+      description:
+        'A notification sent to users about application status changes',
       ...appSqlStorage('notifications'),
       properties: [
         {

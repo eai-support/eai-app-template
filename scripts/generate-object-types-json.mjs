@@ -10,7 +10,13 @@
  *   npm run build:object-types
  */
 
-import { readFileSync, writeFileSync } from 'fs';
+import {
+  existsSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -27,6 +33,129 @@ const provisioningOutputPath =
   join(projectRoot, 'src/eai.config/object-types.provisioning.json');
 
 const BACKEND_ORDER = ['postgresql', 'documentdb', 'blob', 'search'];
+const NAME_PATTERN = /^[A-Z][A-Za-z0-9]*$/;
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const RESERVED_SLUGS = new Set(['operations', 'query', 'search', 'storage']);
+const ESTABLISHED_NAME_SLUGS = new Map([['GitHubConnection', 'github-connection']]);
+const checkOnly = process.argv.includes('--check');
+
+function deriveObjectTypeSlugV1(value) {
+  const normalizedName = value.trim();
+  const derivationSource = ESTABLISHED_NAME_SLUGS.get(normalizedName) ?? normalizedName;
+
+  return derivationSource
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+}
+
+function validateObjectTypes(objectTypesByTenant) {
+  if (
+    typeof objectTypesByTenant !== 'object' ||
+    objectTypesByTenant === null ||
+    Array.isArray(objectTypesByTenant)
+  ) {
+    throw new Error('objectTypes must be a tenant-keyed object');
+  }
+
+  for (const [tenantKey, types] of Object.entries(objectTypesByTenant)) {
+    if (!Array.isArray(types)) {
+      throw new Error(`objectTypes.${tenantKey} must be an array`);
+    }
+    for (const [index, type] of types.entries()) {
+      const location = `objectTypes.${tenantKey}[${index}]`;
+      if (typeof type !== 'object' || type === null || Array.isArray(type)) {
+        throw new Error(`${location} must be an object`);
+      }
+      if (typeof type.name !== 'string' || !NAME_PATTERN.test(type.name)) {
+        throw new Error(`${location}.name must match PascalCase v1 syntax`);
+      }
+      if (typeof type.slug !== 'string' || !type.slug) {
+        throw new Error(`${location}.slug is required`);
+      }
+      if (!SLUG_PATTERN.test(type.slug) || RESERVED_SLUGS.has(type.slug)) {
+        throw new Error(`${location}.slug must be a non-reserved v1 slug`);
+      }
+      const expectedSlug = deriveObjectTypeSlugV1(type.name);
+      if (type.slug !== expectedSlug) {
+        throw new Error(`${location}.slug must equal ${expectedSlug}`);
+      }
+      if (!BACKEND_ORDER.includes(type.storageBackend)) {
+        throw new Error(
+          `${location}.storageBackend must be a supported backend`,
+        );
+      }
+    }
+  }
+}
+
+function replaceOutputsAtomically(outputs) {
+  const temporaryOutputs = outputs.map(({ path, contents }) => ({
+    path,
+    hadOriginal: existsSync(path),
+    temporaryPath: `${path}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    backupPath: `${path}.bak-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    contents,
+  }));
+
+  try {
+    for (const output of temporaryOutputs) {
+      writeFileSync(output.temporaryPath, output.contents, 'utf-8');
+    }
+
+    // Stage every current output first. If one replacement fails, restore all
+    // staged originals so callers never observe a one-file generated pair.
+    for (const output of temporaryOutputs) {
+      if (output.hadOriginal) {
+        renameSync(output.path, output.backupPath);
+      }
+    }
+    for (const output of temporaryOutputs) {
+      renameSync(output.temporaryPath, output.path);
+    }
+    for (const output of temporaryOutputs) {
+      if (existsSync(output.backupPath)) unlinkSync(output.backupPath);
+    }
+  } catch (error) {
+    for (const output of temporaryOutputs) {
+      if (existsSync(output.backupPath)) {
+        if (existsSync(output.path)) unlinkSync(output.path);
+        renameSync(output.backupPath, output.path);
+      } else if (!output.hadOriginal && existsSync(output.path)) {
+        unlinkSync(output.path);
+      }
+    }
+    throw error;
+  } finally {
+    for (const output of temporaryOutputs) {
+      try {
+        unlinkSync(output.temporaryPath);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+      try {
+        unlinkSync(output.backupPath);
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+    }
+  }
+}
+
+function assertGeneratedOutput(path, expected) {
+  let current;
+  try {
+    current = readFileSync(path, 'utf-8');
+  } catch {
+    throw new Error(`${path} is missing; run npm run build:object-types`);
+  }
+  if (current !== expected) {
+    throw new Error(`${path} is stale; run npm run build:object-types`);
+  }
+}
 
 function summarizeProvisioning(objectTypesByTenant) {
   return Object.entries(objectTypesByTenant).map(([tenantKey, types]) => {
@@ -36,9 +165,19 @@ function summarizeProvisioning(objectTypesByTenant) {
       blob: [],
       search: [],
     };
+    const objectTypeIdentifiersByBackend = {
+      postgresql: [],
+      documentdb: [],
+      blob: [],
+      search: [],
+    };
 
     for (const type of types) {
       objectTypesByBackend[type.storageBackend].push(type.name);
+      objectTypeIdentifiersByBackend[type.storageBackend].push({
+        name: type.name,
+        slug: type.slug,
+      });
     }
 
     const declaredBackends = BACKEND_ORDER.filter(
@@ -82,6 +221,7 @@ function summarizeProvisioning(objectTypesByTenant) {
       tenantKey,
       declaredBackends,
       objectTypesByBackend,
+      objectTypeIdentifiersByBackend,
       provision: {
         postgresql: requiresPostgresql,
         documentdb: objectTypesByBackend.documentdb.length > 0,
@@ -103,6 +243,7 @@ let jsContent = tsContent;
 const lines = jsContent.split('\n');
 const cleaned = [];
 let inBlock = false;
+let inTypeAlias = false;
 let braceDepth = 0;
 
 for (const line of lines) {
@@ -116,8 +257,14 @@ for (const line of lines) {
     if (stripped.endsWith(';') && !stripped.includes('{')) {
       continue; // Single-line type alias
     }
+    if (/^(export\s+)?type\s+/.test(stripped) && !stripped.includes('{')) {
+      inBlock = true;
+      inTypeAlias = true;
+      continue;
+    }
     // Multi-line block
     inBlock = true;
+    inTypeAlias = false;
     braceDepth =
       (stripped.match(/{/g) || []).length - (stripped.match(/}/g) || []).length;
     if (braceDepth <= 0) inBlock = false;
@@ -125,6 +272,13 @@ for (const line of lines) {
   }
 
   if (inBlock) {
+    if (inTypeAlias) {
+      if (stripped.endsWith(';')) {
+        inBlock = false;
+        inTypeAlias = false;
+      }
+      continue;
+    }
     braceDepth +=
       (stripped.match(/{/g) || []).length - (stripped.match(/}/g) || []).length;
     if (braceDepth <= 0) inBlock = false;
@@ -158,22 +312,23 @@ for (const line of lines) {
 const evalCode = cleaned.join('\n') + '\n\nobjectTypes;';
 const objectTypes = (0, eval)(evalCode);
 
-// Validate
-if (typeof objectTypes !== 'object' || objectTypes === null) {
-  console.error('Error: objectTypes is not an object');
-  process.exit(1);
-}
+// Validate all source pairs before either tracked output can be replaced.
+validateObjectTypes(objectTypes);
 
-// Write JSON
 const json = JSON.stringify(objectTypes, null, 2);
-writeFileSync(outputPath, json + '\n', 'utf-8');
-
 const provisioning = summarizeProvisioning(objectTypes);
-writeFileSync(
-  provisioningOutputPath,
-  JSON.stringify(provisioning, null, 2) + '\n',
-  'utf-8',
-);
+const provisioningJson = JSON.stringify(provisioning, null, 2);
+const outputs = [
+  { path: outputPath, contents: `${json}\n` },
+  { path: provisioningOutputPath, contents: `${provisioningJson}\n` },
+];
+
+if (checkOnly) {
+  for (const output of outputs)
+    assertGeneratedOutput(output.path, output.contents);
+} else {
+  replaceOutputsAtomically(outputs);
+}
 
 // Summary
 const tenantKeys = Object.keys(objectTypes);
@@ -181,7 +336,9 @@ const totalTypes = tenantKeys.reduce(
   (sum, key) => sum + objectTypes[key].length,
   0,
 );
-console.log(`Generated ${outputPath}`);
-console.log(`Generated ${provisioningOutputPath}`);
+console.log(`${checkOnly ? 'Verified' : 'Generated'} ${outputPath}`);
+console.log(
+  `${checkOnly ? 'Verified' : 'Generated'} ${provisioningOutputPath}`,
+);
 console.log(`  ${tenantKeys.length} tenant(s): ${tenantKeys.join(', ')}`);
 console.log(`  ${totalTypes} Object Type(s) total`);

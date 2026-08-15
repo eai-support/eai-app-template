@@ -2,7 +2,7 @@
 
 A production-ready Next.js template for building tenant-scoped applications on the Enterprise AI platform.
 
-**[Documentation](https://eai-tools.github.io/eai-app-docs/)** | **[Package Registry](https://enterpriseaigroup.github.io/enterpriseai-packages/)** | **[Mirror Repo](https://github.com/eai-tools/eai-app-template)**
+**[Documentation](https://eai-support.github.io/eai-app-docs/)** | **[Package Registry](https://enterpriseaigroup.github.io/enterpriseai-packages/)** | **[Mirror Repo](https://github.com/eai-support/eai-app-template)**
 
 ## What This Template Assumes
 
@@ -17,7 +17,7 @@ A production-ready Next.js template for building tenant-scoped applications on t
 ## Quick Start
 
 ```bash
-git clone https://github.com/eai-tools/eai-app-template.git my-app
+git clone https://github.com/eai-support/eai-app-template.git my-app
 cd my-app
 npm install
 cp .env.example .env.local
@@ -27,20 +27,23 @@ npm run dev
 Then connect the project to a real tenant:
 
 ```bash
-npm config set @eai-tools:registry https://eai-tools.github.io/eai/registry/ --location=user
-npm install -g @eai-tools/cli
+npm config set @enterpriseai:registry https://eai-support.github.io/eai/registry/ --location=user
+npm install -g @enterpriseai/cli
 eai update --check
 eai login
 eai tenant list --format json
 eai tenant select <tenant-slug>
 eai whoami
+eai app provision <app-key> --tenant-id <tenant-id> --format json
 eai types validate
-eai types seed --tenant-key template --tenant-id <tenant-id> --format json
 eai types diff --tenant-key template --tenant-id <tenant-id>
+eai types seed --tenant-key template --tenant-id <tenant-id> --format json
 eai resources schema --tenant-id <tenant-id> --format json
 ```
 
-The `types seed` step should converge cleanly. If `types diff` still shows drift, stop and fix the object types before continuing.
+Review the pre-seed `types diff`, then seed the intended definitions. Re-run
+`types diff` after seeding when you need convergence evidence; any remaining
+drift must be understood before continuing.
 
 ## Runtime Contract
 
@@ -69,6 +72,16 @@ eai deploy doctor --url https://your-deployed-app.example.com
 healthy until Auth.js, runtime config, tenant/workflow values, and declared
 smoke tests pass.
 
+The readiness smoke test remains authenticated. The deploy-doctor process and
+the deployed runtime must receive matching values for
+`EAI_READINESS_PROBE_TOKEN`, `NEXT_PUBLIC_EAI_TENANT_ID`, `EAI_PRODUCT_SLUG`,
+`EAI_ENVIRONMENT`, and `EAI_CONFIG_HASH`. Inject the probe token through the
+operator or CI secret environment; do not put it on the command line or commit
+it. The CLI resolves the contract's `${ENV_NAME}` header values only in memory,
+sends them to the declared endpoint, and does not include them in output. If a
+required value is absent, doctor does not send an unauthenticated request and
+reports missing probe configuration instead of PublicAPI authorization failure.
+
 ## Tenant Data Access
 
 Tenant app data access is user-delegated. Browser code calls the app BFF at
@@ -81,7 +94,32 @@ writes, files, or search. If work must continue after the user leaves the page,
 have the user request a platform workflow/job and pass tenant, app, and user
 context into that workflow.
 
+These credentials and identities have different purposes:
+
+- Auth.js uses the app registration's confidential-client secret to complete
+  interactive sign-in and establish the user's server-side session.
+- The BFF uses the signed-in user's delegated token for tenant-scoped PublicAPI
+  calls; PublicAPI evaluates the user, app client, and tenant together.
+- An app-only/service identity is optional and separate. Generic tenant apps do
+  not need one for normal data-plane access, and `eai app provision` must not
+  create one merely to repair an interactive login.
+
 ## AI Agent Workflow
+
+Projects created with `eai init` include current Gofer assets for GitHub
+Copilot, Claude, Codex, Grok Build, and Gemini-compatible AI workspaces. Detect
+and open an installed workspace with:
+
+```bash
+eai start --check
+eai start
+```
+
+Detection reads installed application and command metadata only. The final
+start action is the user's approval for the selected provider to read the
+project and use the provider account. The first conversation starts with the
+business outcome, uses the public `eai` skill, and pauses for approval of the
+business specification before implementation continues.
 
 When an AI agent is working in this template, it should use the EAI CLI as the source of truth instead of guessing command shapes:
 
@@ -186,7 +224,7 @@ The `@enterpriseaigroup/*` packages are served from a public registry. The inclu
 
 ## Documentation
 
-Full documentation is available at **https://eai-tools.github.io/eai-app-docs/**, covering:
+Full documentation is available at **https://eai-support.github.io/eai-app-docs/**, covering:
 
 - Getting started and onboarding
 - CLI usage and tenant workflows

@@ -1,4 +1,7 @@
-import { EAIPlatformClient, toObjectTypeSlug } from '@enterpriseaigroup/platform-sdk';
+import {
+  EAIPlatformClient,
+  toObjectTypeSlug,
+} from '@enterpriseaigroup/platform-sdk';
 
 export interface PlatformStatus {
   objectTypes: boolean;
@@ -68,12 +71,18 @@ export async function verifyPlatform(
         return type.slug === toObjectTypeSlug(type.name);
       });
 
-    const firstIdentifier = firstType?.name || firstType?.slug;
-    if (firstIdentifier) {
-      const listResponse = await client.resources.list(firstIdentifier, { limit: 1 });
+    // A persisted legacy pair may not derive under v1. Report that fact, but
+    // preserve read-only verification by using its stored slug exactly; never
+    // retry with a name, alias, redirect, or registry lookup.
+    const firstSlug =
+      typeof firstType?.slug === 'string' && firstType.slug.trim()
+        ? firstType.slug
+        : undefined;
+    if (firstSlug) {
+      const listResponse = await client.resources.list(firstSlug, { limit: 1 });
       status.crud = Array.isArray(listResponse.docs);
 
-      const aggregateResponse = await client.resources.aggregate(firstIdentifier, {
+      const aggregateResponse = await client.resources.aggregate(firstSlug, {
         groupBy: ['id'],
         metrics: { count: { function: 'count' } },
         limit: 1,

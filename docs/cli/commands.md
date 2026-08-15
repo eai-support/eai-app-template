@@ -21,7 +21,7 @@ eai init [name] [options]
 | Argument/Flag    | Description                              | Default                                             |
 | ---------------- | ---------------------------------------- | --------------------------------------------------- |
 | `name`           | Project name (kebab-case)                | Interactive prompt                                  |
-| `--from <repo>`  | Template repo URL or local path          | `https://github.com/eai-tools/eai-app-template.git` |
+| `--from <repo>`  | Template repo URL or local path          | `https://github.com/eai-support/eai-app-template.git` |
 | `--skip-prompts` | Use defaults without interactive prompts | `false`                                             |
 
 ### Examples
@@ -580,7 +580,7 @@ eai deploy status [options]
 
 ```bash
 # Initial setup
-eai deploy setup --repo eai-tools/my-app
+eai deploy setup --repo eai-support/my-app
 
 # Deploy
 eai deploy trigger

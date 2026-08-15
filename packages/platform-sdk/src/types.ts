@@ -352,7 +352,9 @@ export interface JoinConfig {
 
 export interface QueryRequest {
   /** List of object type names to query across. */
-  object_types: string[];
+  object_types?: string[];
+  /** Backward-compatible camelCase transport field used by existing callers. */
+  objectTypes?: string[];
   /** Filters keyed by object type name, e.g. { Case: { status: { equals: 'open' } } } */
   where?: Record<string, Record<string, unknown>>;
   /** Optional join configuration for cross-type link queries. */
@@ -368,4 +370,16 @@ export interface CreateLinkRequest {
   target_id: string;
   /** Required by the platform — the object type of the target resource. */
   target_type: string;
+}
+
+export interface ResourceShareRequest {
+  subject_id: string;
+  role: string;
+  [key: string]: unknown;
+}
+
+export interface ResourceParentAttachRequest {
+  parent_object_type: string;
+  parent_id: string;
+  [key: string]: unknown;
 }

@@ -168,7 +168,7 @@ For the full decision tree, workflow steps, and AI-agent prompt guidance, see
 
 When eai-gofer is generating or modifying an EAI app:
 
-1. Scaffold or compare against `https://github.com/eai-tools/eai-app-template`.
+1. Scaffold or compare against `https://github.com/eai-support/eai-app-template`.
 2. Inspect `docs/platform/config-driven-ui.md`,
    `docs/platform/eai-service-patterns.md`, `src/eai.config`, `src/eai.blocks.tsx`,
    `src/hooks`, and `packages/platform-sdk` before inventing new calls.

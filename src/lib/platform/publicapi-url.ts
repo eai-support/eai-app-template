@@ -1,6 +1,6 @@
 export function normalizePublicApiBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/, '');
-  return trimmed.replace(/\/v[34]$/, '');
+  return trimmed.replace(/\/v4$/, '');
 }
 
 export function buildPublicApiUrl(

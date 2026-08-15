@@ -14,6 +14,25 @@
       "blob": [],
       "search": []
     },
+    "objectTypeIdentifiersByBackend": {
+      "postgresql": [
+        {
+          "name": "Application",
+          "slug": "application"
+        },
+        {
+          "name": "Document",
+          "slug": "document"
+        },
+        {
+          "name": "Notification",
+          "slug": "notification"
+        }
+      ],
+      "documentdb": [],
+      "blob": [],
+      "search": []
+    },
     "provision": {
       "postgresql": true,
       "documentdb": false,

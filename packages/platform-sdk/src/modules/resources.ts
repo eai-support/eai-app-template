@@ -1,7 +1,7 @@
 /**
  * Resources Module
  *
- * CRUD operations on domain resources via /v4/data/resources/{tenant}/{type}[/{id}].
+ * CRUD operations on domain resources through the canonical resource router.
  * V4 data resource routes tenant-scoped records to the configured backend while
  * preserving a consistent REST contract.
  */
@@ -33,42 +33,26 @@ import type {
   ResourceSearchRequest,
   ResourceSearchResponse,
   ObjectTypeManagementRequest,
+  ResourceParentAttachRequest,
+  ResourceShareRequest,
 } from '../types';
 import { PlatformError } from '../errors';
 import { platformFetch } from '../client';
-import { toObjectTypeSlug } from '../object-types';
+import {
+  createResourceRouting,
+  type ResourceRouting,
+} from '../resource-routing';
 
 export class ResourcesModule {
-  constructor(
-    private baseUrl: string,
-    private tenantId: string,
-  ) {}
+  private readonly routing: ResourceRouting;
 
-  private resourcesBaseUrl(): string {
-    return `${this.baseUrl}/v4/data/resources`;
-  }
-
-  private resourceUrl(objectType: string, id?: string): string {
-    const slug = toObjectTypeSlug(objectType);
-    const base = `${this.resourcesBaseUrl()}/${this.tenantId}/${slug}`;
-    return id ? `${base}/${id}` : base;
-  }
-
-  private fileUrl(
-    objectType: string,
-    id: string,
-    propertyName: string,
-    suffix?: string,
-  ): string {
-    const base = `${this.resourceUrl(objectType, id)}/files/${encodeURIComponent(
-      propertyName,
-    )}`;
-    return suffix ? `${base}/${suffix}` : base;
+  constructor(baseUrl: string, tenantId: string) {
+    this.routing = createResourceRouting({ baseUrl, tenantId });
   }
 
   private objectTypesUrl(options?: ListOptions): string {
     const url = new URL(
-      `${this.resourcesBaseUrl()}/object-types`,
+      this.routing.objectTypes(),
       globalThis.location?.origin || 'http://localhost',
     );
     if (options?.page) url.searchParams.set('page', String(options.page));
@@ -95,11 +79,14 @@ export class ResourcesModule {
     let attempt = 0;
     while (true) {
       try {
-        const response = await platformFetch(this.resourceUrl(objectType, id), {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data, version: nextVersion }),
-        });
+        const response = await platformFetch(
+          this.routing.member(objectType, id),
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data, version: nextVersion }),
+          },
+        );
         return response.json();
       } catch (error) {
         if (
@@ -128,7 +115,7 @@ export class ResourcesModule {
     objectType: string,
     data: T,
   ): Promise<Resource<T>> {
-    const response = await platformFetch(this.resourceUrl(objectType), {
+    const response = await platformFetch(this.routing.collection(objectType), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data }),
@@ -141,7 +128,7 @@ export class ResourcesModule {
     objectType: string,
     id: string,
   ): Promise<Resource<T>> {
-    const response = await platformFetch(this.resourceUrl(objectType, id));
+    const response = await platformFetch(this.routing.member(objectType, id));
     return response.json();
   }
 
@@ -151,7 +138,7 @@ export class ResourcesModule {
     options?: ListOptions,
   ): Promise<PaginatedResponse<Resource<T>>> {
     const url = new URL(
-      this.resourceUrl(objectType),
+      this.routing.collection(objectType),
       globalThis.location?.origin || 'http://localhost',
     );
     if (options?.page) url.searchParams.set('page', String(options.page));
@@ -173,7 +160,7 @@ export class ResourcesModule {
     options?: Pick<ListOptions, 'limit' | 'sort' | 'where' | 'cursor'>,
   ): Promise<Response> {
     const url = new URL(
-      `${this.resourceUrl(objectType)}/stream`,
+      this.routing.collectionOperation(objectType, 'stream'),
       globalThis.location?.origin || 'http://localhost',
     );
     if (options?.limit) url.searchParams.set('limit', String(options.limit));
@@ -210,7 +197,7 @@ export class ResourcesModule {
     request: ObjectTypeManagementRequest,
   ): Promise<T> {
     const response = await platformFetch(
-      `${this.resourcesBaseUrl()}/object-types/${encodeURIComponent(objectTypeId)}`,
+      this.routing.objectType(objectTypeId),
       {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -222,10 +209,9 @@ export class ResourcesModule {
 
   /** Delete an Object Type through the v4 data resource route. */
   async deleteObjectType(objectTypeId: string): Promise<void> {
-    await platformFetch(
-      `${this.resourcesBaseUrl()}/object-types/${encodeURIComponent(objectTypeId)}`,
-      { method: 'DELETE' },
-    );
+    await platformFetch(this.routing.objectType(objectTypeId), {
+      method: 'DELETE',
+    });
   }
 
   /**
@@ -263,7 +249,7 @@ export class ResourcesModule {
 
   /** Delete a resource by ID. */
   async delete(objectType: string, id: string): Promise<void> {
-    await platformFetch(this.resourceUrl(objectType, id), {
+    await platformFetch(this.routing.member(objectType, id), {
       method: 'DELETE',
     });
   }
@@ -273,7 +259,23 @@ export class ResourcesModule {
     items: Array<BatchCreateItem<T>>,
   ): Promise<BatchResponse> {
     const response = await platformFetch(
-      `${this.resourceUrl(objectType)}/batch/create`,
+      this.routing.collectionOperation(objectType, 'batch', 'create'),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      },
+    );
+    return response.json();
+  }
+
+  /** Import a finite batch of resources. */
+  async batchImport<T = Record<string, unknown>>(
+    objectType: string,
+    items: Array<BatchCreateItem<T>>,
+  ): Promise<BatchResponse> {
+    const response = await platformFetch(
+      this.routing.collectionOperation(objectType, 'batch', 'import'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -288,7 +290,7 @@ export class ResourcesModule {
     items: Array<BatchUpdateItem<T>>,
   ): Promise<BatchResponse> {
     const response = await platformFetch(
-      `${this.resourceUrl(objectType)}/batch/update`,
+      this.routing.collectionOperation(objectType, 'batch', 'update'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -300,7 +302,7 @@ export class ResourcesModule {
 
   async batchDelete(objectType: string, ids: string[]): Promise<BatchResponse> {
     const response = await platformFetch(
-      `${this.resourceUrl(objectType)}/batch/delete`,
+      this.routing.collectionOperation(objectType, 'batch', 'delete'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -315,7 +317,7 @@ export class ResourcesModule {
     request: AggregateRequest,
   ): Promise<AggregateResponse> {
     const response = await platformFetch(
-      `${this.resourceUrl(objectType)}/aggregate`,
+      this.routing.collectionOperation(objectType, 'aggregate'),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -331,18 +333,15 @@ export class ResourcesModule {
   ): Promise<ResourceSearchResponse<T>> {
     const body = {
       ...request,
-      objectTypes: request.objectTypes?.map((type) =>
-        toObjectTypeSlug(type),
-      ),
+      objectTypes: request.objectTypes
+        ? this.routing.transportSlugs(request.objectTypes)
+        : undefined,
     };
-    const response = await platformFetch(
-      `${this.resourcesBaseUrl()}/${this.tenantId}/search`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      },
-    );
+    const response = await platformFetch(this.routing.search(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
     return response.json();
   }
 
@@ -355,7 +354,7 @@ export class ResourcesModule {
     options?: ResourceFileUploadOptions,
   ): Promise<ResourceFileResponse> {
     const url = new URL(
-      this.fileUrl(objectType, id, propertyName),
+      this.routing.subresource(objectType, id, 'files', propertyName),
       globalThis.location?.origin || 'http://localhost',
     );
     if (options?.filename) url.searchParams.set('filename', options.filename);
@@ -382,7 +381,9 @@ export class ResourcesModule {
     id: string,
     propertyName: string,
   ): Promise<Response> {
-    return platformFetch(this.fileUrl(objectType, id, propertyName));
+    return platformFetch(
+      this.routing.subresource(objectType, id, 'files', propertyName),
+    );
   }
 
   /** Delete a Blob-backed resource file property. */
@@ -392,7 +393,7 @@ export class ResourcesModule {
     propertyName: string,
   ): Promise<ResourceFileDeleteResponse> {
     const response = await platformFetch(
-      this.fileUrl(objectType, id, propertyName),
+      this.routing.subresource(objectType, id, 'files', propertyName),
       { method: 'DELETE' },
     );
     return response.json();
@@ -406,7 +407,7 @@ export class ResourcesModule {
     options?: ResourceFileSasOptions,
   ): Promise<ResourceFileSasResponse> {
     const url = new URL(
-      this.fileUrl(objectType, id, propertyName, 'sas'),
+      this.routing.subresource(objectType, id, 'files', propertyName, 'sas'),
       globalThis.location?.origin || 'http://localhost',
     );
     if (options?.expiresInSeconds) {
@@ -426,7 +427,13 @@ export class ResourcesModule {
     propertyName: string,
   ): Promise<ResourceFileIndexStatusResponse> {
     const response = await platformFetch(
-      this.fileUrl(objectType, id, propertyName, 'index-status'),
+      this.routing.subresource(
+        objectType,
+        id,
+        'files',
+        propertyName,
+        'index-status',
+      ),
     );
     return response.json();
   }
@@ -440,7 +447,13 @@ export class ResourcesModule {
     options?: ResourceFileUploadSessionOptions,
   ): Promise<ResourceFileUploadSessionResponse> {
     const url = new URL(
-      this.fileUrl(objectType, id, propertyName, 'upload-session'),
+      this.routing.subresource(
+        objectType,
+        id,
+        'files',
+        propertyName,
+        'upload-session',
+      ),
       globalThis.location?.origin || 'http://localhost',
     );
     if (options?.expiresInSeconds) {
@@ -465,7 +478,13 @@ export class ResourcesModule {
     request: ResourceFileCompleteRequest,
   ): Promise<Resource<T>> {
     const response = await platformFetch(
-      this.fileUrl(objectType, id, propertyName, 'complete'),
+      this.routing.subresource(
+        objectType,
+        id,
+        'files',
+        propertyName,
+        'complete',
+      ),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -482,7 +501,7 @@ export class ResourcesModule {
     propertyName: string,
   ): Promise<ResourceFileRetryResponse> {
     const response = await platformFetch(
-      this.fileUrl(objectType, id, propertyName, 'retry'),
+      this.routing.subresource(objectType, id, 'files', propertyName, 'retry'),
       { method: 'POST' },
     );
     return response.json();
@@ -496,7 +515,7 @@ export class ResourcesModule {
     params?: Record<string, unknown>,
   ): Promise<ResourceActionResult<T>> {
     const response = await platformFetch(
-      `${this.resourceUrl(objectType, id)}/actions/${action}`,
+      this.routing.subresource(objectType, id, 'actions', action),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -513,7 +532,7 @@ export class ResourcesModule {
     linkType: string,
   ): Promise<Resource<T>[]> {
     const response = await platformFetch(
-      `${this.resourceUrl(objectType, id)}/links/${linkType}`,
+      this.routing.subresource(objectType, id, 'links', linkType),
     );
     return response.json();
   }
@@ -528,15 +547,91 @@ export class ResourcesModule {
   ): Promise<Response> {
     const body: CreateLinkRequest = {
       target_id: targetId,
-      target_type: targetType,
+      target_type: this.routing.transportSlug(targetType),
     };
     return platformFetch(
-      `${this.resourceUrl(objectType, id)}/links/${linkType}`,
+      this.routing.subresource(objectType, id, 'links', linkType),
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       },
+    );
+  }
+
+  /** Return the effective permissions for one resource. */
+  async getPermissions<T = Record<string, unknown>>(
+    objectType: string,
+    id: string,
+  ): Promise<T> {
+    const response = await platformFetch(
+      this.routing.subresource(objectType, id, 'permissions'),
+    );
+    return response.json();
+  }
+
+  /** Grant a share using the canonical resource route. */
+  async grantShare<T = Record<string, unknown>>(
+    objectType: string,
+    id: string,
+    request: ResourceShareRequest,
+  ): Promise<T> {
+    const response = await platformFetch(
+      this.routing.subresource(objectType, id, 'shares'),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      },
+    );
+    return response.json();
+  }
+
+  /** Revoke a share using encoded role and subject path segments. */
+  async revokeShare(
+    objectType: string,
+    id: string,
+    role: string,
+    subjectId: string,
+  ): Promise<void> {
+    await platformFetch(
+      this.routing.subresource(objectType, id, 'shares', role, subjectId),
+      { method: 'DELETE' },
+    );
+  }
+
+  /** Attach a canonical parent Object Type to a resource. */
+  async attachParent<T = Record<string, unknown>>(
+    objectType: string,
+    id: string,
+    parentObjectType: string,
+    parentId: string,
+  ): Promise<T> {
+    const request: ResourceParentAttachRequest = {
+      parent_object_type: this.routing.transportSlug(parentObjectType),
+      parent_id: parentId,
+    };
+    const response = await platformFetch(
+      this.routing.subresource(objectType, id, 'parents'),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      },
+    );
+    return response.json();
+  }
+
+  /** Detach a parent using its canonical Object Type slug. */
+  async detachParent(
+    objectType: string,
+    id: string,
+    parentObjectType: string,
+    parentId: string,
+  ): Promise<void> {
+    await platformFetch(
+      this.routing.parent(objectType, id, parentObjectType, parentId),
+      { method: 'DELETE' },
     );
   }
 
@@ -548,7 +643,7 @@ export class ResourcesModule {
     targetId: string,
   ): Promise<void> {
     await platformFetch(
-      `${this.resourceUrl(objectType, id)}/links/${linkType}/${targetId}`,
+      this.routing.subresource(objectType, id, 'links', linkType, targetId),
       { method: 'DELETE' },
     );
   }
@@ -557,22 +652,26 @@ export class ResourcesModule {
   async query<T = Record<string, unknown>>(
     request: QueryRequest,
   ): Promise<PaginatedResponse<Resource<T>>> {
-    const response = await platformFetch(
-      `${this.resourcesBaseUrl()}/${this.tenantId}/query`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      },
-    );
+    const body = {
+      ...request,
+      ...(request.object_types
+        ? { object_types: this.routing.transportSlugs(request.object_types) }
+        : {}),
+      ...(request.objectTypes
+        ? { objectTypes: this.routing.transportSlugs(request.objectTypes) }
+        : {}),
+    };
+    const response = await platformFetch(this.routing.query(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
     return response.json();
   }
 
   /** Get the schema for all object types in this tenant. */
   async getSchema(): Promise<Record<string, unknown>> {
-    const response = await platformFetch(
-      `${this.resourcesBaseUrl()}/schema/${this.tenantId}`,
-    );
+    const response = await platformFetch(this.routing.schema());
     return response.json();
   }
 
@@ -582,7 +681,7 @@ export class ResourcesModule {
     id: string,
   ): Promise<Record<string, unknown>[]> {
     const response = await platformFetch(
-      `${this.resourceUrl(objectType, id)}/history`,
+      this.routing.subresource(objectType, id, 'history'),
     );
     return response.json();
   }

@@ -46,6 +46,7 @@ jest.mock('@/lib/platform/session-resolve', () => {
 });
 
 import { GET } from './route';
+import { resourceRoutesBaseUrl } from '@enterpriseaigroup/platform-sdk';
 
 function createRequest(path: string, init?: { headers?: HeadersInit }) {
   const url = `https://template.test/api/eai/${path}`;
@@ -103,18 +104,26 @@ describe('EAI proxy v4 route-family routing', () => {
     jest.restoreAllMocks();
   });
 
-  it('HP001 routes enabled resource-family requests to the v4 upstream path', async () => {
-    process.env.PUBLICAPI_V4_DATA_RESOURCES_ENABLED = 'true';
-
+  it('HP001 routes v4 resource-family requests to the v4 upstream path', async () => {
     await GET(
+      createRequest('v4/data/resources/tenant-a/Application?limit=5'),
+      createContext('v4/data/resources/tenant-a/Application'),
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${resourceRoutesBaseUrl('https://regional-api.example.com/public')}/tenant-a/Application?limit=5`,
+      expect.any(Object),
+    );
+  });
+
+  it('BP001 rejects retired PublicAPI route families before proxying upstream', async () => {
+    const response = await GET(
       createRequest('v3/resources/tenant-a/Application?limit=5'),
       createContext('v3/resources/tenant-a/Application'),
     );
 
-    expect(global.fetch).toHaveBeenCalledWith(
-      'https://regional-api.example.com/public/v4/data/resources/tenant-a/Application?limit=5',
-      expect.any(Object),
-    );
+    expect(response.status).toBe(410);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('HP002 rewrites root platform user lookups to tenant-scoped v4 paths when app tenant is configured', async () => {
