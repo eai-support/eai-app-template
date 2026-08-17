@@ -58,6 +58,9 @@ jobs:
       - name: AI workspace handoff guidance test
         run: npm run test:ai-workspace-guidance
 
+      - name: Cross-platform lifecycle test
+        run: npm run test:cross-platform-lifecycle
+
       - name: Issue attachment moderation test
         run: node --test tests/issue-attachment-moderation.test.cjs
 
