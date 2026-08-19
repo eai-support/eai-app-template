@@ -1,4 +1,5 @@
 import { GET } from './route';
+import { objectTypes } from '@/eai.config/object-types';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 
 jest.mock('@/lib/generated-workflow/runtime', () => ({
@@ -8,6 +9,9 @@ jest.mock('@/lib/generated-workflow/runtime', () => ({
 const READINESS_PROBE_TOKEN_ENV = ['EAI', 'READINESS', 'PROBE', 'TOKEN'].join(
   '_',
 );
+const TENANT_KEY = Object.keys(objectTypes)[0] ?? 'template';
+const TENANT_ENV_KEY = TENANT_KEY.toUpperCase().replace(/-/g, '_');
+const TEST_TENANT_ID = 'tenant-template';
 
 describe('readiness route', () => {
   const mutableGlobal = global as {
@@ -29,15 +33,15 @@ describe('readiness route', () => {
       NEXT_PUBLIC_APP_NAME: 'contract-test',
       APP_BASE_PATH: '/contract-test',
       NEXT_PUBLIC_APP_BASE_PATH: '/contract-test',
-      NEXT_PUBLIC_EAI_TENANT_ID: 'tenant-template',
+      NEXT_PUBLIC_EAI_TENANT_ID: TEST_TENANT_ID,
       BASE_URL_PUBLIC_API: 'https://publicapi.example.test',
       ROUTING_BOOTSTRAP_PUBLIC_API_URL: 'https://publicapi.example.test',
       EAI_PRODUCT_SLUG: 'contract-test',
       EAI_ENVIRONMENT: 'dev',
       EAI_CONFIG_HASH: 'cfg-123',
-      TENANT_KEYS: 'template',
-      TENANT_TEMPLATE_ID: 'tenant-template',
-      WORKFLOW_TEMPLATE_ID: 'workflow-template',
+      TENANT_KEYS: TENANT_KEY,
+      [`TENANT_${TENANT_ENV_KEY}_ID`]: TEST_TENANT_ID,
+      [`WORKFLOW_${TENANT_ENV_KEY}_ID`]: 'workflow-template',
       ENTRA_TENANT_NAME: 'example',
       ENTRA_TENANT_ID: 'entra-tenant',
       ENTRA_CLIENT_ID: 'entra-client',
@@ -66,7 +70,7 @@ describe('readiness route', () => {
     return {
       headers: new Headers({
         'x-eai-readiness-probe': 'tenantinfra',
-        'x-eai-tenant-id': 'tenant-template',
+        'x-eai-tenant-id': TEST_TENANT_ID,
         'x-eai-app-key': 'contract-test',
         'x-eai-environment': 'dev',
         'x-eai-config-hash': 'cfg-123',
@@ -155,7 +159,7 @@ describe('readiness route', () => {
   it('accepts TenantInfra runtime env names for scope binding', async () => {
     delete process.env['NEXT_PUBLIC_EAI_TENANT_ID'];
     delete process.env['EAI_PRODUCT_SLUG'];
-    process.env['EAI_TENANT_ID'] = 'tenant-template';
+    process.env['EAI_TENANT_ID'] = TEST_TENANT_ID;
     process.env['EAI_APP_KEY'] = 'contract-test';
 
     const response = await GET(readinessRequest());
