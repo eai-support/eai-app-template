@@ -1,4 +1,9 @@
+import { objectTypes } from '../../eai.config/object-types';
 import { evaluateRuntimeReadiness } from './readiness';
+
+const TENANT_KEY = Object.keys(objectTypes)[0] ?? 'template';
+const TENANT_ENV_KEY = TENANT_KEY.toUpperCase().replace(/-/g, '_');
+const TEST_TENANT_ID = 'tenant-template';
 
 function readyEnv(): NodeJS.ProcessEnv {
   return {
@@ -6,15 +11,15 @@ function readyEnv(): NodeJS.ProcessEnv {
     NEXT_PUBLIC_APP_NAME: 'contract-test',
     APP_BASE_PATH: '/contract-test',
     NEXT_PUBLIC_APP_BASE_PATH: '/contract-test',
-    NEXT_PUBLIC_EAI_TENANT_ID: 'tenant-template',
+    NEXT_PUBLIC_EAI_TENANT_ID: TEST_TENANT_ID,
     BASE_URL_PUBLIC_API: 'https://publicapi.example.test',
     ROUTING_BOOTSTRAP_PUBLIC_API_URL: 'https://publicapi.example.test',
     EAI_PRODUCT_SLUG: 'contract-test',
     EAI_ENVIRONMENT: 'dev',
     EAI_CONFIG_HASH: 'cfg-123',
-    TENANT_KEYS: 'template',
-    TENANT_TEMPLATE_ID: 'tenant-template',
-    WORKFLOW_TEMPLATE_ID: 'workflow-template',
+    TENANT_KEYS: TENANT_KEY,
+    [`TENANT_${TENANT_ENV_KEY}_ID`]: TEST_TENANT_ID,
+    [`WORKFLOW_${TENANT_ENV_KEY}_ID`]: 'workflow-template',
     ENTRA_TENANT_NAME: 'example',
     ENTRA_TENANT_ID: 'entra-tenant',
     ENTRA_CLIENT_ID: 'entra-client',
@@ -43,7 +48,7 @@ describe('runtime readiness contract', () => {
     const env = readyEnv();
     delete env.NEXT_PUBLIC_EAI_TENANT_ID;
     delete env.EAI_PRODUCT_SLUG;
-    env.EAI_TENANT_ID = 'tenant-template';
+    env.EAI_TENANT_ID = TEST_TENANT_ID;
     env.EAI_APP_KEY = 'contract-test';
 
     const result = evaluateRuntimeReadiness(env);
