@@ -1,4 +1,8 @@
 import { evaluateRuntimeReadiness } from './readiness';
+import { objectTypes } from '@/eai.config/object-types';
+
+const TEST_TENANT_KEY = Object.keys(objectTypes)[0] ?? 'template';
+const TEST_TENANT_ENV_KEY = TEST_TENANT_KEY.toUpperCase().replace(/-/g, '_');
 
 function readyEnv(): NodeJS.ProcessEnv {
   return {
@@ -12,9 +16,9 @@ function readyEnv(): NodeJS.ProcessEnv {
     EAI_PRODUCT_SLUG: 'contract-test',
     EAI_ENVIRONMENT: 'dev',
     EAI_CONFIG_HASH: 'cfg-123',
-    TENANT_KEYS: 'template',
-    TENANT_TEMPLATE_ID: 'tenant-template',
-    WORKFLOW_TEMPLATE_ID: 'workflow-template',
+    TENANT_KEYS: TEST_TENANT_KEY,
+    [`TENANT_${TEST_TENANT_ENV_KEY}_ID`]: 'tenant-template',
+    [`WORKFLOW_${TEST_TENANT_ENV_KEY}_ID`]: 'workflow-template',
     ENTRA_TENANT_NAME: 'example',
     ENTRA_TENANT_ID: 'entra-tenant',
     ENTRA_CLIENT_ID: 'entra-client',

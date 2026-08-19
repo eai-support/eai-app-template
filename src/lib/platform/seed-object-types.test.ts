@@ -2,12 +2,14 @@ import {
   objectTypePayload,
   seedObjectTypes,
 } from '@/lib/platform/seed-object-types';
+import { objectTypes } from '@/eai.config/object-types';
 import { createResourceRouting } from '@enterpriseaigroup/platform-sdk';
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
 const originalEnv = process.env;
+const TEST_TENANT_KEY = Object.keys(objectTypes)[0] ?? 'template';
 
 describe('seedObjectTypes', () => {
   beforeEach(() => {
@@ -35,7 +37,7 @@ describe('seedObjectTypes', () => {
   });
 
   it('HP001 seeds object types through basePath-aware PublicAPI v4 URLs', async () => {
-    const results = await seedObjectTypes('template', 'tenant-a');
+    const results = await seedObjectTypes(TEST_TENANT_KEY, 'tenant-a');
     const objectTypesUrl = createResourceRouting({
       baseUrl: '/my-template/api/eai',
       tenantId: 'tenant-a',
