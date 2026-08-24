@@ -1,0 +1,7 @@
+{
+  "schemaId": "https://contracts.enterpriseai.group/app-marketplace/v1/application-package.schema.json",
+  "schemaVersion": "eai.application-package.v1",
+  "validatorPackage": "@enterpriseaigroup/application-package",
+  "validatorVersion": "0.1.0",
+  "canonicalizer": "eai.canonical-json/v1"
+}

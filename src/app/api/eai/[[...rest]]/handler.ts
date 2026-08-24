@@ -8,6 +8,7 @@ import {
   resolvePublicApiRoutePath,
   UnsupportedPublicApiRouteError,
 } from '@/lib/platform/publicapi-route-family';
+import { applyInstalledAppHeaders } from '@/lib/platform/app-access';
 
 export interface RouteContext {
   params: Promise<{ rest?: string[] }>;
@@ -158,6 +159,10 @@ async function proxyRequest(
     headers.delete('host');
     headers.delete('tenant');
     headers.delete('x-tenant-id');
+    applyInstalledAppHeaders(headers, {
+      appKey: process.env.EAI_PRODUCT_SLUG,
+      installationId: process.env.EAI_INSTALLATION_ID,
+    });
     applyTraceRequestHeaders(headers, traceContext);
 
     // Tenant app data-plane access is always user-delegated. Background work
