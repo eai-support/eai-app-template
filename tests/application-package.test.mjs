@@ -16,6 +16,8 @@ test('generates the deterministic default private isolated package', () => {
   assert.equal(first.applicationPackage.distribution.visibility, 'private');
   assert.equal(first.applicationPackage.runtime.type, 'isolated-hosted');
   assert.match(first.digest, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(first.canonical.includes('\n'), false);
+  assert.equal(first.digest, 'sha256:aa5637175f08a85def0b8a7963c6ecbe92ceec0bf211befa5edb582d4049bdff');
 });
 
 test('permits EAI first-party embedded packages only', () => {
