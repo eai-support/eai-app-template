@@ -96,8 +96,9 @@ test('validation workflow pins the producer and preserves the published release 
   );
   assert.match(
     workflow,
-    /npm install --no-save --package-lock=false "\$\{\{ steps\.producer-package\.outputs\.tarball \}\}"/,
+    /npm install --no-save "\$\{\{ steps\.producer-package\.outputs\.tarball \}\}"/,
   );
+  assert.doesNotMatch(workflow, /npm install[^\n]*--package-lock=false/);
   assert.match(
     workflow,
     /if: steps\.application-package-source\.outputs\.bootstrap != 'true'/,

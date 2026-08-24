@@ -91,8 +91,9 @@ jobs:
 
       - name: Install dependencies with PR-only producer package
         if: steps.application-package-source.outputs.bootstrap == 'true'
-        # This ephemeral install must never alter the source manifest or release lock.
-        run: npm install --no-save --package-lock=false "${{ steps.producer-package.outputs.tarball }}"
+        # SECURITY: Keep the lock active so every dependency except the exact
+        # producer tarball still resolves from its reviewed immutable URL.
+        run: npm install --no-save "${{ steps.producer-package.outputs.tarball }}"
 
       - name: Verify installed application-package contract
         run: |
