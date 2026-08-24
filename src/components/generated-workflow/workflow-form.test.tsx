@@ -20,8 +20,10 @@ const binding: GeneratedAppRuntimeBinding = {
 
 describe('GeneratedWorkflowForm', () => {
   const originalFetch = global.fetch;
+  const originalAppBasePath = process.env.NEXT_PUBLIC_APP_BASE_PATH;
 
   beforeEach(() => {
+    delete process.env.NEXT_PUBLIC_APP_BASE_PATH;
     window.history.replaceState(null, '', '/');
     global.fetch = jest
       .fn()
@@ -39,6 +41,11 @@ describe('GeneratedWorkflowForm', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    if (originalAppBasePath === undefined) {
+      delete process.env.NEXT_PUBLIC_APP_BASE_PATH;
+    } else {
+      process.env.NEXT_PUBLIC_APP_BASE_PATH = originalAppBasePath;
+    }
   });
 
   it('renders exported fields, validates required answers, and completes anonymously', async () => {
