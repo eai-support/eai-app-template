@@ -109,6 +109,12 @@ test('validation workflow pins the producer and preserves the published release 
   );
   assert.match(workflow, /verify-installed/);
 
+  const jestConfig = await readFile(path.join(root, 'jest.config.ts'), 'utf8');
+  assert.match(
+    jestConfig,
+    /testPathIgnorePatterns: \['<rootDir>\/\.next\/', '<rootDir>\/\.ci\/'\]/,
+  );
+
   const releaseWorkflow = await readFile(
     path.join(root, '.github/workflows/eai-app.yml'),
     'utf8',
