@@ -96,9 +96,13 @@ test('validation workflow pins the producer and preserves the published release 
   );
   assert.match(
     workflow,
-    /npm install --no-save "\$\{\{ steps\.producer-package\.outputs\.tarball \}\}"/,
+    /npm install --no-save\s+"\$\{\{ steps\.producer-package\.outputs\.tarball \}\}"\s+lightningcss-linux-x64-gnu@1\.30\.2\s+@tailwindcss\/oxide-linux-x64-gnu@4\.1\.18/,
   );
   assert.doesNotMatch(workflow, /npm install[^\n]*--package-lock=false/);
+  assert.match(
+    workflow,
+    /name: Install Linux native CSS bindings\s+if: steps\.application-package-source\.outputs\.bootstrap != 'true'/,
+  );
   assert.match(
     workflow,
     /if: steps\.application-package-source\.outputs\.bootstrap != 'true'/,

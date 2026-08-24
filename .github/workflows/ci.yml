@@ -92,8 +92,14 @@ jobs:
       - name: Install dependencies with PR-only producer package
         if: steps.application-package-source.outputs.bootstrap == 'true'
         # SECURITY: Keep the lock active so every dependency except the exact
-        # producer tarball still resolves from its reviewed immutable URL.
-        run: npm install --no-save "${{ steps.producer-package.outputs.tarball }}"
+        # producer tarball still resolves from its reviewed immutable URL. Add
+        # Linux bindings in the same transaction so npm never re-resolves the
+        # intentionally unpublished lock entry in a later install.
+        run: >-
+          npm install --no-save
+          "${{ steps.producer-package.outputs.tarball }}"
+          lightningcss-linux-x64-gnu@1.30.2
+          @tailwindcss/oxide-linux-x64-gnu@4.1.18
 
       - name: Verify installed application-package contract
         run: |
@@ -101,6 +107,7 @@ jobs:
           git diff --exit-code -- package.json package-lock.json eai.application.schema-lock.json
 
       - name: Install Linux native CSS bindings
+        if: steps.application-package-source.outputs.bootstrap != 'true'
         run: npm install --no-save lightningcss-linux-x64-gnu@1.30.2 @tailwindcss/oxide-linux-x64-gnu@4.1.18
 
       - name: Build object types
