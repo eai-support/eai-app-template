@@ -5,6 +5,14 @@ build:application-package` after changing it and commit the deterministic
 generated file. CI runs `npm run check:application-package` and the package
 fixture tests.
 
+The template always locks the published `@enterpriseaigroup/application-package`
+version for main and release workflows. While a new package version is awaiting
+publication, pull-request validation alone may build that dependency from the
+approved exact producer commit. CI verifies the producer commit and the schema
+and runtime SHA-256 values before installing the ephemeral tarball. Missing
+GitHub App access, a different commit, changed contract bytes or use outside a
+pull request fails closed; it never becomes a release fallback.
+
 Customer and partner distributable apps use isolated EAI-hosted or buyer-hosted
 runtime. Trusted embedded mode is EAI first-party only. App code sends all
 platform calls through its server BFF to regional PublicAPI. It never calls

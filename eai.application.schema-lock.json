@@ -3,5 +3,7 @@
   "schemaVersion": "eai.application-package.v1",
   "validatorPackage": "@enterpriseaigroup/application-package",
   "validatorVersion": "0.1.0",
+  "schemaSha256": "sha256:1d20803fac09adbf7e5276137082b5c737ad621cdeb383581ab61ef9ae0fbc47",
+  "runtimeSha256": "sha256:3f0999722404d9dff9dc0545a36ec5071f8a2339de0ad6456d4368a191421972",
   "canonicalizer": "eai.canonical-json/v1"
 }

@@ -14,6 +14,8 @@
             ".eai-manifest.json",
             "eai.runtime.json",
             "scripts/generate-application-package.mjs",
+            "scripts/ci-application-package-bootstrap.mjs",
+            ".github/workflows/ci.yml",
             "src/lib/platform/app-access.ts",
             "src/app/api/eai/[[...rest]]/handler.ts",
             "packages/platform-sdk/src/workload.ts",
@@ -21,6 +23,7 @@
           ],
           "required_repo_tests": [
             "tests/application-package.test.mjs",
+            "tests/ci-application-package-bootstrap.test.mjs",
             "src/lib/platform/app-access.test.ts",
             "packages/platform-sdk/__tests__/workload.test.ts",
             "src/eai.config/deployment-contract.test.ts"

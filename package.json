@@ -21,6 +21,7 @@
     "build:application-package": "node scripts/generate-application-package.mjs",
     "check:application-package": "node scripts/generate-application-package.mjs --check",
     "test:application-package": "node --test tests/application-package.test.mjs",
+    "test:application-package-bootstrap": "node --test tests/ci-application-package-bootstrap.test.mjs",
     "start": "node server.js",
     "start:prod": "cross-env NODE_ENV=production dotenv -e .env.production -- next start",
     "start:test": "cross-env NODE_ENV=test dotenv -e .env.test -- next start",
