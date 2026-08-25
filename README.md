@@ -21,8 +21,19 @@ git clone https://github.com/eai-support/eai-app-template.git my-app
 cd my-app
 npm install
 cp .env.example .env.local
-npm run dev
+./run.sh dev 3001
 ```
+
+On Windows, use:
+
+```bat
+run.bat dev 3001
+```
+
+The runner installs missing dependencies, builds the app, stops any process that
+already listens on the chosen port, and restarts the development server on that
+same port. AI agents should use this runner instead of calling `npm run dev`
+directly.
 
 Then connect the project to a real tenant:
 
@@ -126,6 +137,22 @@ as if the public `eai` entrypoint is active, even when the user omits `/eai`,
 `$eai`, or `#eai`. Do not inject a slash command into the chat box. Route the
 request through the same Gofer decision path and keep replies short, direct,
 and business-focused.
+
+For any local UI preview, use the repo runner:
+
+```bash
+./run.sh dev 3001
+```
+
+On Windows, use:
+
+```bat
+run.bat dev 3001
+```
+
+Do not start the UI with direct `npm run dev` commands unless the runner is
+missing. If the runner is missing, refresh the EAI app template before preview
+work continues.
 
 When an AI agent is working in this template, it should use the EAI CLI as the source of truth instead of guessing command shapes:
 

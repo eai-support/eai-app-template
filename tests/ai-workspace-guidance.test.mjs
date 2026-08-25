@@ -15,6 +15,9 @@ test('documents the provider-neutral AI workspace handoff', () => {
     readme,
     /treat each agent chat in this repository\s+as if the public `eai` entrypoint is active/i
   );
+  assert.match(readme, /\.\/run\.sh dev 3001/);
+  assert.match(readme, /run\.bat dev 3001/);
+  assert.match(readme, /instead of calling `npm run dev`\s+directly/i);
   assert.doesNotMatch(readme, /\/0_business_scenario/);
 });
 
