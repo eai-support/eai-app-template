@@ -26,7 +26,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    // baseURL: 'http://127.0.0.1:3000',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3107',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -71,9 +71,25 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  // webServer: {
-  //   command: 'npm run start',
-  //   url: 'http://127.0.0.1:3000',
-  //   reuseExistingServer: !process.env.CI,
-  // },
+  webServer: {
+    command: 'npm run dev:no-turbo -- --hostname 127.0.0.1 --port 3107',
+    url: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3107',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+    env: {
+      APP_BASE_PATH: '',
+      NEXT_PUBLIC_APP_BASE_PATH: '',
+      NEXT_PUBLIC_APP_NAME: 'eai-app-template',
+      NEXT_PUBLIC_EAI_TENANT_ID: 'template-tenant',
+      EAI_PRODUCT_SLUG: 'eai-app-template',
+      EAI_TENANT_ID: 'template-tenant',
+      TENANT_KEYS: 'template',
+      TENANT_TEMPLATE_ID: 'template-tenant',
+      WORKFLOW_TEMPLATE_ID: 'template-workflow',
+      ROUTING_BOOTSTRAP_PUBLIC_API_URL: 'http://127.0.0.1:3107',
+      BASE_URL_PUBLIC_API: 'http://127.0.0.1:3107',
+      AUTH_SECRET: 'template-local-playwright-secret',
+      AUTH_TRUST_HOST: 'true',
+    },
+  },
 });

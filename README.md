@@ -121,6 +121,12 @@ project and use the provider account. The first conversation starts with the
 business outcome, uses the public `eai` skill, and pauses for approval of the
 business specification before implementation continues.
 
+After Gofer is installed or refreshed, treat each agent chat in this repository
+as if the public `eai` entrypoint is active, even when the user omits `/eai`,
+`$eai`, or `#eai`. Do not inject a slash command into the chat box. Route the
+request through the same Gofer decision path and keep replies short, direct,
+and business-focused.
+
 When an AI agent is working in this template, it should use the EAI CLI as the source of truth instead of guessing command shapes:
 
 ```bash
@@ -135,6 +141,21 @@ eai errors explain <code-or-reason> --format json
 ```
 
 Use `eai update --check` or `eai doctor --check-updates` when a command is missing, help looks stale, or the local CLI may be behind the published release. Direct PublicAPI calls through `eai publicapi` should use only `/v4/...` paths.
+
+Use the app-owned test scripts before inventing commands:
+
+| Script | Purpose |
+| ------ | ------- |
+| `npm run verify` | Local template health: object types, route exports, config, typecheck, and unit tests. |
+| `npm run test:smoke` | Fast local smoke checks for template and AI workspace guidance. |
+| `npm run test:business-scenarios` | Gofer-created browser journeys for business outcomes. |
+| `npm run test:e2e` | Browser end-to-end tests for app journeys. |
+| `npm run test:playwright` | Full Playwright runner for explicit browser test work. |
+
+Gofer should prefer `test:business-scenarios` for user journeys, then
+`test:e2e`, then `test:playwright`. A screenshot is only visual evidence. It
+does not replace a click-through browser test for app behavior. These browser
+aliases must contain real Playwright tests and must not use empty-suite bypasses.
 
 If platform user lookup or membership prerequisite calls return
 `MISSING_TENANT`, `app_token_tenant_context_required`, or "Tenant context
