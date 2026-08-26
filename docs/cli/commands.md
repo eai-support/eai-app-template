@@ -639,7 +639,7 @@ eai doctor [options]
 
 ### What it checks
 
-- Node.js version (18+)
+- Node.js version (24 LTS or newer)
 - npm version (9+)
 - `.env.local` completeness
 - Authentication status
