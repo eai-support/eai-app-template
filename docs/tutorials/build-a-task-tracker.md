@@ -18,7 +18,7 @@ A task tracker with:
 
 ## Prerequisites
 
-- Node.js 18+ installed
+- Node.js 24 LTS or newer installed
 - `eai` CLI installed (`npm install -g @enterpriseai/cli`)
 - Authenticated with `eai login`
 
