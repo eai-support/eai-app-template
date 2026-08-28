@@ -108,7 +108,7 @@
     "dotenv": "^16.5.0",
     "dotenv-cli": "^8.0.0",
     "eslint": "^9",
-    "eslint-config-next": "15.5.9",
+    "eslint-config-next": "15.5.24",
     "eslint-config-prettier": "^10.1.1",
     "html-encoding-sniffer": "^4.0.0",
     "husky": "^9.1.7",
