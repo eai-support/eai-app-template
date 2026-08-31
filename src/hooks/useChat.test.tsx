@@ -74,4 +74,21 @@ describe('useChat', () => {
       },
     );
   });
+
+  it('sends validated app binding keys through the existing platform SDK', async () => {
+    process.env.NEXT_PUBLIC_EAI_TENANT_ID = 'env-tenant';
+
+    const { result } = renderHook(() =>
+      useChat('workflow-a', 'chat', undefined, 'assistant-prompt'),
+    );
+    await result.current.send({
+      message: 'hello',
+      conversationId: 'conversation-a',
+      params: {},
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.appKey).toBe('eai-app-template');
+    expect(body.logicalAlias).toBe('assistant-prompt');
+  });
 });
