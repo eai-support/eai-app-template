@@ -56,6 +56,18 @@ Review the pre-seed `types diff`, then seed the intended definitions. Re-run
 `types diff` after seeding when you need convergence evidence; any remaining
 drift must be understood before continuing.
 
+## Home Route Ownership Guardrail
+
+`src/app/home-client.tsx` ships with a default `<DemoPage />` so a fresh scaffold has a visible landing page immediately.
+
+For real apps, replace that default with your app shell or board/workspace entry component early, then treat `src/app/home-client.tsx` as app-owned during template update merges.
+
+When reviewing template drift:
+
+- Run `eai template check` first.
+- If `src/app/home-client.tsx` appears in a review set, keep your app-specific version unless you intentionally want to restore the demo landing page.
+- Validate the result in CI and after deploy by loading `/` and confirming the expected app UI renders.
+
 ## Runtime Contract
 
 This template declares its deploy-time requirements in `eai.runtime.json`. The
