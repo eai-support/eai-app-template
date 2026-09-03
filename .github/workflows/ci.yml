@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '24'
   APPLICATION_PACKAGE_PRODUCER_SHA: caaf4fb0de88f63d2294a37cfd57772b8237d559
 
 jobs:

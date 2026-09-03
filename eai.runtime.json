@@ -4,7 +4,7 @@
   "name": "eai-app-template",
   "runtime": {
     "framework": "nextjs",
-    "minimumNodeVersion": "20"
+    "minimumNodeVersion": "24"
   },
   "schemaProvenance": {
     "templateVersion": "0.1.0",

@@ -102,6 +102,21 @@ find a command that current documentation references.
 
 Start the local development server with platform connectivity.
 
+For app-template repositories, prefer the repo runner for local preview:
+
+```bash
+./run.sh dev 3001
+```
+
+On Windows:
+
+```bat
+run.bat dev 3001
+```
+
+The runner clears the selected port before restart. Use direct `eai dev` only
+when you intentionally bypass the repo runner.
+
 ```bash
 eai dev [options]
 ```
@@ -624,7 +639,7 @@ eai doctor [options]
 
 ### What it checks
 
-- Node.js version (18+)
+- Node.js version (24 LTS or newer)
 - npm version (9+)
 - `.env.local` completeness
 - Authentication status

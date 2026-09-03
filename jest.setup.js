@@ -2,7 +2,7 @@ import "@testing-library/jest-dom";
 // import "whatwg-fetch";
 import { ReadableStream } from 'node:stream/web';
 
-// Node 20 in CI does not expose Web Streams on the Jest global by default.
+// Some test runners do not expose Web Streams on the Jest global by default.
 if (typeof global.ReadableStream === 'undefined') {
     global.ReadableStream = ReadableStream;
 }

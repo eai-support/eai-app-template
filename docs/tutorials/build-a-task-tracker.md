@@ -18,7 +18,7 @@ A task tracker with:
 
 ## Prerequisites
 
-- Node.js 18+ installed
+- Node.js 24 LTS or newer installed
 - `eai` CLI installed (`npm install -g @enterpriseai/cli`)
 - Authenticated with `eai login`
 
@@ -335,10 +335,16 @@ export default function NewTaskPage() {
 Start the dev server and test:
 
 ```bash
-eai dev
+./run.sh dev 3001
 ```
 
-Open http://localhost:3000/tasks and:
+On Windows, use:
+
+```bat
+run.bat dev 3001
+```
+
+Open http://localhost:3001/tasks and:
 
 1. Click "New Task" to create a task
 2. See the task appear in the list

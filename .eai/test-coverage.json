@@ -123,6 +123,20 @@
               "path": "tests/cross-service/contracts/adminportal-adminapi/generated-workflow-public-routes.spec.ts"
             }
           ]
+        },
+        {
+          "id": "eai-app-template-nextjs-runtime-dependencies",
+          "description": "Root Next.js dependency and lockfile changes are validated by the repository's stable CI gate.",
+          "ci_only": true,
+          "owned_paths": [
+            ".eai/test-coverage.json",
+            "package.json",
+            "package-lock.json"
+          ],
+          "required_repo_tests": [],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": [],
+          "required_deployed_contracts": []
         }
       ]
     }
