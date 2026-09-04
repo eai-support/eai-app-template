@@ -18,9 +18,13 @@
     "build:local": "dotenv -e .env.local -- next build",
     "check:route-exports": "node scripts/check-route-exports.mjs",
     "eai:config:validate": "node scripts/validate-eai-config.cjs",
-    "build": "npm run check:route-exports && npm run eai:config:validate && npm run check:object-types && next build",
+    "build": "npm run check:route-exports && npm run eai:config:validate && npm run check:object-types && npm run check:application-package && next build",
     "build:object-types": "node scripts/generate-object-types-json.mjs",
     "check:object-types": "node scripts/generate-object-types-json.mjs --check",
+    "build:application-package": "node scripts/generate-application-package.mjs",
+    "check:application-package": "node scripts/generate-application-package.mjs --check",
+    "test:application-package": "node --test tests/application-package.test.mjs",
+    "test:application-package-bootstrap": "node --test tests/ci-application-package-bootstrap.test.mjs",
     "start": "node server.js",
     "start:prod": "cross-env NODE_ENV=production dotenv -e .env.production -- next start",
     "start:test": "cross-env NODE_ENV=test dotenv -e .env.test -- next start",
@@ -63,6 +67,7 @@
     "diagnose:resource-storage": "node scripts/diagnose-resource-storage.mjs"
   },
   "dependencies": {
+    "@enterpriseaigroup/application-package": "0.1.0",
     "@enterpriseaigroup/core": "1.0.129",
     "@enterpriseaigroup/demo": "*",
     "@eslint/eslintrc": "^3",
