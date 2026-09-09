@@ -5,6 +5,20 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "tenant-bound-document-classify-url",
+          "description": "The document SDK sends the deployed V4 documentUrl and tenantId contract, supports paired workflow classifier selection, and ignores caller tenant overrides.",
+          "owned_paths": [
+            "packages/platform-sdk/src/modules/documents.ts",
+            "packages/platform-sdk/src/index.ts"
+          ],
+          "required_repo_tests": [
+            "packages/platform-sdk/__tests__/documents.test.ts",
+            "src/lib/platform/publicapi-route-family.test.ts"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": []
+        },
+        {
           "id": "canonical-object-type-routing",
           "description": "The template validates exact Object Type name/slug pairs and routes every SDK resource identifier through the canonical v1 slug owner.",
           "owned_paths": [

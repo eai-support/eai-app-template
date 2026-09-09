@@ -117,4 +117,53 @@ describe('DocumentsModule', () => {
       undefined,
     );
   });
+
+  it('HP005 sends the deployed classify-by-url document and tenant fields', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+    const documents = new DocumentsModule('/api/eai', 'tenant-a');
+    await documents.classifyByUrl('https://example.com/document.pdf');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/eai/v4/data/documents/classify-by-url',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentUrl: 'https://example.com/document.pdf',
+          tenantId: 'tenant-a',
+        }),
+      },
+    );
+  });
+
+  it('HP006 selects a tenant workflow classifier without accepting tenant overrides', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+    const documents = new DocumentsModule('/api/eai', 'tenant-a');
+    const options = {
+      verticalKey: ' business-docs ',
+      workflowKey: ' classify ',
+      tenantId: 'tenant-b',
+    };
+    await documents.classifyByUrl('https://example.com/document.pdf', options);
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body).toEqual({
+      documentUrl: 'https://example.com/document.pdf',
+      tenantId: 'tenant-a',
+      verticalKey: 'business-docs',
+      workflowKey: 'classify',
+    });
+  });
+
+  it.each([
+    { verticalKey: 'business-docs' },
+    { workflowKey: 'classify' },
+    { verticalKey: ' ', workflowKey: 'classify' },
+    { verticalKey: 'business-docs', workflowKey: ' ' },
+  ])('HP007 rejects an incomplete classifier selection before sending: %j', async (options) => {
+    const documents = new DocumentsModule('/api/eai', 'tenant-a');
+    await expect(documents.classifyByUrl('https://example.com/document.pdf', options))
+      .rejects.toThrow('both verticalKey and workflowKey');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 });

@@ -72,6 +72,7 @@ export type { ResourcesModule } from './modules/resources';
 export type { ChatModule } from './modules/chat';
 export type {
   BatchJobStatusResponse,
+  ClassifyByUrlOptions,
   DocumentsModule,
   RagIndexRequest,
   RagIndexResponse,

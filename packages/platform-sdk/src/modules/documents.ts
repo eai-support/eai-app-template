@@ -7,6 +7,11 @@
 import type { ChecklistRequest } from '../types';
 import { platformFetch } from '../client';
 
+export interface ClassifyByUrlOptions {
+  verticalKey?: string;
+  workflowKey?: string;
+}
+
 export interface RagIndexRequest {
   documentId: string;
   storagePath: string;
@@ -119,11 +124,23 @@ export class DocumentsModule {
   }
 
   /** Classify a single document by URL. */
-  async classifyByUrl(url: string): Promise<Response> {
+  async classifyByUrl(
+    url: string,
+    options: ClassifyByUrlOptions = {},
+  ): Promise<Response> {
+    const verticalKey = options.verticalKey?.trim();
+    const workflowKey = options.workflowKey?.trim();
+    if (Boolean(verticalKey) !== Boolean(workflowKey)) {
+      throw new Error('Classifier selection requires both verticalKey and workflowKey.');
+    }
     return platformFetch(this.docsUrl('/classify-by-url'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({
+        documentUrl: url,
+        tenantId: this.tenantId,
+        ...(verticalKey && workflowKey ? { verticalKey, workflowKey } : {}),
+      }),
     });
   }
 
