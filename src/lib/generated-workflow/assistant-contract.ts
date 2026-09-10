@@ -18,6 +18,7 @@ export const workflowAssistantQuestionSchema = z
   })
   .strict();
 
+/** One bounded user or assistant turn retained by the public workflow UI. */
 export type WorkflowAssistantMessage = {
   role: 'user' | 'assistant';
   content: string;

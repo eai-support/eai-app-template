@@ -18,6 +18,7 @@ export {
   type ValidatedWorkflowField,
 } from '@/lib/generated-workflow/field-format';
 
+/** Stable validation codes shared by dry-run and submission responses. */
 export type WorkflowFieldErrorCode =
   | 'invalid_configuration'
   | 'invalid_date'
@@ -29,11 +30,13 @@ export type WorkflowFieldErrorCode =
   | 'unknown_field'
   | 'unknown_step';
 
+/** Machine-readable field validation failure with safe user-facing text. */
 export interface WorkflowFieldValidationError {
   code: WorkflowFieldErrorCode;
   message: string;
 }
 
+/** Validation failure attributed to one workflow step and field. */
 export interface WorkflowFormFieldError extends WorkflowFieldValidationError {
   fieldId: string;
   stepId: string;
@@ -49,6 +52,7 @@ const RUNTIME_FIELD_TYPES = new Set([
   'textarea',
 ]);
 
+/** Return the user-facing error for one value, or null when valid. */
 export function validateFieldValue(
   field: ValidatedWorkflowField,
   value: unknown,
@@ -57,6 +61,7 @@ export function validateFieldValue(
   return validateWorkflowFieldValue(field, value, enabled)?.message ?? null;
 }
 
+/** Validate one untrusted value against its generated field contract. */
 export function validateWorkflowFieldValue(
   field: ValidatedWorkflowField,
   value: unknown,

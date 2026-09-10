@@ -18,6 +18,7 @@ const HEADERS = {
 const failure = (status: number, error: string) =>
   NextResponse.json({ error }, { status, headers: HEADERS });
 
+/** Proxy one same-origin, step-scoped question through the generated-app facade. */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   if (request.headers.get('origin') !== request.nextUrl.origin)
     return failure(403, 'ORIGIN_REQUIRED');

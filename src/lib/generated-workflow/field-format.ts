@@ -1,7 +1,9 @@
 import type { GeneratedWorkflowField as SharedWorkflowField } from './runtime-contract';
 
+/** Formats enforced by both preview and published workflow validation. */
 export type FieldFormat = 'email' | 'phone' | 'url' | 'number' | 'currency';
 
+/** Optional constraints carried in a generated workflow field contract. */
 export interface FieldValidation {
   format?: FieldFormat | 'none';
   pattern?: string;
@@ -13,6 +15,7 @@ export interface FieldValidation {
   recommended?: boolean;
 }
 
+/** Runtime field shape after optional validation metadata is accepted. */
 export type ValidatedWorkflowField = SharedWorkflowField & {
   validation?: FieldValidation;
   options?: string[];
@@ -76,6 +79,7 @@ export const FIELD_FORMATS: Record<FieldFormat, FormatSpec> = {
 
 const VALID_FORMATS = new Set<string>(Object.keys(FIELD_FORMATS));
 
+/** Narrow untrusted schema values to the supported runtime formats. */
 export function isValidFieldFormat(value: unknown): value is FieldFormat {
   return typeof value === 'string' && VALID_FORMATS.has(value);
 }
@@ -92,6 +96,7 @@ const INFERENCE_RULES: ReadonlyArray<{
   },
 ];
 
+/** Infer conservative text-field formats when the generated contract omits one. */
 export function inferFieldFormat(
   field: SharedWorkflowField,
 ): FieldFormat | null {
@@ -102,6 +107,7 @@ export function inferFieldFormat(
   );
 }
 
+/** Resolve explicit or inferred validation when the published feature is enabled. */
 export function resolveFieldValidation(
   field: ValidatedWorkflowField,
   enabled: boolean,
@@ -122,6 +128,7 @@ export function resolveFieldValidation(
   return field.validation ?? null;
 }
 
+/** Map a resolved validation contract to safe native input attributes. */
 export function fieldInputAttrs(
   field: ValidatedWorkflowField,
   enabled: boolean,

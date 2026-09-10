@@ -1,5 +1,6 @@
 export const SUBMISSION_FILE_MAX_BYTES = 10 * 1024 * 1024;
 
+/** Opaque uploaded-file reference accepted in a workflow submission payload. */
 export interface SubmissionFileRef {
   submissionFileId: string;
   fileName: string;
@@ -10,6 +11,7 @@ export interface SubmissionFileRef {
   fieldId: string;
 }
 
+/** Validate the bounded file-reference shape before it enters a submission. */
 export function isSubmissionFileRef(
   value: unknown,
 ): value is SubmissionFileRef {
