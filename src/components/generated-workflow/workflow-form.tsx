@@ -32,6 +32,7 @@ interface GeneratedWorkflowFormProps {
   binding: GeneratedAppRuntimeBinding;
   snapshot: GeneratedWorkflowSnapshot;
   branding?: GeneratedWorkflowBranding;
+  assistantEnabled?: boolean;
 }
 
 type SubmitState = 'starting' | 'idle' | 'submitting' | 'submitted' | 'error';
@@ -107,6 +108,7 @@ export function GeneratedWorkflowForm({
   binding,
   snapshot,
   branding,
+  assistantEnabled = false,
 }: GeneratedWorkflowFormProps) {
   const steps = useMemo(() => normalizeSteps(snapshot), [snapshot]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -486,7 +488,13 @@ export function GeneratedWorkflowForm({
         </div>
       </header>
 
-      <main className='mx-auto grid max-w-6xl items-start gap-5 px-5 py-8 @4xl/workflow:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]'>
+      <main
+        className={
+          assistantEnabled
+            ? 'mx-auto grid max-w-6xl items-start gap-5 px-5 py-8 @4xl/workflow:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]'
+            : 'mx-auto max-w-3xl px-5 py-8'
+        }
+      >
         <section className='rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8'>
           <p className='text-sm font-medium text-slate-500'>
             Step {currentStepIndex + 1} of {steps.length}
@@ -663,10 +671,12 @@ export function GeneratedWorkflowForm({
             </button>
           </div>
         </section>
-        <WorkflowAssistant
-          stepId={currentStep?.id ?? ''}
-          stepTitle={currentStep?.title ?? 'this step'}
-        />
+        {assistantEnabled && (
+          <WorkflowAssistant
+            stepId={currentStep?.id ?? ''}
+            stepTitle={currentStep?.title ?? 'this step'}
+          />
+        )}
       </main>
     </div>
   );

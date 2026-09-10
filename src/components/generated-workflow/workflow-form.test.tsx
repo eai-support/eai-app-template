@@ -41,6 +41,26 @@ describe('GeneratedWorkflowForm', () => {
     global.fetch = originalFetch;
   });
 
+  it.each([false, true])(
+    'renders Q&A only when enabled for this app (%s)',
+    async (assistantEnabled) => {
+      render(
+        <GeneratedWorkflowForm
+          appKey='rates-review'
+          binding={binding}
+          assistantEnabled={assistantEnabled}
+          snapshot={{
+            steps: [{ id: 'request', title: 'Request', fields: [] }],
+          }}
+        />,
+      );
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+      expect(Boolean(screen.queryByLabelText('Workflow assistant'))).toBe(
+        assistantEnabled,
+      );
+    },
+  );
+
   it('renders exported fields, validates required answers, and completes anonymously', async () => {
     render(
       <GeneratedWorkflowForm

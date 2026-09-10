@@ -61,6 +61,7 @@ beforeEach(() => {
     runtime: {
       appKey: 'leave',
       tenantId: 'tenant-a',
+      assistantEnabled: true,
       binding: { workflowTemplate: reference },
       snapshot: { steps: [{ id: 'submit' }] },
     },
@@ -90,6 +91,20 @@ it('calls only the bound assistant facade without creating a submission or trust
     workflowTemplate: reference,
   });
 });
+
+it.each([undefined, false])(
+  'does not call a provider when this app has no NCB assistant (%s)',
+  (assistantEnabled) => {
+    mockGetRuntime.mockReturnValue({
+      status: 'ready',
+      runtime: { assistantEnabled },
+    });
+    return POST(request(question) as never).then((response) => {
+      expect(response.status).toBe(404);
+      expect(mockPlatformFetch).not.toHaveBeenCalled();
+    });
+  },
+);
 
 it.each([
   'formData',

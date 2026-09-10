@@ -24,6 +24,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const resolved = getGeneratedWorkflowRuntime();
   if (resolved.status !== 'ready')
     return failure(503, 'WORKFLOW_RUNTIME_UNAVAILABLE');
+  if (resolved.runtime.assistantEnabled !== true)
+    return failure(404, 'WORKFLOW_ASSISTANT_DISABLED');
   let input;
   try {
     input = workflowAssistantQuestionSchema.safeParse(

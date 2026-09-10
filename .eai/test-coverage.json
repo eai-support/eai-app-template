@@ -102,7 +102,8 @@
             "src/lib/generated-workflow/submission-session.test.ts",
             "src/app/api/eai/workflow-assistant/route.test.ts",
             "src/components/generated-workflow/workflow-assistant.test.tsx",
-            "src/lib/generated-workflow/field-validation.test.ts"
+            "src/lib/generated-workflow/field-validation.test.ts",
+            "src/app/page.test.tsx"
           ],
           "required_ci_checks": [
             "validate"
