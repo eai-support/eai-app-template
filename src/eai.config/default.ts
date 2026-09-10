@@ -15,8 +15,13 @@ import {
   templateDeploymentContract,
   type TemplateDeploymentContract,
 } from './deployment-contract';
+import {
+  templateCapabilityRequirements,
+  type AppCapabilityRequirements,
+} from './capabilities';
 
 type TemplateConfig = EAIConfig & {
+  capabilityRequirements: AppCapabilityRequirements;
   deploymentContract: TemplateDeploymentContract;
 };
 
@@ -42,6 +47,9 @@ const templateConfigSource = {
   features: {
     enableTenantSwitching: false,
   },
+
+  // Logical requirements are bound to tenant capabilities after deployment.
+  capabilityRequirements: templateCapabilityRequirements,
 
   // ==========================================================================
   // DEPLOYMENT CONTRACT

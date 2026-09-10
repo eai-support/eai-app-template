@@ -122,6 +122,8 @@ describe('ChatModule', () => {
       expect(body.params).toEqual({});
       expect(body.thread_id).toBeUndefined();
       expect(body.threadId).toBeUndefined();
+      expect(body.appKey).toBeUndefined();
+      expect(body.logicalAlias).toBeUndefined();
     });
 
     it('passes v4 chat document-search and tool options through', async () => {
@@ -148,6 +150,24 @@ describe('ChatModule', () => {
         { type: 'function', function: { name: 'lookup' } },
       ]);
       expect(body.tool_choice).toBe('auto');
+    });
+
+    it('serializes additive app capability lookup keys', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+
+      await chat.send({
+        workflowId: 'my-workflow',
+        stage: 'chat',
+        message: 'Use the governed prompt',
+        conversationId: 'conversation-123',
+        params: {},
+        appKey: 'rates-review',
+        logicalAlias: 'assistant-prompt',
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.appKey).toBe('rates-review');
+      expect(body.logicalAlias).toBe('assistant-prompt');
     });
 
     it('uses baseUrl (not streamBaseUrl)', async () => {

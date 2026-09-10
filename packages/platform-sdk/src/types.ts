@@ -285,6 +285,10 @@ export interface ChatStreamOptions {
   conversationId?: string;
   /** Use {} if no params needed. */
   params?: Record<string, unknown>;
+  /** Generated-app key used by PublicAPI to resolve a tenant-owned binding. */
+  appKey?: string;
+  /** Logical capability alias resolved server-side; never a tenant resource ID. */
+  logicalAlias?: string;
   runtime_context?: Record<string, unknown>;
   message_history?: Array<{ role: string; content: string }>;
   ai_config?: Record<string, unknown>;

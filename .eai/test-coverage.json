@@ -5,6 +5,34 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "generated-app-capability-bindings",
+          "description": "Generated apps load and validate source-controlled workflow, AI, integration, and content requirements while PublicAPI resolves tenant-owned bindings at runtime.",
+          "owned_paths": [
+            "src/eai.config/capabilities.ts",
+            "src/eai.config/capabilities.generated.json",
+            "src/eai.config/default.ts",
+            "src/eai.config/index.ts",
+            "src/lib/platform/capability-bindings.ts",
+            "src/hooks/useChat.ts",
+            "packages/platform-sdk/src/modules/chat.ts",
+            "packages/platform-sdk/src/types.ts"
+          ],
+          "required_repo_tests": [
+            "src/eai.config/capabilities.test.ts",
+            "src/lib/platform/capability-bindings.test.ts",
+            "src/hooks/useChat.test.tsx",
+            "packages/platform-sdk/__tests__/chat.test.ts"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["publicapi-platform"],
+          "required_deployed_contracts": [
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/platform-lifecycle/publicapi-v4-capability-connections.spec.ts"
+            }
+          ]
+        },
+        {
           "id": "canonical-object-type-routing",
           "description": "The template validates exact Object Type name/slug pairs and routes every SDK resource identifier through the canonical v1 slug owner.",
           "owned_paths": [
