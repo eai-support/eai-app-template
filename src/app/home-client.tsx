@@ -31,6 +31,8 @@ export function HomeClient({
     );
   }
   if (!generatedWorkflow) {
+    // Replace this fallback with the app's real home experience and keep local
+    // ownership of this file during template update merges.
     return <DemoPage />;
   }
   return (
