@@ -1,5 +1,7 @@
 'use client';
 
+import { WorkflowAssistant } from './workflow-assistant';
+
 import Image from 'next/image';
 import {
   useCallback,
@@ -427,7 +429,10 @@ export function GeneratedWorkflowForm({
     backgroundColor: secondaryColor,
   } satisfies CSSProperties;
   return (
-    <div className='min-h-svh overflow-y-auto' style={brandStyle}>
+    <div
+      className='@container/workflow min-h-svh overflow-y-auto'
+      style={brandStyle}
+    >
       <header className='border-b border-slate-200 bg-white'>
         <div className='mx-auto max-w-3xl px-5 py-7'>
           <div className='flex items-center gap-4'>
@@ -469,7 +474,7 @@ export function GeneratedWorkflowForm({
         </div>
       </header>
 
-      <main className='mx-auto max-w-3xl px-5 py-8'>
+      <main className='mx-auto grid max-w-6xl items-start gap-5 px-5 py-8 @4xl/workflow:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]'>
         <section className='rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8'>
           <p className='text-sm font-medium text-slate-500'>
             Step {currentStepIndex + 1} of {steps.length}
@@ -646,6 +651,10 @@ export function GeneratedWorkflowForm({
             </button>
           </div>
         </section>
+        <WorkflowAssistant
+          stepId={currentStep?.id ?? ''}
+          stepTitle={currentStep?.title ?? 'this step'}
+        />
       </main>
     </div>
   );

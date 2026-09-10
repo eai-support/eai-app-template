@@ -13,7 +13,7 @@ export const MAX_ANONYMOUS_JSON_BODY_BYTES = 256 * 1024;
 
 /** Reads a request stream up to an absolute byte limit and aborts on overflow. */
 export async function readBoundedRequestBody(
-  request: Request,
+  request: Request | Response,
   maxBytes: number,
 ): Promise<Uint8Array> {
   const contentLength = request.headers.get('content-length');
@@ -53,7 +53,7 @@ export async function readBoundedRequestBody(
 
 /** Parses JSON only after the request stream has satisfied its byte limit. */
 export async function readBoundedJsonBody(
-  request: Request,
+  request: Request | Response,
   maxBytes = MAX_ANONYMOUS_JSON_BODY_BYTES,
 ): Promise<unknown> {
   const bytes = await readBoundedRequestBody(request, maxBytes);
