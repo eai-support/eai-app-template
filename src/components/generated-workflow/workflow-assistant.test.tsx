@@ -10,12 +10,10 @@ afterAll(() => {
   AbortSignal.timeout = originalTimeout;
 });
 beforeEach(() => {
-  global.fetch = jest
-    .fn()
-    .mockResolvedValue({
-      ok: true,
-      json: async () => ({ answer: 'Review the dates.' }),
-    });
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ answer: 'Review the dates.' }),
+  });
 });
 afterEach(() => {
   global.fetch = originalFetch;
@@ -83,4 +81,24 @@ it('renders model content as text without executing HTML', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
   await screen.findByText('<img src=x onerror=alert(1)>');
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
+
+it('allows long unbroken answers to wrap inside the assistant column', async () => {
+  const answer = `https://example.com/${'a'.repeat(500)}`;
+  (global.fetch as jest.Mock).mockResolvedValue({
+    ok: true,
+    json: async () => ({ answer }),
+  });
+  render(<WorkflowAssistant stepId='submit' stepTitle='Submit' />);
+  fireEvent.click(screen.getByRole('button', { name: 'Assistant +' }));
+  fireEvent.change(screen.getByLabelText('Ask about this workflow'), {
+    target: { value: 'Where is it?' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
+  const message = await screen.findByText(answer);
+  expect(message).toHaveClass('max-w-full', '[overflow-wrap:anywhere]');
+  expect(screen.getByLabelText('Workflow assistant')).toHaveClass(
+    'min-w-0',
+    'max-w-full',
+  );
 });

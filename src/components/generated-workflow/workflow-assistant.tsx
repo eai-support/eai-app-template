@@ -74,7 +74,7 @@ export function WorkflowAssistant({
   return (
     <aside
       aria-label='Workflow assistant'
-      className='rounded-2xl border border-slate-200 bg-white p-5 shadow-sm'
+      className='max-w-full min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm'
     >
       <button
         type='button'
@@ -97,12 +97,12 @@ export function WorkflowAssistant({
           role='log'
           aria-label='Assistant conversation'
           aria-live='polite'
-          className='my-4 max-h-80 space-y-3 overflow-y-auto'
+          className='my-4 max-h-80 min-w-0 space-y-3 overflow-y-auto'
         >
           {messages.map((message, index) => (
             <p
               key={index}
-              className={`rounded-lg p-3 text-sm whitespace-pre-wrap ${message.role === 'user' ? 'bg-slate-100' : 'border border-slate-100'}`}
+              className={`max-w-full rounded-lg p-3 text-sm [overflow-wrap:anywhere] whitespace-pre-wrap ${message.role === 'user' ? 'bg-slate-100' : 'border border-slate-100'}`}
             >
               <span className='sr-only'>
                 {message.role === 'user' ? 'You' : 'Assistant'}:{' '}
