@@ -85,6 +85,95 @@ describe('GeneratedWorkflowForm', () => {
     );
   });
 
+  it('does not submit invalid formatted answers and accepts their correction', async () => {
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        snapshot={{
+          steps: [
+            {
+              id: 'contact',
+              title: 'Contact',
+              fields: [
+                { id: 'email', label: 'Email', type: 'text', required: true },
+                {
+                  id: 'amount',
+                  label: 'Amount',
+                  type: 'text',
+                  validation: { format: 'currency', min: 10, max: 20 },
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+    const submit = await screen.findByRole('button', { name: 'Submit' });
+    fireEvent.change(
+      screen.getByLabelText(/Email/, { selector: '[id="contact.email"]' }),
+      {
+        target: { value: 'bad' },
+      },
+    );
+    fireEvent.change(screen.getByLabelText(/Amount/), {
+      target: { value: '9' },
+    });
+    fireEvent.click(submit);
+    expect(screen.getByText('Enter a valid email address')).toBeVisible();
+    expect(screen.getByText('Must be at least 10')).toBeVisible();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    fireEvent.change(
+      screen.getByLabelText(/Email/, { selector: '[id="contact.email"]' }),
+      {
+        target: { value: 'alex@example.com' },
+      },
+    );
+    fireEvent.change(screen.getByLabelText(/Amount/), {
+      target: { value: '12.50' },
+    });
+    fireEvent.click(submit);
+    await screen.findByText('Submitted');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns a resumed form to an earlier invalid step before completing', async () => {
+    window.history.replaceState(null, '', '/?submission=existing');
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        submission: {
+          status: 'in_progress',
+          currentStep: 1,
+          formData: { contact: { email: 'invalid' } },
+        },
+      }),
+    });
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        snapshot={{
+          steps: [
+            {
+              id: 'contact',
+              title: 'Contact',
+              fields: [
+                { id: 'email', label: 'Email', type: 'text', required: true },
+              ],
+            },
+            { id: 'review', title: 'Review', fields: [] },
+          ],
+        }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit' }));
+    expect(
+      await screen.findByText('Enter a valid email address'),
+    ).toBeVisible();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('renders the exported company brand snapshot', async () => {
     render(
       <GeneratedWorkflowForm

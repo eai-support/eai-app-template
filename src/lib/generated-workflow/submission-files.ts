@@ -1,4 +1,36 @@
 export const SUBMISSION_FILE_MAX_BYTES = 10 * 1024 * 1024;
+
+export interface SubmissionFileRef {
+  submissionFileId: string;
+  fileName: string;
+  fileSize: number;
+  contentType: string;
+  uploadedAt: string;
+  stepId: string;
+  fieldId: string;
+}
+
+export function isSubmissionFileRef(
+  value: unknown,
+): value is SubmissionFileRef {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const file = value as Partial<SubmissionFileRef>;
+  return (
+    typeof file.submissionFileId === 'string' &&
+    /^[A-Za-z0-9_-]{1,160}$/.test(file.submissionFileId) &&
+    typeof file.fileName === 'string' &&
+    file.fileName.length > 0 &&
+    file.fileName.length <= 160 &&
+    typeof file.fileSize === 'number' &&
+    Number.isInteger(file.fileSize) &&
+    file.fileSize > 0 &&
+    file.fileSize <= SUBMISSION_FILE_MAX_BYTES &&
+    typeof file.contentType === 'string' &&
+    typeof file.uploadedAt === 'string' &&
+    typeof file.stepId === 'string' &&
+    typeof file.fieldId === 'string'
+  );
+}
 export const SUBMISSION_FILE_ACCEPTED_EXTENSIONS = [
   'pdf',
   'doc',

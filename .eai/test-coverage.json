@@ -45,7 +45,7 @@
             "validate"
           ],
           "required_cross_service_surfaces": [
-            "adminportal-generated-app-builder-export"
+            "admin-portal"
           ]
         },
         {
@@ -84,7 +84,8 @@
             "src/components/generated-workflow/**",
             "src/eai.config/index.ts",
             "src/lib/generated-workflow/**",
-            "src/app/api/eai/workflow-assistant/**"
+            "src/app/api/eai/workflow-assistant/**",
+            "tests/fixtures/ncb/**"
           ],
           "required_repo_tests": [
             "src/app/globals.test.ts",
@@ -100,7 +101,8 @@
             "src/lib/generated-workflow/server-configuration.test.ts",
             "src/lib/generated-workflow/submission-session.test.ts",
             "src/app/api/eai/workflow-assistant/route.test.ts",
-            "src/components/generated-workflow/workflow-assistant.test.tsx"
+            "src/components/generated-workflow/workflow-assistant.test.tsx",
+            "src/lib/generated-workflow/field-validation.test.ts"
           ],
           "required_ci_checks": [
             "validate"

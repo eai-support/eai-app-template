@@ -2,6 +2,7 @@
 
 import type { GeneratedWorkflowField } from '@/lib/generated-workflow/runtime-contract';
 import { SUBMISSION_FILE_ACCEPT } from '@/lib/generated-workflow/submission-files';
+import { fieldInputAttrs } from '@/lib/generated-workflow/field-format';
 
 interface GeneratedWorkflowFieldInputProps {
   disabled: boolean;
@@ -79,7 +80,8 @@ export function GeneratedWorkflowFieldInput({
   return (
     <input
       id={id}
-      type={field.type === 'date' ? 'date' : 'text'}
+      type={field.type === 'date' ? 'date' : fieldInputAttrs(field, true).type}
+      placeholder={fieldInputAttrs(field, true).placeholder}
       className={INPUT_CLASS}
       disabled={disabled}
       value={typeof value === 'string' ? value : ''}

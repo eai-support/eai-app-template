@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { FieldValidation } from './field-format';
 
 /** JSON-safe field definition emitted by the no-code builder snapshot. */
 export interface GeneratedWorkflowField {
@@ -10,6 +11,7 @@ export interface GeneratedWorkflowField {
   helpText?: string;
   options?: string[];
   replaces?: string[];
+  validation?: FieldValidation;
 }
 
 /** JSON-safe output kinds declared by a canonical guided block. */

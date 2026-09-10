@@ -20,6 +20,7 @@ import type {
   GeneratedWorkflowStep,
 } from '@/lib/generated-workflow/runtime-contract';
 import { validateSubmissionFile } from '@/lib/generated-workflow/submission-files';
+import { validateFieldValue } from '@/lib/generated-workflow/field-validation';
 import { GeneratedWorkflowFieldInput } from './field-input';
 import {
   GeneratedWorkflowSmartBlock,
@@ -241,20 +242,16 @@ export function GeneratedWorkflowForm({
     [],
   );
 
-  const validateStep = useCallback(
-    (step: GeneratedWorkflowStep): boolean => {
+  const stepErrors = useCallback(
+    (step: GeneratedWorkflowStep): Record<string, string> => {
       const errors: Record<string, string> = {};
       for (const field of step.fields ?? []) {
         if (field.type === 'smart_block') continue;
         const stepId = step.id ?? '';
         const fieldId = field.id ?? '';
         const value = formData[stepId]?.[fieldId];
-        if (
-          field.required &&
-          (value === undefined || value === null || value === '')
-        ) {
-          errors[fieldKey(stepId, fieldId)] = 'This field is required.';
-        }
+        const error = validateFieldValue(field, value, true);
+        if (error) errors[fieldKey(stepId, fieldId)] = error;
       }
       for (const block of step.blocks ?? []) {
         const stepId = step.id ?? '';
@@ -281,11 +278,16 @@ export function GeneratedWorkflowForm({
           errors[key] = 'Complete the required guided activity outputs.';
         }
       }
-      setFieldErrors(errors);
-      return Object.keys(errors).length === 0;
+      return errors;
     },
     [formData],
   );
+
+  const validateStep = (step: GeneratedWorkflowStep): boolean => {
+    const errors = stepErrors(step);
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const saveProgress = useCallback(
     async (nextStep: number, data = formDataRef.current) => {
@@ -362,7 +364,16 @@ export function GeneratedWorkflowForm({
   );
 
   const submit = useCallback(async () => {
-    if (!currentStep || !validateStep(currentStep) || !submissionId) return;
+    if (!currentStep || !submissionId) return;
+    const errorsByStep = steps.map(stepErrors);
+    const firstInvalid = errorsByStep.findIndex(
+      (errors) => Object.keys(errors).length > 0,
+    );
+    if (firstInvalid >= 0) {
+      setFieldErrors(Object.assign({}, ...errorsByStep));
+      setCurrentStepIndex(firstInvalid);
+      return;
+    }
     setSubmitState('submitting');
     setErrorMessage(null);
     try {
@@ -397,7 +408,8 @@ export function GeneratedWorkflowForm({
     submissionId,
     userEmail,
     userName,
-    validateStep,
+    stepErrors,
+    steps,
   ]);
 
   if (steps.length === 0) {
