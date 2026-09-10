@@ -375,10 +375,7 @@
       "id": "answer",
       "label": "Answer",
       "type": "select",
-      "options": [
-        "Yes",
-        "No"
-      ]
+      "options": ["Yes", "No"]
     },
     "value": "Yes",
     "error": null
@@ -389,10 +386,7 @@
       "id": "answer",
       "label": "Answer",
       "type": "select",
-      "options": [
-        "Yes",
-        "No"
-      ]
+      "options": ["Yes", "No"]
     },
     "value": "Maybe",
     "error": "invalid_option"

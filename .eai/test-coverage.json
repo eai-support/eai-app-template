@@ -24,12 +24,8 @@
             "tests/generate-object-types-json.test.mjs",
             "src/lib/platform/verify-platform.test.ts"
           ],
-          "required_ci_checks": [
-            "validate"
-          ],
-          "required_cross_service_surfaces": [
-            "backend"
-          ]
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["backend"]
         },
         {
           "id": "generated-app-object-type-seeding",
@@ -38,15 +34,9 @@
             "src/eai.config/object-types.ts",
             "src/lib/platform/seed-object-types.ts"
           ],
-          "required_repo_tests": [
-            "src/lib/platform/seed-object-types.test.ts"
-          ],
-          "required_ci_checks": [
-            "validate"
-          ],
-          "required_cross_service_surfaces": [
-            "admin-portal"
-          ]
+          "required_repo_tests": ["src/lib/platform/seed-object-types.test.ts"],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["admin-portal"]
         },
         {
           "id": "generated-app-platform-sdk-resource-count-policy",
@@ -58,12 +48,8 @@
           "required_repo_tests": [
             "packages/platform-sdk/__tests__/resources.test.ts"
           ],
-          "required_ci_checks": [
-            "validate"
-          ],
-          "required_cross_service_surfaces": [
-            "backend"
-          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["backend"],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",
@@ -105,13 +91,8 @@
             "src/lib/generated-workflow/field-validation.test.ts",
             "src/app/page.test.tsx"
           ],
-          "required_ci_checks": [
-            "validate"
-          ],
-          "required_cross_service_surfaces": [
-            "admin-portal",
-            "ncb-sugar-hit"
-          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["admin-portal", "ncb-sugar-hit"],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",
@@ -133,9 +114,7 @@
             "package-lock.json"
           ],
           "required_repo_tests": [],
-          "required_ci_checks": [
-            "validate"
-          ],
+          "required_ci_checks": ["validate"],
           "required_cross_service_surfaces": [],
           "required_deployed_contracts": []
         }
