@@ -170,7 +170,9 @@ export function validateWorkflowFieldValue(
   }
 
   if (validation.pattern) {
-    if (!new RegExp(validation.pattern).test(normalizedValue)) {
+    const matches = compileBoundedPattern(validation.pattern);
+    if (!matches) return invalidConfiguration();
+    if (!matches(normalizedValue)) {
       return validationError(
         'invalid_format',
         validation.message ?? 'Invalid format',
@@ -239,19 +241,48 @@ function validateFieldConfiguration(
   }
   if (validation.pattern !== undefined) {
     if (typeof validation.pattern !== 'string') return invalidConfiguration();
-    try {
-      if (
-        !/^\^\[[A-Za-z0-9 .@_+\\-]+\](?:[+*?]|\{\d{1,3}(?:,\d{1,3})?\})\$$/.test(
-          validation.pattern,
-        )
-      )
-        return invalidConfiguration();
-      new RegExp(validation.pattern);
-    } catch {
+    if (!compileBoundedPattern(validation.pattern))
       return invalidConfiguration();
-    }
   }
   return null;
+}
+
+function compileBoundedPattern(
+  pattern: string,
+): ((value: string) => boolean) | null {
+  if (pattern.length > 128) return null;
+  const parts =
+    /^\^\[([A-Za-z0-9 .@_+\\-]+)\]([+*?]|\{(\d{1,3})(?:,(\d{1,3}))?\})\$$/.exec(
+      pattern,
+    );
+  if (!parts) return null;
+  const quantifier = parts[2];
+  const minimum =
+    quantifier === '+'
+      ? 1
+      : quantifier === '*' || quantifier === '?'
+        ? 0
+        : Number(parts[3]);
+  const maximum =
+    quantifier === '+' || quantifier === '*'
+      ? Infinity
+      : quantifier === '?'
+        ? 1
+        : Number(parts[4] ?? parts[3]);
+  if (minimum > maximum) return null;
+  try {
+    // Only the isolated character class reaches RegExp. Repetition is a linear scan.
+    const character = new RegExp(`^[${parts[1]}]$`);
+    return (value) => {
+      if (value.length < minimum || value.length > maximum) return false;
+      for (let index = 0; index < value.length; index += 1) {
+        if (!character.test(value.charAt(index))) return false;
+      }
+      return true;
+    };
+  } catch {
+    return null;
+  }
 }
 
 function isCalendarDate(value: string): boolean {
