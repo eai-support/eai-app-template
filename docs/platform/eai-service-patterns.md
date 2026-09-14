@@ -47,8 +47,8 @@ choosing how to use Enterprise AI platform services from the EAI App Template.
 | Execute resource action      | `client.resources.executeAction(type, id, action)`                                       | named resources command if available, otherwise `eai publicapi post /v4/data/resources/...` | Actions enforce configured object-type rules.                                  |
 | Search resources             | add a local helper around `/v4/data/resources/{tenant}/search` until the SDK exposes one | `eai resources search "query" --mode hybrid`                                                | Search is a derived projection over canonical data.                            |
 | Upload resource file         | add a local helper around resource file routes                                           | `eai resources file upload <type> <id> <property> <path>`                                   | Use for file properties on resources.                                          |
-| Upload documents             | `useDocuments().upload(file, metadata)`                                                  | `eai docs upload <file>`                                                                    | Uses the platform document service.                                            |
-| Classify documents           | `useDocuments().classify(files)` or `classifyByUrl(url)`                                 | `eai docs classify <file>`                                                                  | Classification may return immediate results or a job.                          |
+| Upload documents             | `useDocuments().upload(file, { verticalKey, workflowKey })`                              | `eai docs upload <file>`                                                                    | Uses the Curate document lifecycle.                                            |
+| Classify documents           | `useDocuments().classify(files, { verticalKey, workflowKey })` or `classifyByUrl(url)`   | `eai docs classify <file>`                                                                  | Stored-file classification uses the Curate upload lifecycle.                   |
 | Index documents for RAG      | `useDocuments().ragIndex(documentId)`                                                    | `eai docs index <documentId>`                                                               | RAG indexing is document-service indexing, not an Object Type storage backend. |
 | Non-streaming chat           | `useChat(workflowId, stage).send(...)`                                                   | `eai chat send "message"`                                                                   | Requires tenant, workflow, stage, message, conversation ID, and params.        |
 | Streaming chat               | `useChat(workflowId, stage).stream(...)`                                                 | `eai chat stream "message"`                                                                 | Uses the stream BFF path `/api/eai/stream/...`.                                |
@@ -147,13 +147,15 @@ processing:
 
 ```ts
 const { upload, classify, ragIndex } = useDocuments(tenantId);
+const workflow = { verticalKey: 'my-document-app', workflowKey: 'document-intake' };
 
 const uploaded = await upload(file, {
+  ...workflow,
   category: 'supporting-document',
   application_id: applicationId,
 });
 
-await classify([file]);
+await classify([file], workflow);
 await ragIndex(uploadedDocumentId);
 ```
 

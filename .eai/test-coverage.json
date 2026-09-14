@@ -5,6 +5,24 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "tenant-bound-document-lifecycle",
+          "description": "The document SDK uses the Curate-backed V4 upload lifecycle for stored-file processing, requires paired app and workflow classifier selection, and sends the deployed V4 documentUrl and tenantId contract for direct URL classification.",
+          "owned_paths": [
+            "packages/platform-sdk/src/modules/documents.ts",
+            "packages/platform-sdk/src/index.ts",
+            "src/hooks/useDocuments.ts",
+            "docs/platform/documents-and-files.md",
+            "docs/platform/eai-service-patterns.md"
+          ],
+          "required_repo_tests": [
+            "packages/platform-sdk/__tests__/documents.test.ts",
+            "src/hooks/useDocuments.test.tsx",
+            "src/lib/platform/publicapi-route-family.test.ts"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": []
+        },
+        {
           "id": "canonical-object-type-routing",
           "description": "The template validates exact Object Type name/slug pairs and routes every SDK resource identifier through the canonical v1 slug owner.",
           "owned_paths": [
