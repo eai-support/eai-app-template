@@ -27,7 +27,7 @@ files, and knowledge sources.
 
 Step goals:
 
-1. Upload the file with tenant context.
+1. Upload the file with the app and workflow that own its published classifier.
 2. Capture the returned job or document ID.
 3. Classify the document when the app needs a document type or extraction path.
 4. Index the document for RAG when chat or workflow stages need to answer from
@@ -40,7 +40,13 @@ App code:
 ```tsx
 const { upload, classify, ragIndex, getJobStatus } = useDocuments(tenantId);
 
+const workflow = {
+  verticalKey: "my-document-app",
+  workflowKey: "document-intake",
+};
+
 const uploadResponse = await upload(file, {
+  ...workflow,
   category: "supporting-document",
   application_id: applicationId,
 });
@@ -50,7 +56,7 @@ const documentId =
   uploadPayload.documents?.[0]?.documentId ||
   uploadPayload.documents?.[0]?.document_id;
 
-await classify([file]);
+await classify([file], workflow);
 await ragIndex({
   documentId,
   businessRequestId: applicationId,
@@ -75,6 +81,11 @@ The PublicAPI route behind this workflow is:
 ```text
 POST /v4/data/documents/upload
 ```
+
+The SDK always sends `storage_target=resourceapi`. It sends `processing_mode=full`
+for `upload` and `processing_mode=classification` for `classify`; neither helper
+calls the retired `POST /v4/data/documents/classify` route. The app and workflow
+keys are required so PublicAPI can resolve the tenant's published classifier.
 
 Use `eai publicapi get /v4/data/documents/jobs/<job-id>` for job status until a
 named CLI job command exists.

@@ -7,6 +7,12 @@
 import type { ChecklistRequest } from '../types';
 import { platformFetch } from '../client';
 
+export interface DocumentWorkflowOptions {
+  verticalKey?: string;
+  workflowKey?: string;
+  [metadataKey: string]: string | undefined;
+}
+
 export interface ClassifyByUrlOptions {
   verticalKey?: string;
   workflowKey?: string;
@@ -87,39 +93,62 @@ export class DocumentsModule {
     return `${this.baseUrl}/v4/data/documents${path}`;
   }
 
-  /** Upload a document (multipart/form-data). */
-  async upload(
-    file: File,
-    metadata?: Record<string, string>,
-  ): Promise<Response> {
-    const formData = new FormData();
-    formData.append('files', file);
-    formData.append('tenant_id', this.tenantId);
-    formData.append('processing_mode', 'full');
-    if (metadata) {
-      for (const [key, value] of Object.entries(metadata)) {
-        formData.append(key, value);
-      }
+  private uploadForm(
+    files: File[],
+    processingMode: 'full' | 'classification',
+    options: DocumentWorkflowOptions = {},
+  ): FormData {
+    const verticalKey = options.verticalKey?.trim();
+    const workflowKey = options.workflowKey?.trim();
+    if (!verticalKey || !workflowKey) {
+      throw new Error('Document processing requires both verticalKey and workflowKey.');
     }
 
-    return platformFetch(this.docsUrl('/upload'), {
-      method: 'POST',
-      body: formData,
-    });
-  }
-
-  /** Classify a batch of files. */
-  async classify(files: File[]): Promise<Response> {
     const formData = new FormData();
     for (const file of files) {
       formData.append('files', file);
     }
     formData.append('tenant_id', this.tenantId);
-    formData.append('processing_mode', 'classification');
+    formData.append('storage_target', 'resourceapi');
+    formData.append('processing_mode', processingMode);
+    formData.append('verticalKey', verticalKey);
+    formData.append('workflowKey', workflowKey);
 
-    return platformFetch(this.docsUrl('/classify'), {
+    for (const [key, value] of Object.entries(options)) {
+      if (
+        value === undefined ||
+        key === 'verticalKey' ||
+        key === 'workflowKey' ||
+        key === 'tenant_id' ||
+        key === 'storage_target' ||
+        key === 'processing_mode'
+      ) {
+        continue;
+      }
+      formData.append(key, value);
+    }
+    return formData;
+  }
+
+  /** Upload a document (multipart/form-data). */
+  async upload(
+    file: File,
+    options?: DocumentWorkflowOptions,
+  ): Promise<Response> {
+    return platformFetch(this.docsUrl('/upload'), {
       method: 'POST',
-      body: formData,
+      body: this.uploadForm([file], 'full', options),
+    });
+  }
+
+  /** Classify files through the supported Curate document lifecycle. */
+  async classify(
+    files: File[],
+    options?: DocumentWorkflowOptions,
+  ): Promise<Response> {
+    return platformFetch(this.docsUrl('/upload'), {
+      method: 'POST',
+      body: this.uploadForm(files, 'classification', options),
     });
   }
 

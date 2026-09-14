@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from 'react';
 import {
   EAIPlatformClient,
+  type DocumentWorkflowOptions,
   type RagIndexRequest,
 } from '@enterpriseaigroup/platform-sdk';
 
@@ -15,8 +16,8 @@ import {
  * ```tsx
  * const { upload, classify, classifyByUrl } = useDocuments();
  *
- * await upload(file, { category: 'permit' });
- * const results = await classify(files);
+ * await upload(file, { verticalKey: 'permits', workflowKey: 'document-intake' });
+ * const results = await classify(files, { verticalKey: 'permits', workflowKey: 'document-intake' });
  * ```
  */
 export function useDocuments(tenantId?: string) {
@@ -28,13 +29,14 @@ export function useDocuments(tenantId?: string) {
   );
 
   const upload = useCallback(
-    (file: File, metadata?: Record<string, string>) =>
-      client.documents.upload(file, metadata),
+    (file: File, options?: DocumentWorkflowOptions) =>
+      client.documents.upload(file, options),
     [client],
   );
 
   const classify = useCallback(
-    (files: File[]) => client.documents.classify(files),
+    (files: File[], options?: DocumentWorkflowOptions) =>
+      client.documents.classify(files, options),
     [client],
   );
 

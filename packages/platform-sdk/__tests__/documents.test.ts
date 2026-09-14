@@ -8,12 +8,14 @@ describe('DocumentsModule', () => {
     mockFetch.mockReset();
   });
 
-  it('HP001 uploads documents through the v4 data documents endpoint', async () => {
+  it('HP001 uploads documents through the Curate v4 document lifecycle', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
 
     const documents = new DocumentsModule('/api/eai', 'tenant-a');
     await documents.upload(new File(['hello'], 'test.pdf'), {
       source: 'smoke',
+      verticalKey: 'document-app',
+      workflowKey: 'intake',
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -26,18 +28,24 @@ describe('DocumentsModule', () => {
     const body = mockFetch.mock.calls[0]?.[1]?.body as FormData;
     expect(body.get('files')).toBeInstanceOf(File);
     expect(body.get('tenant_id')).toBe('tenant-a');
+    expect(body.get('storage_target')).toBe('resourceapi');
     expect(body.get('processing_mode')).toBe('full');
+    expect(body.get('verticalKey')).toBe('document-app');
+    expect(body.get('workflowKey')).toBe('intake');
     expect(body.get('source')).toBe('smoke');
   });
 
-  it('HP001b classifies documents with tenant and processing metadata', async () => {
+  it('HP001b classifies documents through upload with Curate and workflow metadata', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
 
     const documents = new DocumentsModule('/api/eai', 'tenant-a');
-    await documents.classify([new File(['hello'], 'test.pdf')]);
+    await documents.classify([new File(['hello'], 'test.pdf')], {
+      verticalKey: 'document-app',
+      workflowKey: 'intake',
+    });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      '/api/eai/v4/data/documents/classify',
+      '/api/eai/v4/data/documents/upload',
       expect.objectContaining({
         method: 'POST',
         body: expect.any(FormData),
@@ -46,7 +54,22 @@ describe('DocumentsModule', () => {
     const body = mockFetch.mock.calls[0]?.[1]?.body as FormData;
     expect(body.get('files')).toBeInstanceOf(File);
     expect(body.get('tenant_id')).toBe('tenant-a');
+    expect(body.get('storage_target')).toBe('resourceapi');
     expect(body.get('processing_mode')).toBe('classification');
+    expect(body.get('verticalKey')).toBe('document-app');
+    expect(body.get('workflowKey')).toBe('intake');
+  });
+
+  it.each([
+    undefined,
+    { verticalKey: 'document-app' },
+    { workflowKey: 'intake' },
+    { verticalKey: ' ', workflowKey: 'intake' },
+  ])('HP001c rejects an incomplete document workflow before upload: %j', async (options) => {
+    const documents = new DocumentsModule('/api/eai', 'tenant-a');
+    await expect(documents.classify([new File(['hello'], 'test.pdf')], options))
+      .rejects.toThrow('both verticalKey and workflowKey');
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('HP002 requests checklists through the v4 data documents endpoint', async () => {
