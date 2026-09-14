@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from 'react';
 import {
+  type ClassifyByUrlOptions,
   EAIPlatformClient,
   type DocumentWorkflowOptions,
   type RagIndexRequest,
@@ -41,7 +42,8 @@ export function useDocuments(tenantId?: string) {
   );
 
   const classifyByUrl = useCallback(
-    (url: string) => client.documents.classifyByUrl(url),
+    (url: string, options?: ClassifyByUrlOptions) =>
+      client.documents.classifyByUrl(url, options),
     [client],
   );
 
