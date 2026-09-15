@@ -15,6 +15,11 @@ const HEADERS = {
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
 };
+const STREAM_HEADERS = {
+  ...HEADERS,
+  'Content-Type': 'text/event-stream; charset=utf-8',
+  'X-Accel-Buffering': 'no',
+};
 const failure = (status: number, error: string) =>
   NextResponse.json({ error }, { status, headers: HEADERS });
 
@@ -55,6 +60,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       anonymousClientId: requestClientFingerprint(request.headers),
       init: {
         method: 'POST',
+        headers: { Accept: 'text/event-stream' },
         signal: AbortSignal.timeout(40_000),
         body: JSON.stringify({
           ...input.data,
@@ -71,6 +77,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         [409, 429, 503].includes(response.status) ? response.status : 502,
         'ASSISTANT_UNAVAILABLE',
       );
+    if (
+      response.body &&
+      response.headers.get('content-type')?.startsWith('text/event-stream')
+    ) {
+      return new NextResponse(response.body, { headers: STREAM_HEADERS });
+    }
     const output = (await readBoundedJsonBody(response, 32_768)) as {
       answer?: unknown;
     } | null;
@@ -82,7 +94,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     ) {
       return failure(502, 'ASSISTANT_UNAVAILABLE');
     }
-    return NextResponse.json({ answer: output.answer }, { headers: HEADERS });
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: 'token', data: output.answer })}\n\n`,
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: 'done', data: null })}\n\n`,
+          ),
+        );
+        controller.close();
+      },
+    });
+    return new NextResponse(body, { headers: STREAM_HEADERS });
   } catch {
     return failure(502, 'ASSISTANT_UNAVAILABLE');
   }

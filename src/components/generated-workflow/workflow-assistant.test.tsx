@@ -1,19 +1,46 @@
+import { TextDecoder, TextEncoder } from 'node:util';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { WorkflowAssistant } from './workflow-assistant';
 
 const originalFetch = global.fetch;
 const originalTimeout = AbortSignal.timeout;
+const originalTextDecoder = global.TextDecoder;
+
+function streamingResponse(answer: string): Response {
+  const encoder = new TextEncoder();
+  return {
+    ok: true,
+    status: 200,
+    body: new globalThis.ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: 'token', data: answer })}\n\n`,
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: 'done', data: null })}\n\n`,
+          ),
+        );
+        controller.close();
+      },
+    }),
+  } as unknown as Response;
+}
+
 beforeAll(() => {
   AbortSignal.timeout = () => new AbortController().signal;
+  global.TextDecoder = TextDecoder as unknown as typeof global.TextDecoder;
 });
 afterAll(() => {
   AbortSignal.timeout = originalTimeout;
+  global.TextDecoder = originalTextDecoder;
 });
 beforeEach(() => {
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ answer: 'Review the dates.' }),
-  });
+  global.fetch = jest
+    .fn()
+    .mockResolvedValue(streamingResponse('Review the dates.'));
 });
 afterEach(() => {
   global.fetch = originalFetch;
@@ -72,10 +99,9 @@ it('does not auto-call the model and retains a failed question for deliberate re
 });
 
 it('renders model content as text without executing HTML', async () => {
-  (global.fetch as jest.Mock).mockResolvedValue({
-    ok: true,
-    json: async () => ({ answer: '<img src=x onerror=alert(1)>' }),
-  });
+  (global.fetch as jest.Mock).mockResolvedValue(
+    streamingResponse('<img src=x onerror=alert(1)>'),
+  );
   render(<WorkflowAssistant stepId='submit' stepTitle='Submit' />);
   fireEvent.change(screen.getByLabelText('Ask about this workflow'), {
     target: { value: 'Why?' },
@@ -87,10 +113,7 @@ it('renders model content as text without executing HTML', async () => {
 
 it('allows long unbroken answers to wrap inside the assistant column', async () => {
   const answer = `https://example.com/${'a'.repeat(500)}`;
-  (global.fetch as jest.Mock).mockResolvedValue({
-    ok: true,
-    json: async () => ({ answer }),
-  });
+  (global.fetch as jest.Mock).mockResolvedValue(streamingResponse(answer));
   render(<WorkflowAssistant stepId='submit' stepTitle='Submit' />);
   fireEvent.change(screen.getByLabelText('Ask about this workflow'), {
     target: { value: 'Where is it?' },
@@ -101,6 +124,47 @@ it('allows long unbroken answers to wrap inside the assistant column', async () 
   expect(screen.getByLabelText('Workflow assistant')).toHaveClass(
     'border-l',
     'max-w-full',
+  );
+});
+
+it('renders partial assistant tokens before the stream completes', async () => {
+  const encoder = new TextEncoder();
+  let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+  const body = new globalThis.ReadableStream<Uint8Array>({
+    start(controller) {
+      streamController = controller;
+    },
+  });
+  (global.fetch as jest.Mock).mockResolvedValue({
+    ok: true,
+    status: 200,
+    body: body as unknown as globalThis.ReadableStream<Uint8Array>,
+  } as Response);
+  render(<WorkflowAssistant stepId='submit' stepTitle='Submit' />);
+  fireEvent.change(screen.getByLabelText('Ask about this workflow'), {
+    target: { value: 'Why?' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Ask assistant' }));
+  await waitFor(() => expect(streamController).toBeDefined());
+
+  streamController?.enqueue(
+    encoder.encode('data: {"type":"token","data":"Review"}\n\n'),
+  );
+
+  expect(await screen.findByText('Review')).toBeVisible();
+  expect(screen.getByRole('status')).toHaveTextContent('Answering…');
+
+  streamController?.enqueue(
+    encoder.encode(
+      'data: {"type":"token","data":" the dates."}\n\n' +
+        'data: {"type":"done","data":null}\n\n',
+    ),
+  );
+  streamController?.close();
+
+  expect(await screen.findByText('Review the dates.')).toBeVisible();
+  await waitFor(() =>
+    expect(screen.queryByRole('status')).not.toBeInTheDocument(),
   );
 });
 

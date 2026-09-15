@@ -54,6 +54,19 @@ const reference = {
   version: 4,
   digest: `sha256:${'a'.repeat(64)}`,
 };
+
+async function readStreamText(body: unknown): Promise<string> {
+  const reader = (body as ReadableStream<Uint8Array>).getReader();
+  const decoder = new TextDecoder();
+  let value = '';
+  for (;;) {
+    const result = await reader.read();
+    if (result.done) break;
+    value += decoder.decode(result.value, { stream: true });
+  }
+  return value + decoder.decode();
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetRuntime.mockReturnValue({
@@ -73,11 +86,17 @@ beforeEach(() => {
   }));
 });
 
-it('calls only the bound assistant facade without creating a submission or trusting client scope', async () => {
+it('streams only the bound assistant facade without creating a submission or trusting client scope', async () => {
   const response = await POST(request(question) as never);
   expect(response.status).toBe(200);
-  expect(await response.json()).toEqual({ answer: 'Enter the dates.' });
+  expect(await readStreamText(response.body)).toBe(
+    'data: {"type":"token","data":"Enter the dates."}\n\n' +
+      'data: {"type":"done","data":null}\n\n',
+  );
   expect(response.headers.get('cache-control')).toBe('no-store');
+  expect(response.headers.get('content-type')).toBe(
+    'text/event-stream; charset=utf-8',
+  );
   expect(mockPlatformFetch).toHaveBeenCalledTimes(1);
   const args = mockPlatformFetch.mock.calls[0][0];
   expect(args).toMatchObject({
@@ -86,10 +105,40 @@ it('calls only the bound assistant facade without creating a submission or trust
     path: '/assistant',
     anonymousClientId: expect.stringMatching(/^sha256:/),
   });
+  expect(args.init.headers).toEqual({ Accept: 'text/event-stream' });
   expect(JSON.parse(args.init.body)).toEqual({
     ...question,
     workflowTemplate: reference,
   });
+});
+
+it('passes through a streaming PublicAPI response without buffering it', async () => {
+  const upstream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(
+        new TextEncoder().encode('data: {"type":"token","data":"Enter "}\n\n'),
+      );
+      controller.enqueue(
+        new TextEncoder().encode(
+          'data: {"type":"token","data":"the dates."}\n\n' +
+            'data: {"type":"done","data":null}\n\n',
+        ),
+      );
+      controller.close();
+    },
+  });
+  mockPlatformFetch.mockResolvedValue({
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'content-type': 'text/event-stream' }),
+    body: upstream,
+  });
+
+  const response = await POST(request(question) as never);
+
+  expect(response.status).toBe(200);
+  expect(response.body).toBe(upstream);
+  expect(response.headers.get('x-accel-buffering')).toBe('no');
 });
 
 it.each([undefined, false])(

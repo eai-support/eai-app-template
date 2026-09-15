@@ -4,7 +4,10 @@ import { FormEvent, useId, useRef, useState } from 'react';
 import { ArrowUp, Sparkles } from 'lucide-react';
 
 import { apiUrl } from '@/lib/api-helpers';
-import type { WorkflowAssistantMessage } from '@/lib/generated-workflow/assistant-contract';
+import {
+  readWorkflowAssistantEventStream,
+  type WorkflowAssistantMessage,
+} from '@/lib/generated-workflow/assistant-contract';
 
 export function WorkflowAssistant({
   stepId,
@@ -19,6 +22,7 @@ export function WorkflowAssistant({
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [activeQuestion, setActiveQuestion] = useState('');
+  const [streamingAnswer, setStreamingAnswer] = useState('');
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState(false);
   const inFlight = useRef(false);
@@ -32,6 +36,7 @@ export function WorkflowAssistant({
     setBusy(true);
     setActiveQuestion(text);
     setQuestion('');
+    setStreamingAnswer('');
     setError('');
     try {
       const response = await fetch(apiUrl('/api/eai/workflow-assistant'), {
@@ -50,12 +55,11 @@ export function WorkflowAssistant({
             ? 'Please wait a minute before asking another question.'
             : 'The assistant is unavailable. Please try again.',
         );
-      const output = (await response.json()) as { answer?: unknown };
-      if (
-        typeof output.answer !== 'string' ||
-        !output.answer.trim() ||
-        output.answer.length > 4000
-      ) {
+      const output = await readWorkflowAssistantEventStream(
+        response,
+        setStreamingAnswer,
+      );
+      if (!output.completed || !output.text.trim()) {
         throw new Error('The assistant could not answer. Please try again.');
       }
       setMessages(
@@ -63,7 +67,7 @@ export function WorkflowAssistant({
           [
             ...previous,
             { role: 'user', content: text },
-            { role: 'assistant', content: String(output.answer) },
+            { role: 'assistant', content: output.text.trim() },
           ].slice(-100) as WorkflowAssistantMessage[],
       );
     } catch (cause) {
@@ -77,6 +81,7 @@ export function WorkflowAssistant({
       inFlight.current = false;
       setBusy(false);
       setActiveQuestion('');
+      setStreamingAnswer('');
     }
   }
 
@@ -99,9 +104,15 @@ export function WorkflowAssistant({
           {activeQuestion}
         </p>
       ) : null}
+      {streamingAnswer ? (
+        <p className='max-w-full rounded-lg border p-3 text-sm [overflow-wrap:anywhere] whitespace-pre-wrap'>
+          <span className='sr-only'>Assistant: </span>
+          {streamingAnswer}
+        </p>
+      ) : null}
       {busy ? (
         <p role='status' className='text-muted-foreground text-sm'>
-          Thinking…
+          {streamingAnswer ? 'Answering…' : 'Thinking…'}
         </p>
       ) : null}
     </>
