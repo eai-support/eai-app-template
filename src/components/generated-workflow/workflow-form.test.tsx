@@ -85,7 +85,9 @@ describe('GeneratedWorkflowForm', () => {
       />,
     );
 
-    expect(screen.getByText('Contact details')).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Contact details' }),
+    ).toBeVisible();
     const submit = await screen.findByRole('button', { name: 'Submit' });
     fireEvent.click(submit);
     expect(screen.getByText('This field is required.')).toBeVisible();
@@ -212,9 +214,50 @@ describe('GeneratedWorkflowForm', () => {
 
     expect(screen.getByText('Acme Council')).toBeVisible();
     expect(screen.getByAltText('Acme Council logo')).toBeVisible();
-    expect(await screen.findByRole('button', { name: 'Submit' })).toHaveStyle({
-      backgroundColor: '#123ABC',
+    expect(screen.getByLabelText('Published workflow')).toHaveStyle({
+      '--primary': '#123ABC',
+      '--secondary': '#EDF4FF',
     });
+    expect(await screen.findByRole('button', { name: 'Submit' })).toHaveClass(
+      'bg-primary',
+      'text-primary-foreground',
+    );
+  });
+
+  it('matches the signed two-panel workflow preview shell', async () => {
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        assistantEnabled
+        branding={{ displayName: 'Acme Council' }}
+        snapshot={{
+          steps: [
+            { id: 'request', title: 'Request', fields: [] },
+            { id: 'review', title: 'Review', fields: [] },
+          ],
+        }}
+      />,
+    );
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText('Published workflow')).toHaveClass(
+      'h-full',
+      'min-h-0',
+      'overflow-hidden',
+    );
+    expect(screen.getByLabelText('Acme Council branding')).toBeVisible();
+    expect(
+      screen.getByRole('navigation', { name: 'Workflow steps' }),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: '1 Request' })).toHaveAttribute(
+      'aria-current',
+      'step',
+    );
+    expect(screen.getByLabelText('Workflow assistant')).toHaveClass('border-l');
+    expect(
+      await screen.findByRole('button', { name: 'Continue' }),
+    ).toBeVisible();
   });
 
   it('renders canonical step blocks in order and persists declared outputs', async () => {

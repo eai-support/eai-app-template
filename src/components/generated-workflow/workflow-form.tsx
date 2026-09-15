@@ -43,6 +43,24 @@ function detectDevice(): 'Desktop' | 'Mobile' | 'Tablet' {
   return 'Desktop';
 }
 
+function useCompactViewport(): boolean {
+  const [compact, setCompact] = useState(() =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 767px)').matches
+      : false,
+  );
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(max-width: 767px)');
+    const update = () => setCompact(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return compact;
+}
+
 function readableTextColor(background: string): string {
   const red = Number.parseInt(background.slice(1, 3), 16);
   const green = Number.parseInt(background.slice(3, 5), 16);
@@ -124,6 +142,7 @@ export function GeneratedWorkflowForm({
   const [userEmail, setUserEmail] = useState('');
   const initialized = useRef(false);
   const formDataRef = useRef(formData);
+  const compactViewport = useCompactViewport();
 
   useEffect(() => {
     formDataRef.current = formData;
@@ -438,246 +457,284 @@ export function GeneratedWorkflowForm({
     ) ?? false;
   const primaryColor = branding?.primaryColor ?? '#1d4ed8';
   const secondaryColor = branding?.secondaryColor ?? '#f8fafc';
-  const accentColor = branding?.accentColor ?? primaryColor;
-  const brandStyle = {
-    backgroundColor: secondaryColor,
-  } satisfies CSSProperties;
+  const brandName = branding?.displayName ?? appKey.replace(/-/g, ' ');
+  const themeStyle = {
+    '--primary': primaryColor,
+    '--primary-foreground': readableTextColor(primaryColor),
+    '--secondary': secondaryColor,
+    '--secondary-foreground': readableTextColor(secondaryColor),
+  } as CSSProperties;
   return (
-    <div
-      className='@container/workflow min-h-svh overflow-y-auto'
-      style={brandStyle}
-    >
-      <header className='border-b border-slate-200 bg-white'>
-        <div className='mx-auto max-w-3xl px-5 py-7'>
-          <div className='flex items-center gap-4'>
-            {branding?.logoDataUrl ? (
-              <Image
-                alt={`${branding.displayName ?? binding.workflowTemplate.title} logo`}
-                className='h-12 w-12 rounded-lg border bg-white object-contain p-1'
-                height={48}
-                src={branding.logoDataUrl}
-                style={{ borderColor: accentColor }}
-                unoptimized
-                width={48}
-              />
-            ) : null}
-            <div>
-              <p
-                className='text-xs font-semibold tracking-widest uppercase'
-                style={{ color: primaryColor }}
-              >
-                {branding?.displayName ?? appKey.replace(/-/g, ' ')}
-              </p>
-              <h1 className='mt-2 text-2xl font-semibold text-slate-950'>
+    <main className='bg-muted/30 flex h-svh min-h-0 flex-col p-4'>
+      <section
+        aria-label='Published workflow'
+        className='bg-background @container/workflow mx-auto flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border shadow-sm'
+        style={themeStyle}
+      >
+        <header
+          aria-label={`${brandName} branding`}
+          className='flex shrink-0 items-center gap-3 px-5 py-4'
+          style={{
+            background: secondaryColor,
+            color: readableTextColor(secondaryColor),
+          }}
+        >
+          {branding?.logoDataUrl ? (
+            <Image
+              alt={`${brandName} logo`}
+              className='size-9 object-contain'
+              height={36}
+              src={branding.logoDataUrl}
+              unoptimized
+              width={36}
+            />
+          ) : (
+            <span className='flex size-9 items-center justify-center rounded-lg border text-sm font-bold'>
+              {brandName.slice(0, 1).toUpperCase()}
+            </span>
+          )}
+          <span className='truncate font-semibold'>{brandName}</span>
+        </header>
+
+        <div className='relative flex min-h-0 flex-1 flex-row'>
+          <div className='flex min-h-0 min-w-0 flex-1 flex-col'>
+            <div className='min-h-0 flex-1 overflow-y-auto px-5 py-5'>
+              <h1 className='text-xl font-semibold tracking-tight'>
                 {binding.workflowTemplate.title}
               </h1>
-            </div>
-          </div>
-          <div className='mt-5 flex gap-2' aria-label='Workflow progress'>
-            {steps.map((step, index) => (
-              <div
-                key={step.id}
-                className='h-1.5 flex-1 rounded-full'
+              <nav
+                aria-label='Workflow steps'
+                className='mt-4 grid gap-2'
                 style={{
-                  backgroundColor:
-                    index <= currentStepIndex ? primaryColor : '#e2e8f0',
+                  gridTemplateColumns: `repeat(${Math.min(steps.length, 4)}, minmax(0, 1fr))`,
                 }}
-              />
-            ))}
-          </div>
-        </div>
-      </header>
+              >
+                {steps.map((step, index) => {
+                  const active = index === currentStepIndex;
+                  const selectable = index <= currentStepIndex;
+                  return (
+                    <button
+                      key={step.id ?? index}
+                      type='button'
+                      aria-current={active ? 'step' : undefined}
+                      disabled={!selectable}
+                      onClick={() => {
+                        if (!selectable) return;
+                        setFieldErrors({});
+                        setCurrentStepIndex(index);
+                      }}
+                      className={`flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                        active
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      } ${selectable && !active ? 'hover:text-foreground' : 'cursor-default'}`}
+                    >
+                      <span
+                        className={`flex size-4 shrink-0 items-center justify-center rounded-full border text-[10px] ${
+                          active
+                            ? 'border-primary-foreground bg-primary-foreground text-primary'
+                            : 'border-current'
+                        }`}
+                      >
+                        {index + 1}
+                      </span>
+                      <span className='truncate'>{step.title}</span>
+                    </button>
+                  );
+                })}
+              </nav>
 
-      <main
-        className={
-          assistantEnabled
-            ? 'mx-auto grid max-w-6xl items-start gap-5 px-5 py-8 @4xl/workflow:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]'
-            : 'mx-auto max-w-3xl px-5 py-8'
-        }
-      >
-        <section className='rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8'>
-          <p className='text-sm font-medium text-slate-500'>
-            Step {currentStepIndex + 1} of {steps.length}
-          </p>
-          <h2 className='mt-2 text-xl font-semibold text-slate-950'>
-            {currentStep?.title}
-          </h2>
-          {currentStep?.description ? (
-            <p className='mt-2 text-sm leading-6 text-slate-600'>
-              {currentStep.description}
-            </p>
-          ) : null}
+              <div className='mt-5'>
+                <h2 className='text-base font-semibold'>
+                  {currentStep?.title}
+                </h2>
+                {currentStep?.description ? (
+                  <p className='text-muted-foreground mt-1 text-sm'>
+                    {currentStep.description}
+                  </p>
+                ) : null}
+              </div>
 
-          <div className='mt-7 space-y-6'>
-            {currentStep?.fields?.map((field) => {
-              const stepId = currentStep.id ?? '';
-              const fieldId = field.id ?? '';
-              const key = fieldKey(stepId, fieldId);
-              if (field.type === 'smart_block') {
-                return (
-                  <div
-                    key={key}
-                    className='rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900'
-                  >
-                    {field.label || 'Guided workflow activity'}
+              <div className='mt-5 space-y-4'>
+                {currentStep?.fields?.map((field) => {
+                  const stepId = currentStep.id ?? '';
+                  const fieldId = field.id ?? '';
+                  const key = fieldKey(stepId, fieldId);
+                  if (field.type === 'smart_block') {
+                    return (
+                      <div
+                        key={key}
+                        className='bg-muted rounded-md border p-4 text-sm'
+                      >
+                        {field.label || 'Guided workflow activity'}
+                      </div>
+                    );
+                  }
+                  return (
+                    <label
+                      key={key}
+                      htmlFor={key}
+                      className='block text-sm font-medium'
+                    >
+                      {field.label}
+                      {field.required ? (
+                        <span className='text-destructive ml-1'>*</span>
+                      ) : null}
+                      {field.helpText ? (
+                        <span className='text-muted-foreground mt-1 block text-xs font-normal'>
+                          {field.helpText}
+                        </span>
+                      ) : null}
+                      <GeneratedWorkflowFieldInput
+                        id={key}
+                        disabled={
+                          submitState === 'starting' ||
+                          submitState === 'submitting' ||
+                          uploadingField === key
+                        }
+                        field={field}
+                        value={formData[stepId]?.[fieldId]}
+                        onChange={(value) =>
+                          setFieldValue(stepId, fieldId, value)
+                        }
+                        onFileSelect={(file) =>
+                          void uploadFile(stepId, fieldId, file)
+                        }
+                      />
+                      {uploadingField === key ? (
+                        <span className='text-muted-foreground mt-1 block text-xs'>
+                          Uploading…
+                        </span>
+                      ) : null}
+                      {fieldErrors[key] ? (
+                        <span className='text-destructive mt-1 block text-xs'>
+                          {fieldErrors[key]}
+                        </span>
+                      ) : null}
+                    </label>
+                  );
+                })}
+                {currentStep?.blocks?.map((block) => {
+                  const stepId = currentStep.id ?? '';
+                  const key = blockKey(stepId, block.id);
+                  return (
+                    <div key={key}>
+                      <GeneratedWorkflowSmartBlock
+                        block={block}
+                        disabled={
+                          submitState === 'starting' ||
+                          submitState === 'submitting'
+                        }
+                        formData={formData}
+                        stepId={stepId}
+                        values={blockOutputValues(formData, stepId, block.id)}
+                        onOutputChange={(outputName, value) =>
+                          setBlockOutputValue(
+                            stepId,
+                            block.id,
+                            outputName,
+                            value,
+                          )
+                        }
+                      />
+                      {fieldErrors[key] ? (
+                        <span className='text-destructive mt-1 block text-xs'>
+                          {fieldErrors[key]}
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+
+                {isLastStep ? (
+                  <div className='@container/contact grid gap-5 border-t pt-7 @xl/contact:grid-cols-2'>
+                    <label className='text-sm font-medium'>
+                      Name
+                      <input
+                        className='bg-background mt-2 w-full rounded-md border px-3 py-2'
+                        value={userName}
+                        maxLength={200}
+                        onChange={(event) => setUserName(event.target.value)}
+                      />
+                    </label>
+                    <label className='text-sm font-medium'>
+                      Email
+                      <input
+                        type='email'
+                        className='bg-background mt-2 w-full rounded-md border px-3 py-2'
+                        value={userEmail}
+                        maxLength={200}
+                        onChange={(event) => setUserEmail(event.target.value)}
+                      />
+                    </label>
                   </div>
-                );
-              }
-              return (
-                <label
-                  key={key}
-                  htmlFor={key}
-                  className='block text-sm font-medium text-slate-800'
-                >
-                  {field.label}
-                  {field.required ? (
-                    <span className='ml-1 text-red-600'>*</span>
-                  ) : null}
-                  {field.helpText ? (
-                    <span className='mt-1 block text-xs font-normal text-slate-500'>
-                      {field.helpText}
-                    </span>
-                  ) : null}
-                  <GeneratedWorkflowFieldInput
-                    id={key}
-                    disabled={
-                      submitState === 'starting' ||
-                      submitState === 'submitting' ||
-                      uploadingField === key
-                    }
-                    field={field}
-                    value={formData[stepId]?.[fieldId]}
-                    onChange={(value) => setFieldValue(stepId, fieldId, value)}
-                    onFileSelect={(file) =>
-                      void uploadFile(stepId, fieldId, file)
-                    }
-                  />
-                  {uploadingField === key ? (
-                    <span className='mt-1 block text-xs text-slate-500'>
-                      Uploading…
-                    </span>
-                  ) : null}
-                  {fieldErrors[key] ? (
-                    <span className='mt-1 block text-xs text-red-600'>
-                      {fieldErrors[key]}
-                    </span>
-                  ) : null}
-                </label>
-              );
-            })}
-            {currentStep?.blocks?.map((block) => {
-              const stepId = currentStep.id ?? '';
-              const key = blockKey(stepId, block.id);
-              return (
-                <div key={key}>
-                  <GeneratedWorkflowSmartBlock
-                    block={block}
-                    disabled={
-                      submitState === 'starting' || submitState === 'submitting'
-                    }
-                    formData={formData}
-                    stepId={stepId}
-                    values={blockOutputValues(formData, stepId, block.id)}
-                    onOutputChange={(outputName, value) =>
-                      setBlockOutputValue(stepId, block.id, outputName, value)
-                    }
-                  />
-                  {fieldErrors[key] ? (
-                    <span className='mt-1 block text-xs text-red-600'>
-                      {fieldErrors[key]}
-                    </span>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
+                ) : null}
 
-          {isLastStep ? (
-            <div className='mt-8 grid gap-5 border-t border-slate-200 pt-7 sm:grid-cols-2'>
-              <label className='text-sm font-medium text-slate-800'>
-                Name
-                <input
-                  className='mt-2 w-full rounded-lg border border-slate-300 px-3 py-2'
-                  value={userName}
-                  maxLength={200}
-                  onChange={(event) => setUserName(event.target.value)}
-                />
-              </label>
-              <label className='text-sm font-medium text-slate-800'>
-                Email
-                <input
-                  type='email'
-                  className='mt-2 w-full rounded-lg border border-slate-300 px-3 py-2'
-                  value={userEmail}
-                  maxLength={200}
-                  onChange={(event) => setUserEmail(event.target.value)}
-                />
-              </label>
+                {errorMessage ? (
+                  <div
+                    role='alert'
+                    className='border-destructive/40 bg-destructive/5 rounded-md border px-4 py-3'
+                  >
+                    <p className='text-destructive text-sm'>{errorMessage}</p>
+                  </div>
+                ) : null}
+              </div>
             </div>
-          ) : null}
 
-          {errorMessage ? (
-            <p
-              role='alert'
-              className='mt-6 rounded-lg bg-red-50 p-3 text-sm text-red-700'
-            >
-              {errorMessage}
-            </p>
-          ) : null}
-
-          <div className='mt-8 flex justify-between'>
-            <button
-              type='button'
-              className='rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40'
-              disabled={currentStepIndex === 0 || submitState === 'submitting'}
-              onClick={() => {
-                setFieldErrors({});
-                setCurrentStepIndex((current) => Math.max(0, current - 1));
-              }}
-            >
-              Back
-            </button>
-            <button
-              type='button'
-              className='rounded-lg px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50'
-              style={{
-                backgroundColor: primaryColor,
-                color: readableTextColor(primaryColor),
-              }}
-              disabled={
-                submitState === 'starting' ||
-                submitState === 'submitting' ||
-                Boolean(uploadingField) ||
-                currentStepHasUnsupportedBlocks
-              }
-              onClick={() => {
-                if (!currentStep || !validateStep(currentStep)) return;
-                if (isLastStep) {
-                  void submit();
-                  return;
+            <div className='bg-background flex h-16 shrink-0 items-center justify-between gap-3 border-t px-5'>
+              <button
+                type='button'
+                className='hover:bg-muted rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-40'
+                disabled={
+                  currentStepIndex === 0 || submitState === 'submitting'
                 }
-                const next = currentStepIndex + 1;
-                setCurrentStepIndex(next);
-                void saveProgress(next);
-              }}
-            >
-              {submitState === 'starting'
-                ? 'Starting…'
-                : submitState === 'submitting'
-                  ? 'Submitting…'
-                  : isLastStep
-                    ? 'Submit'
-                    : 'Next'}
-            </button>
+                onClick={() => {
+                  setFieldErrors({});
+                  setCurrentStepIndex((current) => Math.max(0, current - 1));
+                }}
+              >
+                Back
+              </button>
+              <button
+                type='button'
+                className='bg-primary text-primary-foreground rounded-md px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50'
+                disabled={
+                  submitState === 'starting' ||
+                  submitState === 'submitting' ||
+                  Boolean(uploadingField) ||
+                  currentStepHasUnsupportedBlocks
+                }
+                onClick={() => {
+                  if (!currentStep || !validateStep(currentStep)) return;
+                  if (isLastStep) {
+                    void submit();
+                    return;
+                  }
+                  const next = currentStepIndex + 1;
+                  setCurrentStepIndex(next);
+                  void saveProgress(next);
+                }}
+              >
+                {submitState === 'starting'
+                  ? 'Starting…'
+                  : submitState === 'submitting'
+                    ? 'Submitting…'
+                    : isLastStep
+                      ? 'Submit'
+                      : 'Continue'}
+              </button>
+            </div>
           </div>
-        </section>
-        {assistantEnabled && (
-          <WorkflowAssistant
-            stepId={currentStep?.id ?? ''}
-            stepTitle={currentStep?.title ?? 'this step'}
-          />
-        )}
-      </main>
-    </div>
+
+          {assistantEnabled ? (
+            <WorkflowAssistant
+              variant={compactViewport ? 'bubble' : 'rail'}
+              stepId={currentStep?.id ?? ''}
+              stepTitle={currentStep?.title ?? 'this step'}
+            />
+          ) : null}
+        </div>
+      </section>
+    </main>
   );
 }
