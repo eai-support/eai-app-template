@@ -30,6 +30,8 @@ export interface WorkflowAssistantStreamResult {
   text: string;
 }
 
+const TEXT_UPDATE_INTERVAL_MS = 32;
+
 /** Consume the bounded token and completion events exposed by the workflow assistant route. */
 export async function readWorkflowAssistantEventStream(
   response: Response,
@@ -44,6 +46,18 @@ export async function readWorkflowAssistantEventStream(
   let buffered = '';
   let accumulated = '';
   let completed = false;
+  let lastTextNotificationAt = Number.NEGATIVE_INFINITY;
+  let lastNotifiedText = '';
+
+  function notifyText(force = false): void {
+    if (accumulated === lastNotifiedText) return;
+    const now = Date.now();
+    if (!force && now - lastTextNotificationAt < TEXT_UPDATE_INTERVAL_MS)
+      return;
+    lastTextNotificationAt = now;
+    lastNotifiedText = accumulated;
+    onText(accumulated);
+  }
 
   function consumeLine(rawLine: string): void {
     const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
@@ -62,7 +76,6 @@ export async function readWorkflowAssistantEventStream(
       if (accumulated.length > maxTextLength) {
         throw new Error('The assistant returned an invalid response.');
       }
-      onText(accumulated);
     } else if (event.type === 'done') {
       completed = true;
     } else if (event.type === 'error') {
@@ -78,9 +91,11 @@ export async function readWorkflowAssistantEventStream(
       const lines = buffered.split('\n');
       buffered = lines.pop() ?? '';
       for (const line of lines) consumeLine(line);
+      notifyText();
     }
     buffered += decoder.decode();
     if (buffered) consumeLine(buffered);
+    notifyText(true);
   } finally {
     reader.releaseLock();
   }

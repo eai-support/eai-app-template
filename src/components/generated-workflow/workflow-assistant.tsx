@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useId, useRef, useState } from 'react';
+import { FormEvent, memo, useEffect, useId, useRef, useState } from 'react';
 import { ArrowUp, Sparkles } from 'lucide-react';
 
 import { apiUrl } from '@/lib/api-helpers';
@@ -11,7 +11,7 @@ import {
 
 const EMPTY_ASSISTANT_MESSAGES: WorkflowAssistantMessage[] = [];
 
-export function WorkflowAssistant({
+export const WorkflowAssistant = memo(function WorkflowAssistant({
   stepId,
   stepTitle,
   variant = 'rail',
@@ -258,4 +258,4 @@ export function WorkflowAssistant({
       </div>
     </aside>
   );
-}
+});
