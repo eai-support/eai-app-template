@@ -41,6 +41,54 @@ describe('GeneratedWorkflowForm', () => {
     global.fetch = originalFetch;
   });
 
+  it.each([false, true])(
+    'renders Q&A only when enabled for this app (%s)',
+    async (assistantEnabled) => {
+      render(
+        <GeneratedWorkflowForm
+          appKey='rates-review'
+          binding={binding}
+          assistantEnabled={assistantEnabled}
+          snapshot={{
+            steps: [{ id: 'request', title: 'Request', fields: [] }],
+          }}
+        />,
+      );
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+      expect(Boolean(screen.queryByLabelText('Workflow assistant'))).toBe(
+        assistantEnabled,
+      );
+    },
+  );
+
+  it('adds the resumable submission URL without notifying the app router', async () => {
+    const routerPatchedReplaceState = jest.fn();
+    Object.defineProperty(window.history, 'replaceState', {
+      configurable: true,
+      value: routerPatchedReplaceState,
+      writable: true,
+    });
+
+    try {
+      render(
+        <GeneratedWorkflowForm
+          appKey='rates-review'
+          binding={binding}
+          snapshot={{
+            steps: [{ id: 'request', title: 'Request', fields: [] }],
+          }}
+        />,
+      );
+
+      await screen.findByRole('button', { name: 'Submit' });
+      expect(window.location.search).toBe('?submission=submission-1');
+      expect(routerPatchedReplaceState).not.toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      Reflect.deleteProperty(window.history, 'replaceState');
+    }
+  });
+
   it('renders exported fields, validates required answers, and completes anonymously', async () => {
     render(
       <GeneratedWorkflowForm
@@ -65,7 +113,9 @@ describe('GeneratedWorkflowForm', () => {
       />,
     );
 
-    expect(screen.getByText('Contact details')).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: 'Contact details' }),
+    ).toBeVisible();
     const submit = await screen.findByRole('button', { name: 'Submit' });
     fireEvent.click(submit);
     expect(screen.getByText('This field is required.')).toBeVisible();
@@ -76,6 +126,12 @@ describe('GeneratedWorkflowForm', () => {
     fireEvent.click(submit);
 
     await waitFor(() => expect(screen.getByText('Submitted')).toBeVisible());
+    expect(screen.getByRole('main')).toHaveClass(
+      'min-h-svh',
+      'items-center',
+      'justify-center',
+      'text-center',
+    );
     expect(global.fetch).toHaveBeenLastCalledWith(
       '/api/eai/workflow-submissions/submission-1',
       expect.objectContaining({
@@ -83,6 +139,95 @@ describe('GeneratedWorkflowForm', () => {
         body: expect.stringContaining('Alex Respondent'),
       }),
     );
+  });
+
+  it('does not submit invalid formatted answers and accepts their correction', async () => {
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        snapshot={{
+          steps: [
+            {
+              id: 'contact',
+              title: 'Contact',
+              fields: [
+                { id: 'email', label: 'Email', type: 'text', required: true },
+                {
+                  id: 'amount',
+                  label: 'Amount',
+                  type: 'text',
+                  validation: { format: 'currency', min: 10, max: 20 },
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+    const submit = await screen.findByRole('button', { name: 'Submit' });
+    fireEvent.change(
+      screen.getByLabelText(/Email/, { selector: '[id="contact.email"]' }),
+      {
+        target: { value: 'bad' },
+      },
+    );
+    fireEvent.change(screen.getByLabelText(/Amount/), {
+      target: { value: '9' },
+    });
+    fireEvent.click(submit);
+    expect(screen.getByText('Enter a valid email address')).toBeVisible();
+    expect(screen.getByText('Must be at least 10')).toBeVisible();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    fireEvent.change(
+      screen.getByLabelText(/Email/, { selector: '[id="contact.email"]' }),
+      {
+        target: { value: 'alex@example.com' },
+      },
+    );
+    fireEvent.change(screen.getByLabelText(/Amount/), {
+      target: { value: '12.50' },
+    });
+    fireEvent.click(submit);
+    await screen.findByText('Submitted');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns a resumed form to an earlier invalid step before completing', async () => {
+    window.history.replaceState(null, '', '/?submission=existing');
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        submission: {
+          status: 'in_progress',
+          currentStep: 1,
+          formData: { contact: { email: 'invalid' } },
+        },
+      }),
+    });
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        snapshot={{
+          steps: [
+            {
+              id: 'contact',
+              title: 'Contact',
+              fields: [
+                { id: 'email', label: 'Email', type: 'text', required: true },
+              ],
+            },
+            { id: 'review', title: 'Review', fields: [] },
+          ],
+        }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit' }));
+    expect(
+      await screen.findByText('Enter a valid email address'),
+    ).toBeVisible();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
   it('renders the exported company brand snapshot', async () => {
@@ -103,9 +248,50 @@ describe('GeneratedWorkflowForm', () => {
 
     expect(screen.getByText('Acme Council')).toBeVisible();
     expect(screen.getByAltText('Acme Council logo')).toBeVisible();
-    expect(await screen.findByRole('button', { name: 'Submit' })).toHaveStyle({
-      backgroundColor: '#123ABC',
+    expect(screen.getByLabelText('Published workflow')).toHaveStyle({
+      '--primary': '#123ABC',
+      '--secondary': '#EDF4FF',
     });
+    expect(await screen.findByRole('button', { name: 'Submit' })).toHaveClass(
+      'bg-primary',
+      'text-primary-foreground',
+    );
+  });
+
+  it('matches the signed two-panel workflow preview shell', async () => {
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        assistantEnabled
+        branding={{ displayName: 'Acme Council' }}
+        snapshot={{
+          steps: [
+            { id: 'request', title: 'Request', fields: [] },
+            { id: 'review', title: 'Review', fields: [] },
+          ],
+        }}
+      />,
+    );
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText('Published workflow')).toHaveClass(
+      'h-full',
+      'min-h-0',
+      'overflow-hidden',
+    );
+    expect(screen.getByLabelText('Acme Council branding')).toBeVisible();
+    expect(
+      screen.getByRole('navigation', { name: 'Workflow steps' }),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: '1 Request' })).toHaveAttribute(
+      'aria-current',
+      'step',
+    );
+    expect(screen.getByLabelText('Workflow assistant')).toHaveClass('border-l');
+    expect(
+      await screen.findByRole('button', { name: 'Continue' }),
+    ).toBeVisible();
   });
 
   it('renders canonical step blocks in order and persists declared outputs', async () => {

@@ -10,8 +10,23 @@ interface CachedAccessToken {
   expiresAtMs: number;
 }
 
+interface PendingAccessToken {
+  audience: string;
+  clientId?: string;
+  promise: Promise<string>;
+}
+
 let cachedAccessToken: CachedAccessToken | null = null;
+let pendingAccessToken: PendingAccessToken | null = null;
 let tokenProviderOverride: GeneratedWorkflowTokenProvider | null = null;
+
+/** Keeps platform connectivity failures distinct from malformed client input. */
+export class GeneratedWorkflowPlatformUnavailableError extends Error {
+  constructor(options?: ErrorOptions) {
+    super('Generated workflow platform is unavailable.', options);
+    this.name = 'GeneratedWorkflowPlatformUnavailableError';
+  }
+}
 
 function publicApiBaseUrl(): string {
   const value =
@@ -65,6 +80,31 @@ async function containerAppsManagedIdentityToken(
     return cachedAccessToken.token;
   }
 
+  if (
+    pendingAccessToken?.audience === audience &&
+    pendingAccessToken.clientId === clientId
+  ) {
+    return pendingAccessToken.promise;
+  }
+
+  const promise = requestContainerAppsManagedIdentityToken(
+    audience,
+    clientId,
+    now,
+  );
+  pendingAccessToken = { audience, clientId, promise };
+  try {
+    return await promise;
+  } finally {
+    if (pendingAccessToken?.promise === promise) pendingAccessToken = null;
+  }
+}
+
+async function requestContainerAppsManagedIdentityToken(
+  audience: string,
+  clientId: string | undefined,
+  now: number,
+): Promise<string> {
   const identityHeader = process.env.IDENTITY_HEADER?.trim();
   if (!identityHeader) {
     throw new Error(
@@ -132,32 +172,36 @@ export async function generatedWorkflowPlatformFetch(args: {
   anonymousClientId?: string;
   init?: RequestInit;
 }): Promise<Response> {
-  const headers = new Headers(args.init?.headers);
-  const isBinary = args.init?.body instanceof ArrayBuffer;
-  if (
-    !isBinary &&
-    !(args.init?.body instanceof FormData) &&
-    !headers.has('Content-Type')
-  ) {
-    headers.set('Content-Type', 'application/json');
-  }
-  headers.set('Authorization', `Bearer ${await accessToken()}`);
-  if (args.anonymousClientId) {
-    headers.set('X-EAI-Anonymous-Client', args.anonymousClientId);
-  }
+  try {
+    const headers = new Headers(args.init?.headers);
+    const isBinary = args.init?.body instanceof ArrayBuffer;
+    if (
+      !isBinary &&
+      !(args.init?.body instanceof FormData) &&
+      !headers.has('Content-Type')
+    ) {
+      headers.set('Content-Type', 'application/json');
+    }
+    headers.set('Authorization', `Bearer ${await accessToken()}`);
+    if (args.anonymousClientId) {
+      headers.set('X-EAI-Anonymous-Client', args.anonymousClientId);
+    }
 
-  return fetch(
-    `${publicApiBaseUrl()}${runtimeFacadePath(
-      args.tenantId,
-      args.appKey,
-      args.path,
-    )}`,
-    {
-      ...args.init,
-      headers,
-      cache: 'no-store',
-    },
-  );
+    return await fetch(
+      `${publicApiBaseUrl()}${runtimeFacadePath(
+        args.tenantId,
+        args.appKey,
+        args.path,
+      )}`,
+      {
+        ...args.init,
+        headers,
+        cache: 'no-store',
+      },
+    );
+  } catch (error) {
+    throw new GeneratedWorkflowPlatformUnavailableError({ cause: error });
+  }
 }
 
 export function __setGeneratedWorkflowTokenProviderForTests(
@@ -165,4 +209,5 @@ export function __setGeneratedWorkflowTokenProviderForTests(
 ): void {
   tokenProviderOverride = provider;
   cachedAccessToken = null;
+  pendingAccessToken = null;
 }

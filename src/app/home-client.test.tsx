@@ -9,9 +9,15 @@ jest.mock('@enterpriseaigroup/demo', () => ({
 jest.mock('@/components/generated-workflow/workflow-form', () => ({
   GeneratedWorkflowForm: ({
     branding,
+    assistantEnabled,
   }: {
     branding?: { displayName?: string };
-  }) => <div>{branding?.displayName ?? 'Generated workflow form'}</div>,
+    assistantEnabled?: boolean;
+  }) => (
+    <div data-assistant-enabled={assistantEnabled}>
+      {branding?.displayName ?? 'Generated workflow form'}
+    </div>
+  ),
 }));
 
 describe('HomeClient generated workflow runtime', () => {
@@ -20,6 +26,7 @@ describe('HomeClient generated workflow runtime', () => {
       <HomeClient
         generatedWorkflow={{
           appKey: 'rates-review',
+          assistantEnabled: true,
           binding: {
             schemaVersion: 'eai.generated_app_runtime_binding.v1',
             workflowTemplate: {
@@ -47,6 +54,10 @@ describe('HomeClient generated workflow runtime', () => {
     );
     expect(marker).toHaveAttribute('data-eai-workflow-title', 'Rates Review');
     expect(screen.getByText('Acme Council')).toBeVisible();
+    expect(screen.getByText('Acme Council')).toHaveAttribute(
+      'data-assistant-enabled',
+      'true',
+    );
   });
 
   it('keeps the general template demo when no generated runtime is exported', () => {

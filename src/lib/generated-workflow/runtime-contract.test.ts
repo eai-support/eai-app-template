@@ -65,6 +65,7 @@ describe('generated workflow runtime contract', () => {
         tenantId: 'tenant-a',
         binding: binding(),
         snapshot,
+        assistantEnabled: false,
         branding: {
           displayName: 'Acme Council',
           primaryColor: '#123ABC',
@@ -75,6 +76,27 @@ describe('generated workflow runtime contract', () => {
       },
     });
   });
+
+  it.each([undefined, false, 'unknown-version', 'eai.ncb_workflow_qa.v1'])(
+    'enables Q&A only for the exported NCB marker (%s)',
+    (workflowAssistant) => {
+      const resolved = resolveGeneratedWorkflowRuntime({
+        appKey: 'rates-review',
+        config: {
+          tenantId: 'tenant-a',
+          runtimeBinding: binding(),
+          workflowAssistant,
+        },
+        snapshot,
+      });
+      expect(resolved).toMatchObject({
+        status: 'ready',
+        runtime: {
+          assistantEnabled: workflowAssistant === 'eai.ncb_workflow_qa.v1',
+        },
+      });
+    },
+  );
 
   it('drops unsafe optional branding without invalidating the workflow', () => {
     const result = resolveGeneratedWorkflowRuntime({

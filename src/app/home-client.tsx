@@ -7,7 +7,7 @@ import type { GeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime-
 interface HomeClientProps {
   generatedWorkflow?: Pick<
     GeneratedWorkflowRuntime,
-    'appKey' | 'binding' | 'snapshot' | 'branding'
+    'appKey' | 'binding' | 'snapshot' | 'branding' | 'assistantEnabled'
   >;
   runtimeError?: string;
 }
@@ -45,6 +45,7 @@ export function HomeClient({
         appKey={generatedWorkflow.appKey}
         binding={generatedWorkflow.binding}
         branding={generatedWorkflow.branding}
+        assistantEnabled={generatedWorkflow.assistantEnabled}
         snapshot={generatedWorkflow.snapshot}
       />
     </div>

@@ -54,9 +54,7 @@
           ],
           "required_repo_tests": ["src/lib/platform/seed-object-types.test.ts"],
           "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": [
-            "adminportal-generated-app-builder-export"
-          ]
+          "required_cross_service_surfaces": ["admin-portal"]
         },
         {
           "id": "generated-app-platform-sdk-resource-count-policy",
@@ -89,7 +87,9 @@
             "src/app/api/eai/workflow-submissions/**",
             "src/components/generated-workflow/**",
             "src/eai.config/index.ts",
-            "src/lib/generated-workflow/**"
+            "src/lib/generated-workflow/**",
+            "src/app/api/eai/workflow-assistant/**",
+            "tests/fixtures/ncb/**"
           ],
           "required_repo_tests": [
             "src/app/globals.test.ts",
@@ -97,20 +97,31 @@
             "src/app/api/eai/generated-workflow/readiness/route.test.ts",
             "src/app/api/eai/readiness/route.test.ts",
             "src/app/api/eai/workflow-submissions/route.test.ts",
+            "src/app/api/eai/workflow-submissions/[submissionId]/route.test.ts",
             "src/components/generated-workflow/workflow-form.test.tsx",
             "src/lib/generated-workflow/bounded-body.test.ts",
             "src/lib/generated-workflow/platform.test.ts",
             "src/lib/generated-workflow/public-guards.test.ts",
             "src/lib/generated-workflow/runtime-contract.test.ts",
+            "src/lib/generated-workflow/runtime.test.ts",
             "src/lib/generated-workflow/server-configuration.test.ts",
-            "src/lib/generated-workflow/submission-session.test.ts"
+            "src/lib/generated-workflow/submission-session.test.ts",
+            "src/app/api/eai/workflow-assistant/route.test.ts",
+            "src/components/generated-workflow/workflow-assistant.test.tsx",
+            "src/lib/generated-workflow/assistant-contract.test.ts",
+            "src/lib/generated-workflow/field-validation.test.ts",
+            "src/app/page.test.tsx"
           ],
           "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["admin-portal"],
+          "required_cross_service_surfaces": ["admin-portal", "ncb-sugar-hit"],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",
               "path": "tests/cross-service/contracts/adminportal-adminapi/generated-workflow-public-routes.spec.ts"
+            },
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/ncb/ncb-boundaries.spec.ts"
             }
           ]
         },

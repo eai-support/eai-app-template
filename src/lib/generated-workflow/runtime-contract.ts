@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { FieldValidation } from './field-format';
 
 /** JSON-safe field definition emitted by the no-code builder snapshot. */
 export interface GeneratedWorkflowField {
@@ -10,6 +11,7 @@ export interface GeneratedWorkflowField {
   helpText?: string;
   options?: string[];
   replaces?: string[];
+  validation?: FieldValidation;
 }
 
 /** JSON-safe output kinds declared by a canonical guided block. */
@@ -109,6 +111,7 @@ export interface GeneratedWorkflowRuntime {
   binding: GeneratedAppRuntimeBinding;
   snapshot: GeneratedWorkflowSnapshot;
   branding?: GeneratedWorkflowBranding;
+  assistantEnabled?: boolean;
 }
 
 /** Fail-closed resolution state while preserving an unbound generic template. */
@@ -267,6 +270,7 @@ export function resolveGeneratedWorkflowRuntime(args: {
     tenantId?: unknown;
     runtimeBinding?: unknown;
     generatedAppBranding?: unknown;
+    workflowAssistant?: unknown;
   };
   if (config.runtimeBinding === undefined) {
     return { status: 'unconfigured' };
@@ -311,6 +315,7 @@ export function resolveGeneratedWorkflowRuntime(args: {
       tenantId: config.tenantId as string,
       binding,
       snapshot,
+      assistantEnabled: config.workflowAssistant === 'eai.ncb_workflow_qa.v1',
       ...(branding ? { branding } : {}),
     },
   };

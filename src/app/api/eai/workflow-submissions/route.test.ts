@@ -29,6 +29,7 @@ jest.mock('next/server', () => ({
 }));
 
 jest.mock('@/lib/generated-workflow/platform', () => ({
+  GeneratedWorkflowPlatformUnavailableError: class extends Error {},
   generatedWorkflowPlatformFetch: (...args: unknown[]) =>
     mockPlatformFetch(...args),
 }));
@@ -43,6 +44,7 @@ jest.mock('@/lib/generated-workflow/submission-session', () => ({
 }));
 
 import { POST } from './route';
+import { GeneratedWorkflowPlatformUnavailableError } from '@/lib/generated-workflow/platform';
 
 function jsonRequest(value: unknown): Request {
   const encoded = new TextEncoder().encode(JSON.stringify(value));
@@ -154,6 +156,19 @@ describe('generated workflow anonymous submission BFF', () => {
 
     expect(response.status).toBe(400);
     expect(mockPlatformFetch).not.toHaveBeenCalled();
+  });
+
+  it('returns a retryable response when the platform cannot be reached', async () => {
+    mockPlatformFetch.mockRejectedValue(
+      new GeneratedWorkflowPlatformUnavailableError(),
+    );
+
+    const response = await POST(jsonRequest({ device: 'Desktop' }) as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'PLATFORM_UNAVAILABLE',
+    });
   });
 
   it.each([

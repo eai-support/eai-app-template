@@ -2,6 +2,7 @@
 
 import type { GeneratedWorkflowField } from '@/lib/generated-workflow/runtime-contract';
 import { SUBMISSION_FILE_ACCEPT } from '@/lib/generated-workflow/submission-files';
+import { fieldInputAttrs } from '@/lib/generated-workflow/field-format';
 
 interface GeneratedWorkflowFieldInputProps {
   disabled: boolean;
@@ -13,7 +14,7 @@ interface GeneratedWorkflowFieldInputProps {
 }
 
 const INPUT_CLASS =
-  'mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100';
+  'bg-background border-input text-foreground mt-2 w-full rounded-md border px-3 py-2 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:bg-muted';
 
 export function GeneratedWorkflowFieldInput({
   disabled,
@@ -57,7 +58,7 @@ export function GeneratedWorkflowFieldInput({
       <input
         id={id}
         type='checkbox'
-        className='mt-2 h-5 w-5 rounded border-slate-300 text-blue-600'
+        className='border-input text-primary mt-2 h-5 w-5 rounded'
         checked={value === true}
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
@@ -70,7 +71,7 @@ export function GeneratedWorkflowFieldInput({
         id={id}
         type='file'
         accept={SUBMISSION_FILE_ACCEPT}
-        className={`${INPUT_CLASS} file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium`}
+        className={`${INPUT_CLASS} file:bg-muted file:text-foreground file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-sm file:font-medium`}
         disabled={disabled}
         onChange={(event) => onFileSelect(event.target.files?.[0] ?? null)}
       />
@@ -79,7 +80,8 @@ export function GeneratedWorkflowFieldInput({
   return (
     <input
       id={id}
-      type={field.type === 'date' ? 'date' : 'text'}
+      type={field.type === 'date' ? 'date' : fieldInputAttrs(field, true).type}
+      placeholder={fieldInputAttrs(field, true).placeholder}
       className={INPUT_CLASS}
       disabled={disabled}
       value={typeof value === 'string' ? value : ''}
