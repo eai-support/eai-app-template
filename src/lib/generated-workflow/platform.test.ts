@@ -1,5 +1,6 @@
 import {
   __setGeneratedWorkflowTokenProviderForTests,
+  GeneratedWorkflowPlatformUnavailableError,
   generatedWorkflowPlatformFetch,
 } from './platform';
 
@@ -57,5 +58,28 @@ describe('generated workflow runtime facade client', () => {
       `sha256:${'a'.repeat(64)}`,
     );
     expect(headers.get('tenant')).toBeNull();
+  });
+
+  it('classifies a platform network failure without exposing its target', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new TypeError('fetch failed'));
+
+    await expect(
+      generatedWorkflowPlatformFetch({
+        tenantId: 'tenant-a',
+        appKey: 'rates-review',
+        path: '/submissions',
+        init: { method: 'POST' },
+      }),
+    ).rejects.toEqual(expect.any(GeneratedWorkflowPlatformUnavailableError));
+
+    await generatedWorkflowPlatformFetch({
+      tenantId: 'tenant-a',
+      appKey: 'rates-review',
+      path: '/submissions',
+      init: { method: 'POST' },
+    }).catch((error: unknown) => {
+      expect(String(error)).not.toContain('publicapi.example.test');
+      expect(String(error)).not.toContain('tenant-a');
+    });
   });
 });

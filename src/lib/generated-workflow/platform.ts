@@ -13,6 +13,14 @@ interface CachedAccessToken {
 let cachedAccessToken: CachedAccessToken | null = null;
 let tokenProviderOverride: GeneratedWorkflowTokenProvider | null = null;
 
+/** Keeps platform connectivity failures distinct from malformed client input. */
+export class GeneratedWorkflowPlatformUnavailableError extends Error {
+  constructor(options?: ErrorOptions) {
+    super('Generated workflow platform is unavailable.', options);
+    this.name = 'GeneratedWorkflowPlatformUnavailableError';
+  }
+}
+
 function publicApiBaseUrl(): string {
   const value =
     process.env.EAI_PLATFORM_API_BASE_URL?.trim() ||
@@ -132,32 +140,36 @@ export async function generatedWorkflowPlatformFetch(args: {
   anonymousClientId?: string;
   init?: RequestInit;
 }): Promise<Response> {
-  const headers = new Headers(args.init?.headers);
-  const isBinary = args.init?.body instanceof ArrayBuffer;
-  if (
-    !isBinary &&
-    !(args.init?.body instanceof FormData) &&
-    !headers.has('Content-Type')
-  ) {
-    headers.set('Content-Type', 'application/json');
-  }
-  headers.set('Authorization', `Bearer ${await accessToken()}`);
-  if (args.anonymousClientId) {
-    headers.set('X-EAI-Anonymous-Client', args.anonymousClientId);
-  }
+  try {
+    const headers = new Headers(args.init?.headers);
+    const isBinary = args.init?.body instanceof ArrayBuffer;
+    if (
+      !isBinary &&
+      !(args.init?.body instanceof FormData) &&
+      !headers.has('Content-Type')
+    ) {
+      headers.set('Content-Type', 'application/json');
+    }
+    headers.set('Authorization', `Bearer ${await accessToken()}`);
+    if (args.anonymousClientId) {
+      headers.set('X-EAI-Anonymous-Client', args.anonymousClientId);
+    }
 
-  return fetch(
-    `${publicApiBaseUrl()}${runtimeFacadePath(
-      args.tenantId,
-      args.appKey,
-      args.path,
-    )}`,
-    {
-      ...args.init,
-      headers,
-      cache: 'no-store',
-    },
-  );
+    return await fetch(
+      `${publicApiBaseUrl()}${runtimeFacadePath(
+        args.tenantId,
+        args.appKey,
+        args.path,
+      )}`,
+      {
+        ...args.init,
+        headers,
+        cache: 'no-store',
+      },
+    );
+  } catch (error) {
+    throw new GeneratedWorkflowPlatformUnavailableError({ cause: error });
+  }
 }
 
 export function __setGeneratedWorkflowTokenProviderForTests(
