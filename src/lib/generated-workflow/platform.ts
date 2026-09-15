@@ -10,7 +10,14 @@ interface CachedAccessToken {
   expiresAtMs: number;
 }
 
+interface PendingAccessToken {
+  audience: string;
+  clientId?: string;
+  promise: Promise<string>;
+}
+
 let cachedAccessToken: CachedAccessToken | null = null;
+let pendingAccessToken: PendingAccessToken | null = null;
 let tokenProviderOverride: GeneratedWorkflowTokenProvider | null = null;
 
 /** Keeps platform connectivity failures distinct from malformed client input. */
@@ -73,6 +80,31 @@ async function containerAppsManagedIdentityToken(
     return cachedAccessToken.token;
   }
 
+  if (
+    pendingAccessToken?.audience === audience &&
+    pendingAccessToken.clientId === clientId
+  ) {
+    return pendingAccessToken.promise;
+  }
+
+  const promise = requestContainerAppsManagedIdentityToken(
+    audience,
+    clientId,
+    now,
+  );
+  pendingAccessToken = { audience, clientId, promise };
+  try {
+    return await promise;
+  } finally {
+    if (pendingAccessToken?.promise === promise) pendingAccessToken = null;
+  }
+}
+
+async function requestContainerAppsManagedIdentityToken(
+  audience: string,
+  clientId: string | undefined,
+  now: number,
+): Promise<string> {
   const identityHeader = process.env.IDENTITY_HEADER?.trim();
   if (!identityHeader) {
     throw new Error(
@@ -177,4 +209,5 @@ export function __setGeneratedWorkflowTokenProviderForTests(
 ): void {
   tokenProviderOverride = provider;
   cachedAccessToken = null;
+  pendingAccessToken = null;
 }

@@ -82,4 +82,93 @@ describe('generated workflow runtime facade client', () => {
       expect(String(error)).not.toContain('tenant-a');
     });
   });
+
+  it('shares one managed-identity lookup across concurrent platform calls', async () => {
+    __setGeneratedWorkflowTokenProviderForTests(null);
+    process.env.IDENTITY_ENDPOINT = 'http://127.0.0.1:42356/msi/token';
+    process.env.IDENTITY_HEADER = 'identity-proof';
+    process.env.AZURE_CLIENT_ID = 'runtime-client';
+    let releaseIdentityLookup: () => void = () => undefined;
+    const identityLookupGate = new Promise<void>((resolve) => {
+      releaseIdentityLookup = resolve;
+    });
+    global.fetch = jest.fn(async (input) => {
+      if (String(input).startsWith(process.env.IDENTITY_ENDPOINT!)) {
+        await identityLookupGate;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            access_token: 'shared-managed-identity-token',
+            expires_on: Math.floor(Date.now() / 1000) + 3600,
+          }),
+        } as Response;
+      }
+      return { ok: true, status: 200 } as Response;
+    }) as typeof fetch;
+
+    const requests = Array.from({ length: 20 }, (_, index) =>
+      generatedWorkflowPlatformFetch({
+        tenantId: 'tenant-a',
+        appKey: 'rates-review',
+        path: `/submissions/${index}`,
+      }),
+    );
+    expect(
+      (global.fetch as jest.Mock).mock.calls.filter(([input]) =>
+        String(input).startsWith(process.env.IDENTITY_ENDPOINT!),
+      ),
+    ).toHaveLength(1);
+
+    releaseIdentityLookup();
+    await Promise.all(requests);
+
+    const calls = (global.fetch as jest.Mock).mock.calls;
+    expect(calls).toHaveLength(21);
+    expect(
+      calls.filter(([input]) =>
+        String(input).startsWith(process.env.IDENTITY_ENDPOINT!),
+      ),
+    ).toHaveLength(1);
+    for (const [, init] of calls.slice(1)) {
+      expect((init.headers as Headers).get('Authorization')).toBe(
+        'Bearer shared-managed-identity-token',
+      );
+    }
+  });
+
+  it('retries managed identity after a shared lookup fails', async () => {
+    __setGeneratedWorkflowTokenProviderForTests(null);
+    process.env.IDENTITY_ENDPOINT = 'http://127.0.0.1:42356/msi/token';
+    process.env.IDENTITY_HEADER = 'identity-proof';
+    let identityAttempts = 0;
+    global.fetch = jest.fn(async (input) => {
+      if (String(input).startsWith(process.env.IDENTITY_ENDPOINT!)) {
+        identityAttempts += 1;
+        if (identityAttempts === 1) throw new TypeError('identity unavailable');
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            access_token: 'recovered-managed-identity-token',
+            expires_on: Math.floor(Date.now() / 1000) + 3600,
+          }),
+        } as Response;
+      }
+      return { ok: true, status: 200 } as Response;
+    }) as typeof fetch;
+
+    const request = () =>
+      generatedWorkflowPlatformFetch({
+        tenantId: 'tenant-a',
+        appKey: 'rates-review',
+        path: '/workflow',
+      });
+
+    await expect(request()).rejects.toEqual(
+      expect.any(GeneratedWorkflowPlatformUnavailableError),
+    );
+    await expect(request()).resolves.toMatchObject({ ok: true });
+    expect(identityAttempts).toBe(2);
+  });
 });
