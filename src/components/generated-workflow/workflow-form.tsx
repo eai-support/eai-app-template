@@ -13,6 +13,7 @@ import {
 } from 'react';
 
 import { apiUrl } from '@/lib/api-helpers';
+import type { WorkflowAssistantMessage } from '@/lib/generated-workflow/assistant-contract';
 import type {
   GeneratedAppRuntimeBinding,
   GeneratedWorkflowBranding,
@@ -152,6 +153,9 @@ export function GeneratedWorkflowForm({
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [assistantMessages, setAssistantMessages] = useState<
+    WorkflowAssistantMessage[]
+  >([]);
   const initialized = useRef(false);
   const formDataRef = useRef(formData);
   const compactViewport = useCompactViewport();
@@ -198,6 +202,7 @@ export function GeneratedWorkflowForm({
                 formData?: Record<string, Record<string, unknown>>;
                 userName?: string;
                 userEmail?: string;
+                assistantMessages?: WorkflowAssistantMessage[];
               };
             };
             if (
@@ -216,6 +221,7 @@ export function GeneratedWorkflowForm({
             );
             setUserName(payload.submission.userName ?? '');
             setUserEmail(payload.submission.userEmail ?? '');
+            setAssistantMessages(payload.submission.assistantMessages ?? []);
             setSubmitState('idle');
           })
           .catch(() => startSubmission())
@@ -230,6 +236,21 @@ export function GeneratedWorkflowForm({
   }, [startSubmission, steps.length]);
 
   const currentStep = steps[currentStepIndex];
+  const persistAssistantMessages = useCallback(
+    async (messages: WorkflowAssistantMessage[]) => {
+      if (!submissionId)
+        throw new Error('The assistant is unavailable. Please try again.');
+      const response = await fetch(submissionEndpoint(submissionId), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assistantMessages: messages }),
+      });
+      if (!response.ok)
+        throw new Error('The assistant is unavailable. Please try again.');
+      setAssistantMessages(messages);
+    },
+    [submissionId],
+  );
   const setFieldValue = useCallback(
     (stepId: string, fieldId: string, value: unknown) => {
       setFormData((current) => ({
@@ -743,6 +764,8 @@ export function GeneratedWorkflowForm({
               variant={compactViewport ? 'bubble' : 'rail'}
               stepId={currentStep?.id ?? ''}
               stepTitle={currentStep?.title ?? 'this step'}
+              initialMessages={assistantMessages}
+              onMessagesChange={persistAssistantMessages}
             />
           ) : null}
         </div>

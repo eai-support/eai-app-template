@@ -6,6 +6,7 @@ import {
 } from '@/lib/generated-workflow/bounded-body';
 import {
   requestClientFingerprint,
+  readPersistedAssistantMessages,
   validateSubmissionPatch,
 } from '@/lib/generated-workflow/public-guards';
 import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
@@ -76,6 +77,9 @@ export async function GET(
           formData: stored.formData ?? {},
           userName: stored.userName ?? '',
           userEmail: stored.userEmail ?? '',
+          assistantMessages: readPersistedAssistantMessages(
+            stored.assistantMessages,
+          ),
         },
       },
       { headers: NO_STORE_HEADERS },
@@ -135,6 +139,18 @@ export async function PATCH(
       return NextResponse.json(
         { error: 'SUBMISSION_FINALIZED' },
         { status: 409, headers: NO_STORE_HEADERS },
+      );
+    }
+    if (
+      parsed.value.assistantMessages !== undefined &&
+      !route.runtime.assistantEnabled
+    ) {
+      return NextResponse.json(
+        {
+          error: 'INVALID_BODY',
+          message: 'Workflow assistant is not enabled.',
+        },
+        { status: 400, headers: NO_STORE_HEADERS },
       );
     }
 

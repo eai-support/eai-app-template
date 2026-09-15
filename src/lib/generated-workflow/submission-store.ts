@@ -12,6 +12,7 @@ export interface StoredSubmission {
   formData?: unknown;
   userName?: unknown;
   userEmail?: unknown;
+  assistantMessages?: unknown;
 }
 
 /** Reads a submission only after its HttpOnly ownership capability is verified. */
@@ -50,5 +51,6 @@ export async function readOwnedSubmission(args: {
     formData: stored.formData,
     userName: stored.userName,
     userEmail: stored.userEmail,
+    assistantMessages: stored.assistantMessages,
   };
 }

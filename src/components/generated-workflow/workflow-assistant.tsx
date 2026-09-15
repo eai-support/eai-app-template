@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useId, useRef, useState } from 'react';
+import { FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { ArrowUp, Sparkles } from 'lucide-react';
 
 import { apiUrl } from '@/lib/api-helpers';
@@ -13,12 +13,17 @@ export function WorkflowAssistant({
   stepId,
   stepTitle,
   variant = 'rail',
+  initialMessages = [],
+  onMessagesChange,
 }: {
   stepId: string;
   stepTitle: string;
   variant?: 'rail' | 'bubble';
+  initialMessages?: WorkflowAssistantMessage[];
+  onMessagesChange?: (messages: WorkflowAssistantMessage[]) => Promise<void>;
 }) {
-  const [messages, setMessages] = useState<WorkflowAssistantMessage[]>([]);
+  const [messages, setMessages] =
+    useState<WorkflowAssistantMessage[]>(initialMessages);
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [activeQuestion, setActiveQuestion] = useState('');
@@ -27,6 +32,8 @@ export function WorkflowAssistant({
   const [expanded, setExpanded] = useState(false);
   const inFlight = useRef(false);
   const id = useId();
+
+  useEffect(() => setMessages(initialMessages), [initialMessages]);
 
   async function ask(event: FormEvent) {
     event.preventDefault();
@@ -62,14 +69,13 @@ export function WorkflowAssistant({
       if (!output.completed || !output.text.trim()) {
         throw new Error('The assistant could not answer. Please try again.');
       }
-      setMessages(
-        (previous) =>
-          [
-            ...previous,
-            { role: 'user', content: text },
-            { role: 'assistant', content: output.text.trim() },
-          ].slice(-100) as WorkflowAssistantMessage[],
-      );
+      const nextMessages = [
+        ...messages,
+        { role: 'user' as const, content: text },
+        { role: 'assistant' as const, content: output.text.trim() },
+      ].slice(-100);
+      await onMessagesChange?.(nextMessages);
+      setMessages(nextMessages);
     } catch (cause) {
       setQuestion(text);
       setError(
