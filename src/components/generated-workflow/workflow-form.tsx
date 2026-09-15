@@ -121,6 +121,18 @@ function submissionEndpoint(submissionId?: string, files = false): string {
   );
 }
 
+function replaceSubmissionInAddressBar(submissionId: string): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set('submission', submissionId);
+  // INVARIANT: The resumable URL must not notify Next's router, which remounts the form and repeats runtime authority checks.
+  History.prototype.replaceState.call(
+    window.history,
+    window.history.state,
+    '',
+    url.toString(),
+  );
+}
+
 export function GeneratedWorkflowForm({
   appKey,
   binding,
@@ -166,9 +178,7 @@ export function GeneratedWorkflowForm({
     }
     setSubmissionId(payload.submissionId);
     setSubmitState('idle');
-    const url = new URL(window.location.href);
-    url.searchParams.set('submission', payload.submissionId);
-    window.history.replaceState(null, '', url.toString());
+    replaceSubmissionInAddressBar(payload.submissionId);
   }, []);
 
   useEffect(() => {

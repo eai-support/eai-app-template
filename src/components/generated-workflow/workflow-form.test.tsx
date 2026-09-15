@@ -61,6 +61,34 @@ describe('GeneratedWorkflowForm', () => {
     },
   );
 
+  it('adds the resumable submission URL without notifying the app router', async () => {
+    const routerPatchedReplaceState = jest.fn();
+    Object.defineProperty(window.history, 'replaceState', {
+      configurable: true,
+      value: routerPatchedReplaceState,
+      writable: true,
+    });
+
+    try {
+      render(
+        <GeneratedWorkflowForm
+          appKey='rates-review'
+          binding={binding}
+          snapshot={{
+            steps: [{ id: 'request', title: 'Request', fields: [] }],
+          }}
+        />,
+      );
+
+      await screen.findByRole('button', { name: 'Submit' });
+      expect(window.location.search).toBe('?submission=submission-1');
+      expect(routerPatchedReplaceState).not.toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      Reflect.deleteProperty(window.history, 'replaceState');
+    }
+  });
+
   it('renders exported fields, validates required answers, and completes anonymously', async () => {
     render(
       <GeneratedWorkflowForm
