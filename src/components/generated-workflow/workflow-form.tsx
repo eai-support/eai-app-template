@@ -1,8 +1,7 @@
 'use client';
 
-import { WorkflowAssistant } from './workflow-assistant';
-
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import {
   useCallback,
   useEffect,
@@ -27,6 +26,10 @@ import {
   GeneratedWorkflowSmartBlock,
   isSupportedGeneratedWorkflowBlock,
 } from './smart-block';
+
+const WorkflowAssistant = dynamic(() =>
+  import('./workflow-assistant').then((module) => module.WorkflowAssistant),
+);
 
 interface GeneratedWorkflowFormProps {
   appKey: string;
