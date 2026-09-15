@@ -9,11 +9,13 @@ import {
   type WorkflowAssistantMessage,
 } from '@/lib/generated-workflow/assistant-contract';
 
+const EMPTY_ASSISTANT_MESSAGES: WorkflowAssistantMessage[] = [];
+
 export function WorkflowAssistant({
   stepId,
   stepTitle,
   variant = 'rail',
-  initialMessages = [],
+  initialMessages = EMPTY_ASSISTANT_MESSAGES,
   onMessagesChange,
 }: {
   stepId: string;
