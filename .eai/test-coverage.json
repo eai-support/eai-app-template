@@ -97,6 +97,7 @@
             "src/app/api/eai/generated-workflow/readiness/route.test.ts",
             "src/app/api/eai/readiness/route.test.ts",
             "src/app/api/eai/workflow-submissions/route.test.ts",
+            "src/app/api/eai/workflow-submissions/[submissionId]/route.test.ts",
             "src/components/generated-workflow/workflow-form.test.tsx",
             "src/lib/generated-workflow/bounded-body.test.ts",
             "src/lib/generated-workflow/platform.test.ts",

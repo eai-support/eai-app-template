@@ -99,6 +99,9 @@ describe('Home routing bootstrap', () => {
       assistantEnabled: true,
     });
     expect(element.props.generatedWorkflow).not.toHaveProperty('tenantId');
+    expect(getAccessToken).not.toHaveBeenCalled();
+    expect(headers).not.toHaveBeenCalled();
+    expect(resolvePublicApiBaseUrl).not.toHaveBeenCalled();
   });
 
   it('redirects to the resolved app host when routing requires correction', async () => {

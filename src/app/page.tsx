@@ -52,7 +52,6 @@ async function redirectToResolvedAppHost(): Promise<void> {
 
 /** Renders immutable generated workflows while retaining the generic template fallback. */
 export default async function Home() {
-  await redirectToResolvedAppHost();
   const generatedWorkflow = getGeneratedWorkflowRuntime();
   if (generatedWorkflow.status === 'ready') {
     const { appKey, binding, branding, snapshot, assistantEnabled } =
@@ -69,6 +68,7 @@ export default async function Home() {
       />
     );
   }
+  await redirectToResolvedAppHost();
   return (
     <HomeClient
       runtimeError={

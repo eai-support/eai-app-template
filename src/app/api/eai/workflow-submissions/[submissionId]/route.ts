@@ -11,6 +11,7 @@ import {
 } from '@/lib/generated-workflow/public-guards';
 import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
+import { hasSubmissionSession } from '@/lib/generated-workflow/submission-session';
 import { readOwnedSubmission } from '@/lib/generated-workflow/submission-store';
 
 export const dynamic = 'force-dynamic';
@@ -129,18 +130,14 @@ export async function PATCH(
       );
     }
 
-    const stored = await readOwnedSubmission({
-      request,
-      runtime: route.runtime,
-      submissionId: route.submissionId,
-    });
-    if (!stored) return notFound();
-    if (stored.status === 'completed' || stored.status === 'abandoned') {
-      return NextResponse.json(
-        { error: 'SUBMISSION_FINALIZED' },
-        { status: 409, headers: NO_STORE_HEADERS },
-      );
-    }
+    if (
+      !hasSubmissionSession(
+        request,
+        route.submissionId,
+        route.runtime.binding.workflowTemplate.digest,
+      )
+    )
+      return notFound();
     if (
       parsed.value.assistantMessages !== undefined &&
       !route.runtime.assistantEnabled
@@ -169,6 +166,12 @@ export async function PATCH(
         return NextResponse.json(
           { error: 'RATE_LIMITED' },
           { status: 429, headers: NO_STORE_HEADERS },
+        );
+      }
+      if (updateResponse.status === 409) {
+        return NextResponse.json(
+          { error: 'SUBMISSION_FINALIZED' },
+          { status: 409, headers: NO_STORE_HEADERS },
         );
       }
       console.error(
