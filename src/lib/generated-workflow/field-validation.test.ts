@@ -11,6 +11,41 @@ it.each(cases)('$name', ({ field, value, error }) => {
   ).toBe(error);
 });
 
+it.each([
+  ['ada@example.test', null],
+  [' ada@example.test, grace@example.test ', null],
+  ['ada@example.test, invalid', 'invalid_format'],
+  ['ada@example.test, ', 'invalid_format'],
+])('validates an explicit email textarea value %s', (value, expected) => {
+  expect(
+    validateWorkflowFieldValue(
+      {
+        id: 'guest_emails',
+        label: 'Guest emails',
+        type: 'textarea',
+        validation: { format: 'email' },
+      },
+      value,
+      true,
+    )?.code ?? null,
+  ).toBe(expected);
+});
+
+it('keeps ordinary email text fields single-address', () => {
+  expect(
+    validateWorkflowFieldValue(
+      {
+        id: 'email',
+        label: 'Email',
+        type: 'text',
+        validation: { format: 'email' },
+      },
+      'ada@example.test, grace@example.test',
+      true,
+    )?.code,
+  ).toBe('invalid_format');
+});
+
 it('rejects unsafe patterns before evaluating respondent input', () => {
   expect(
     validateWorkflowFieldValue(

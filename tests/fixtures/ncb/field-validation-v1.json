@@ -90,6 +90,71 @@
     "error": "invalid_format"
   },
   {
+    "name": "email textarea accepts one address",
+    "field": {
+      "id": "guest_emails",
+      "label": "Guest emails",
+      "type": "textarea",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": "ada@example.test",
+    "error": null
+  },
+  {
+    "name": "email textarea accepts comma separated addresses",
+    "field": {
+      "id": "guest_emails",
+      "label": "Guest emails",
+      "type": "textarea",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": " ada@example.test, grace@example.test ",
+    "error": null
+  },
+  {
+    "name": "email textarea rejects an invalid member",
+    "field": {
+      "id": "guest_emails",
+      "label": "Guest emails",
+      "type": "textarea",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": "ada@example.test, invalid",
+    "error": "invalid_format"
+  },
+  {
+    "name": "email textarea rejects an empty member",
+    "field": {
+      "id": "guest_emails",
+      "label": "Guest emails",
+      "type": "textarea",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": "ada@example.test, ",
+    "error": "invalid_format"
+  },
+  {
+    "name": "email text remains single address",
+    "field": {
+      "id": "email",
+      "label": "Email",
+      "type": "text",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": "ada@example.test, grace@example.test",
+    "error": "invalid_format"
+  },
+  {
     "name": "phone valid",
     "field": {
       "id": "answer",

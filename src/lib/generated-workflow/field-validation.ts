@@ -129,7 +129,7 @@ export function validateWorkflowFieldValue(
 
   if (isValidFieldFormat(validation.format)) {
     const format = FIELD_FORMATS[validation.format];
-    if (!format.test(normalizedValue)) {
+    if (!matchesFieldFormat(field, validation.format, normalizedValue)) {
       return validationError(
         'invalid_format',
         validation.message ?? format.message,
@@ -186,6 +186,21 @@ export function validateWorkflowFieldValue(
   }
 
   return null;
+}
+
+function matchesFieldFormat(
+  field: ValidatedWorkflowField,
+  format: keyof typeof FIELD_FORMATS,
+  value: string,
+): boolean {
+  const candidates =
+    format === 'email' && field.type === 'textarea'
+      ? value.split(',').map((candidate) => candidate.trim())
+      : [value];
+  return candidates.every(
+    (candidate) =>
+      candidate.length > 0 && FIELD_FORMATS[format].test(candidate),
+  );
 }
 
 function validateFieldConfiguration(
