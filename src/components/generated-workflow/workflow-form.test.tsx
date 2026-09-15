@@ -98,6 +98,12 @@ describe('GeneratedWorkflowForm', () => {
     fireEvent.click(submit);
 
     await waitFor(() => expect(screen.getByText('Submitted')).toBeVisible());
+    expect(screen.getByRole('main')).toHaveClass(
+      'min-h-svh',
+      'items-center',
+      'justify-center',
+      'text-center',
+    );
     expect(global.fetch).toHaveBeenLastCalledWith(
       '/api/eai/workflow-submissions/submission-1',
       expect.objectContaining({

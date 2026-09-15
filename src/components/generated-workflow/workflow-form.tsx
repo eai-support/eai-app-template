@@ -438,15 +438,17 @@ export function GeneratedWorkflowForm({
   }
   if (submitState === 'submitted') {
     return (
-      <div className='mx-auto max-w-xl px-6 py-24 text-center'>
-        <div className='mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700'>
-          ✓
+      <main className='flex min-h-svh items-center justify-center px-6 py-12 text-center'>
+        <div className='max-w-xl'>
+          <div className='mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700'>
+            ✓
+          </div>
+          <h1 className='text-2xl font-semibold text-slate-950'>Submitted</h1>
+          <p className='mt-2 text-slate-600'>
+            Thank you. Your response has been received.
+          </p>
         </div>
-        <h1 className='text-2xl font-semibold text-slate-950'>Submitted</h1>
-        <p className='mt-2 text-slate-600'>
-          Thank you. Your response has been received.
-        </p>
-      </div>
+      </main>
     );
   }
 

@@ -5,6 +5,59 @@ const MAX_FORM_DATA_CHARS = 256 * 1024;
 const MAX_TEXT_LENGTH = 200;
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+interface OriginAwareRequest {
+  headers: Headers;
+  nextUrl: { origin: string };
+}
+
+function lastForwardedValue(value: string | null): string | null {
+  const values = (value ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return values.at(-1) ?? null;
+}
+
+function canonicalHttpOrigin(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash
+    ) {
+      return null;
+    }
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function forwardedOrigin(headers: Headers): string | null {
+  const protocol = lastForwardedValue(headers.get('x-forwarded-proto'));
+  const host =
+    lastForwardedValue(headers.get('x-forwarded-host')) ??
+    headers.get('host')?.trim() ??
+    null;
+  if (!protocol || !host || host.includes(',')) return null;
+  return canonicalHttpOrigin(`${protocol.toLowerCase()}://${host}`);
+}
+
+/** Accepts the browser origin or the rightmost origin appended by the ingress proxy. */
+export function requestHasSameOrigin(request: OriginAwareRequest): boolean {
+  const browserOrigin = canonicalHttpOrigin(request.headers.get('origin'));
+  if (!browserOrigin) return false;
+  return (
+    browserOrigin === canonicalHttpOrigin(request.nextUrl.origin) ||
+    browserOrigin === forwardedOrigin(request.headers)
+  );
+}
+
 /** Anonymous autosave fields accepted by the same-origin BFF. */
 export interface SubmissionPatch {
   status?: 'completed';

@@ -31,15 +31,31 @@ jest.mock('@/lib/generated-workflow/runtime', () => ({
 }));
 import { POST } from './route';
 
-function request(value: unknown, origin = 'https://workflow.test') {
+function request(
+  value: unknown,
+  origin = 'https://workflow.test',
+  options: {
+    requestOrigin?: string;
+    forwardedHost?: string;
+    forwardedProto?: string;
+  } = {},
+) {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
+  const headers = new Headers({
+    origin,
+    'content-type': 'application/json',
+    host: 'workflow-internal:3000',
+    'x-forwarded-for': '192.0.2.1',
+  });
+  if (options.forwardedHost)
+    headers.set('x-forwarded-host', options.forwardedHost);
+  if (options.forwardedProto)
+    headers.set('x-forwarded-proto', options.forwardedProto);
   return {
-    nextUrl: new URL('https://workflow.test/api/eai/workflow-assistant'),
-    headers: new Headers({
-      origin,
-      'content-type': 'application/json',
-      'x-forwarded-for': '192.0.2.1',
-    }),
+    nextUrl: new URL(
+      `${options.requestOrigin ?? 'https://workflow.test'}/api/eai/workflow-assistant`,
+    ),
+    headers,
     body: new ReadableStream({
       start(controller) {
         controller.enqueue(bytes);
@@ -175,6 +191,39 @@ it('rejects cross-origin and missing origin before resolving runtime', async () 
     expect((await POST(request(question, origin) as never)).status).toBe(403);
   }
   expect(mockGetRuntime).not.toHaveBeenCalled();
+});
+
+it('accepts the public Azure origin supplied by the rightmost ingress hop', async () => {
+  const response = await POST(
+    request(question, 'https://workflow.test', {
+      requestOrigin: 'http://workflow-internal:3000',
+      forwardedHost: 'attacker.test, workflow.test',
+      forwardedProto: 'http, https',
+    }) as never,
+  );
+
+  expect(response.status).toBe(200);
+  expect(mockPlatformFetch).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  {
+    forwardedHost: 'workflow.test, attacker.test',
+    forwardedProto: 'http, https',
+  },
+  { forwardedHost: 'workflow.test', forwardedProto: 'http' },
+  { forwardedHost: 'https://workflow.test', forwardedProto: 'https' },
+])('rejects a spoofed or mismatched proxy origin (%o)', async (forwarded) => {
+  const response = await POST(
+    request(question, 'https://workflow.test', {
+      requestOrigin: 'http://workflow-internal:3000',
+      ...forwarded,
+    }) as never,
+  );
+
+  expect(response.status).toBe(403);
+  expect(mockGetRuntime).not.toHaveBeenCalled();
+  expect(mockPlatformFetch).not.toHaveBeenCalled();
 });
 
 it('rejects unknown step and oversized streamed bodies', async () => {

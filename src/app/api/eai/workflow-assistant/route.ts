@@ -6,7 +6,10 @@ import {
   RequestBodyTooLargeError,
 } from '@/lib/generated-workflow/bounded-body';
 import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
-import { requestClientFingerprint } from '@/lib/generated-workflow/public-guards';
+import {
+  requestClientFingerprint,
+  requestHasSameOrigin,
+} from '@/lib/generated-workflow/public-guards';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 
 export const dynamic = 'force-dynamic';
@@ -25,8 +28,7 @@ const failure = (status: number, error: string) =>
 
 /** Proxy one same-origin, step-scoped question through the generated-app facade. */
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  if (request.headers.get('origin') !== request.nextUrl.origin)
-    return failure(403, 'ORIGIN_REQUIRED');
+  if (!requestHasSameOrigin(request)) return failure(403, 'ORIGIN_REQUIRED');
   const resolved = getGeneratedWorkflowRuntime();
   if (resolved.status !== 'ready')
     return failure(503, 'WORKFLOW_RUNTIME_UNAVAILABLE');
