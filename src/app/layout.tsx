@@ -16,6 +16,7 @@ const geistSans = Geist({
   subsets: ['latin'],
 });
 
+/** Bind document title and icon to the same validated generated-workflow branding. */
 export function generateMetadata(): Metadata {
   return generatedWorkflowDocumentMetadata(getGeneratedWorkflowRuntime());
 }
