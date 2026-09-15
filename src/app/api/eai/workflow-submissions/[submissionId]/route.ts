@@ -169,10 +169,22 @@ export async function PATCH(
         );
       }
       if (updateResponse.status === 409) {
-        return NextResponse.json(
-          { error: 'SUBMISSION_FINALIZED' },
-          { status: 409, headers: NO_STORE_HEADERS },
-        );
+        const upstream = (await updateResponse.json().catch(() => null)) as {
+          error?: unknown;
+          detail?: { error?: unknown };
+        } | null;
+        const upstreamError =
+          typeof upstream?.error === 'string'
+            ? upstream.error
+            : typeof upstream?.detail?.error === 'string'
+              ? upstream.detail.error
+              : null;
+        if (upstreamError === 'ALREADY_COMPLETED') {
+          return NextResponse.json(
+            { error: 'SUBMISSION_FINALIZED' },
+            { status: 409, headers: NO_STORE_HEADERS },
+          );
+        }
       }
       console.error(
         '[generated-workflow] submission update failed:',

@@ -162,7 +162,16 @@ describe('generated workflow anonymous submission update BFF', () => {
   });
 
   it('preserves the finalized response without a preflight platform read', async () => {
-    mockPlatformFetch.mockResolvedValue({ ok: false, status: 409 });
+    mockPlatformFetch.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        detail: {
+          error: 'ALREADY_COMPLETED',
+          message: 'This submission has already been completed.',
+        },
+      }),
+    });
 
     const response = await PATCH(jsonPatch({ status: 'completed' }) as never, {
       params: Promise.resolve({ submissionId: 'submission-1' }),
@@ -175,4 +184,26 @@ describe('generated workflow anonymous submission update BFF', () => {
     expect(mockReadOwnedSubmission).not.toHaveBeenCalled();
     expect(mockPlatformFetch).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['RUNTIME_BINDING_MISMATCH', 'WORKFLOW_SNAPSHOT_MISMATCH'])(
+    'does not misclassify the upstream %s conflict as a finalized submission',
+    async (error) => {
+      mockPlatformFetch.mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ detail: { error } }),
+      });
+
+      const response = await PATCH(jsonPatch({ currentStep: 1 }) as never, {
+        params: Promise.resolve({ submissionId: 'submission-1' }),
+      });
+
+      expect(response.status).toBe(502);
+      await expect(response.json()).resolves.toEqual({
+        error: 'SUBMISSION_UPDATE_FAILED',
+      });
+      expect(mockReadOwnedSubmission).not.toHaveBeenCalled();
+      expect(mockPlatformFetch).toHaveBeenCalledTimes(1);
+    },
+  );
 });
