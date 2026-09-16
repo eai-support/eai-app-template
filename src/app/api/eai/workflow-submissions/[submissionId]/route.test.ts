@@ -5,6 +5,7 @@ const mockPlatformFetch = jest.fn();
 const mockGetRuntime = jest.fn();
 const mockReadOwnedSubmission = jest.fn();
 const mockHasSubmissionSession = jest.fn();
+const mockSubmissionReadFailure = jest.fn();
 
 jest.mock('next/server', () => ({
   NextResponse: class MockNextResponse {
@@ -39,6 +40,8 @@ jest.mock('@/lib/generated-workflow/runtime', () => ({
 
 jest.mock('@/lib/generated-workflow/submission-store', () => ({
   readOwnedSubmission: (...args: unknown[]) => mockReadOwnedSubmission(...args),
+  submissionReadFailure: (...args: unknown[]) =>
+    mockSubmissionReadFailure(...args),
 }));
 
 jest.mock('@/lib/generated-workflow/submission-session', () => ({
@@ -46,7 +49,7 @@ jest.mock('@/lib/generated-workflow/submission-session', () => ({
     mockHasSubmissionSession(...args),
 }));
 
-import { PATCH } from './route';
+import { GET, PATCH } from './route';
 
 function oversizedChunkedPatch(): Request {
   const encoder = new TextEncoder();
@@ -106,6 +109,29 @@ describe('generated workflow anonymous submission update BFF', () => {
     });
     mockHasSubmissionSession.mockReturnValue(true);
     mockPlatformFetch.mockResolvedValue({ ok: true, status: 200 });
+    mockSubmissionReadFailure.mockReturnValue({
+      error: 'SUBMISSION_READ_FAILED',
+      status: 502,
+    });
+  });
+
+  it('keeps an upstream availability failure retryable instead of returning 404', async () => {
+    const upstreamError = new Error('upstream unavailable');
+    mockReadOwnedSubmission.mockRejectedValue(upstreamError);
+    mockSubmissionReadFailure.mockReturnValue({
+      error: 'PLATFORM_UNAVAILABLE',
+      status: 503,
+    });
+
+    const response = await GET({} as never, {
+      params: Promise.resolve({ submissionId: 'submission-1' }),
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'PLATFORM_UNAVAILABLE',
+    });
+    expect(mockSubmissionReadFailure).toHaveBeenCalledWith(upstreamError);
   });
 
   it('rejects a false-small chunked JSON body before ownership or platform access', async () => {

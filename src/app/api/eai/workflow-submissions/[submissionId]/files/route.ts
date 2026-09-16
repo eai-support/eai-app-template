@@ -12,7 +12,10 @@ import {
   SUBMISSION_FILE_MAX_BYTES,
   validateSubmissionFile,
 } from '@/lib/generated-workflow/submission-files';
-import { readOwnedSubmission } from '@/lib/generated-workflow/submission-store';
+import {
+  readOwnedSubmission,
+  submissionReadFailure,
+} from '@/lib/generated-workflow/submission-store';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -108,11 +111,24 @@ export async function POST(
     );
     if (!fileFieldExists) return notFound();
 
-    const stored = await readOwnedSubmission({
-      request,
-      runtime: resolved.runtime,
-      submissionId,
-    });
+    let stored;
+    try {
+      stored = await readOwnedSubmission({
+        request,
+        runtime: resolved.runtime,
+        submissionId,
+      });
+    } catch (error) {
+      const failure = submissionReadFailure(error);
+      console.error(
+        '[generated-workflow] submission ownership read error:',
+        error instanceof Error ? error.name : 'unknown',
+      );
+      return NextResponse.json(
+        { error: failure.error },
+        { status: failure.status, headers: NO_STORE_HEADERS },
+      );
+    }
     if (!stored || stored.status !== 'in_progress') return notFound();
 
     const fileName = sanitizeSubmissionFileName(file.name);
