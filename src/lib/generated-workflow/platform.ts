@@ -118,6 +118,7 @@ async function requestContainerAppsManagedIdentityToken(
 
   const response = await fetch(endpoint, {
     headers: { 'X-IDENTITY-HEADER': identityHeader },
+    signal: AbortSignal.timeout(15_000),
     cache: 'no-store',
   });
   if (!response.ok) {
@@ -196,6 +197,10 @@ export async function generatedWorkflowPlatformFetch(args: {
       {
         ...args.init,
         headers,
+        // Keep the deadline active through response-body consumption.
+        signal: args.init?.signal
+          ? AbortSignal.any([args.init.signal, AbortSignal.timeout(60_000)])
+          : AbortSignal.timeout(60_000),
         cache: 'no-store',
       },
     );
