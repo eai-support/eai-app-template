@@ -79,6 +79,7 @@
           "id": "generated-workflow-anonymous-container-runtime",
           "description": "Generated NCB apps render an immutable workflow snapshot, use an ACA managed-identity BFF for anonymous submissions and files, and expose semantic readiness proof.",
           "owned_paths": [
+            "next.config.ts",
             "src/app/globals.css",
             "src/app/home-client.tsx",
             "src/app/page.tsx",
