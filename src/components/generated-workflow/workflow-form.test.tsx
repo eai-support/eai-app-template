@@ -89,6 +89,37 @@ describe('GeneratedWorkflowForm', () => {
     }
   });
 
+  it('accepts ordinary answers while the resumable submission is starting', () => {
+    global.fetch = jest.fn(() => new Promise<Response>(() => {}));
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        snapshot={{
+          steps: [
+            {
+              id: 'request',
+              title: 'Request',
+              fields: [
+                { id: 'details', label: 'Details', type: 'text' },
+                { id: 'evidence', label: 'Evidence', type: 'file' },
+              ],
+            },
+            { id: 'review', title: 'Review', fields: [] },
+          ],
+        }}
+      />,
+    );
+
+    const details = screen.getByLabelText('Details');
+    fireEvent.change(details, { target: { value: 'Prepared while starting' } });
+
+    expect(details).toHaveValue('Prepared while starting');
+    expect(details).toBeEnabled();
+    expect(screen.getByLabelText('Evidence')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Starting…' })).toBeDisabled();
+  });
+
   it('renders exported fields, validates required answers, and completes anonymously', async () => {
     render(
       <GeneratedWorkflowForm

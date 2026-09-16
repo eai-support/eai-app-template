@@ -624,9 +624,9 @@ export function GeneratedWorkflowForm({
                       <GeneratedWorkflowFieldInput
                         id={key}
                         disabled={
-                          submitState === 'starting' ||
                           submitState === 'submitting' ||
-                          uploadingField === key
+                          uploadingField === key ||
+                          (submitState === 'starting' && field.type === 'file')
                         }
                         field={field}
                         value={formData[stepId]?.[fieldId]}
@@ -657,10 +657,7 @@ export function GeneratedWorkflowForm({
                     <div key={key}>
                       <GeneratedWorkflowSmartBlock
                         block={block}
-                        disabled={
-                          submitState === 'starting' ||
-                          submitState === 'submitting'
-                        }
+                        disabled={submitState === 'submitting'}
                         formData={formData}
                         stepId={stepId}
                         values={blockOutputValues(formData, stepId, block.id)}
