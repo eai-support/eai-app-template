@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 
 import { generatedWorkflowPlatformFetch } from './platform';
+import { GeneratedWorkflowPlatformUnavailableError } from './platform';
 import { hasSubmissionSession } from './submission-session';
 import type { GeneratedWorkflowRuntime } from './runtime-contract';
 
@@ -13,6 +14,34 @@ export interface StoredSubmission {
   userName?: unknown;
   userEmail?: unknown;
   assistantMessages?: unknown;
+}
+
+/** Preserves the upstream status so the public route can map throttling and platform failures. */
+export class SubmissionReadUpstreamError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`Generated workflow submission read failed (${status}).`);
+    this.name = 'SubmissionReadUpstreamError';
+    this.status = status;
+  }
+}
+
+/** Maps submission-read failures to the stable public error envelope without exposing upstream detail. */
+export function submissionReadFailure(error: unknown): {
+  error: 'PLATFORM_UNAVAILABLE' | 'RATE_LIMITED' | 'SUBMISSION_READ_FAILED';
+  status: 429 | 502 | 503;
+} {
+  if (error instanceof SubmissionReadUpstreamError) {
+    if (error.status === 429) return { error: 'RATE_LIMITED', status: 429 };
+    if (error.status >= 500) {
+      return { error: 'PLATFORM_UNAVAILABLE', status: 503 };
+    }
+  }
+  if (error instanceof GeneratedWorkflowPlatformUnavailableError) {
+    return { error: 'PLATFORM_UNAVAILABLE', status: 503 };
+  }
+  return { error: 'SUBMISSION_READ_FAILED', status: 502 };
 }
 
 /** Reads a submission only after its HttpOnly ownership capability is verified. */
@@ -36,13 +65,14 @@ export async function readOwnedSubmission(args: {
     appKey: runtime.appKey,
     path: `/submissions/${encodeURIComponent(submissionId)}`,
   });
-  if (!response.ok) return null;
+  if (response.status === 404) return null;
+  if (!response.ok) throw new SubmissionReadUpstreamError(response.status);
   const payload = (await response.json()) as {
     submission?: Partial<StoredSubmission>;
   };
   const stored = payload.submission ?? {};
   if (typeof stored.id !== 'string' || stored.id !== submissionId) {
-    return null;
+    throw new SubmissionReadUpstreamError(502);
   }
   return {
     id: submissionId,

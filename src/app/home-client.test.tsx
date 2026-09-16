@@ -60,9 +60,9 @@ describe('HomeClient generated workflow runtime', () => {
     );
   });
 
-  it('keeps the general template demo when no generated runtime is exported', () => {
+  it('keeps the general template demo when no generated runtime is exported', async () => {
     render(<HomeClient />);
 
-    expect(screen.getByText('Demo fallback')).toBeVisible();
+    expect(await screen.findByText('Demo fallback')).toBeVisible();
   });
 });

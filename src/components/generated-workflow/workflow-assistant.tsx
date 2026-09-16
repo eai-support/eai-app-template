@@ -31,11 +31,19 @@ export const WorkflowAssistant = memo(function WorkflowAssistant({
   const [activeQuestion, setActiveQuestion] = useState('');
   const [streamingAnswer, setStreamingAnswer] = useState('');
   const [error, setError] = useState('');
+  const [slow, setSlow] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const inFlight = useRef(false);
+  const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const id = useId();
 
   useEffect(() => setMessages(initialMessages), [initialMessages]);
+  useEffect(
+    () => () => {
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+    },
+    [],
+  );
 
   async function ask(event: FormEvent) {
     event.preventDefault();
@@ -47,6 +55,8 @@ export const WorkflowAssistant = memo(function WorkflowAssistant({
     setQuestion('');
     setStreamingAnswer('');
     setError('');
+    setSlow(false);
+    slowTimer.current = setTimeout(() => setSlow(true), 8_000);
     try {
       const response = await fetch(apiUrl('/api/eai/workflow-assistant'), {
         method: 'POST',
@@ -81,13 +91,18 @@ export const WorkflowAssistant = memo(function WorkflowAssistant({
     } catch (cause) {
       setQuestion(text);
       setError(
-        cause instanceof Error && cause.name === 'Error'
-          ? cause.message
-          : 'The assistant is unavailable. Please try again.',
+        cause instanceof Error && cause.name === 'TimeoutError'
+          ? 'The assistant took too long. Retry your question.'
+          : cause instanceof Error && cause.name === 'Error'
+            ? cause.message
+            : 'The assistant is unavailable. Please try again.',
       );
     } finally {
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+      slowTimer.current = null;
       inFlight.current = false;
       setBusy(false);
+      setSlow(false);
       setActiveQuestion('');
       setStreamingAnswer('');
     }
@@ -120,7 +135,11 @@ export const WorkflowAssistant = memo(function WorkflowAssistant({
       ) : null}
       {busy ? (
         <p role='status' className='text-muted-foreground text-sm'>
-          {streamingAnswer ? 'Answering…' : 'Thinking…'}
+          {streamingAnswer
+            ? 'Answering…'
+            : slow
+              ? 'Still working…'
+              : 'Thinking…'}
         </p>
       ) : null}
     </>
@@ -165,7 +184,7 @@ export const WorkflowAssistant = memo(function WorkflowAssistant({
       <button
         type='submit'
         disabled={busy || !question.trim()}
-        aria-label='Ask assistant'
+        aria-label={error ? 'Retry assistant' : 'Ask assistant'}
         className='bg-foreground text-background flex size-10 shrink-0 items-center justify-center rounded-lg disabled:opacity-40'
       >
         <ArrowUp className='size-4' aria-hidden='true' />

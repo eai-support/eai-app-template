@@ -1,3 +1,4 @@
+/** @jest-environment node */
 import {
   __setGeneratedWorkflowTokenProviderForTests,
   GeneratedWorkflowPlatformUnavailableError,
@@ -83,6 +84,26 @@ describe('generated workflow runtime facade client', () => {
     });
   });
 
+  it('applies caller cancellation while managed identity is still resolving', async () => {
+    const caller = new AbortController();
+    __setGeneratedWorkflowTokenProviderForTests(
+      () => new Promise<string>(() => undefined),
+    );
+
+    const request = generatedWorkflowPlatformFetch({
+      tenantId: 'tenant-a',
+      appKey: 'rates-review',
+      path: '/assistant',
+      init: { method: 'POST', signal: caller.signal },
+    });
+    caller.abort(new DOMException('Caller timed out', 'TimeoutError'));
+
+    await expect(request).rejects.toEqual(
+      expect.any(GeneratedWorkflowPlatformUnavailableError),
+    );
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('shares one managed-identity lookup across concurrent platform calls', async () => {
     __setGeneratedWorkflowTokenProviderForTests(null);
     process.env.IDENTITY_ENDPOINT = 'http://127.0.0.1:42356/msi/token';
@@ -105,7 +126,7 @@ describe('generated workflow runtime facade client', () => {
         } as Response;
       }
       return { ok: true, status: 200 } as Response;
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const requests = Array.from({ length: 20 }, (_, index) =>
       generatedWorkflowPlatformFetch({
@@ -156,7 +177,7 @@ describe('generated workflow runtime facade client', () => {
         } as Response;
       }
       return { ok: true, status: 200 } as Response;
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const request = () =>
       generatedWorkflowPlatformFetch({
@@ -170,5 +191,51 @@ describe('generated workflow runtime facade client', () => {
     );
     await expect(request()).resolves.toMatchObject({ ok: true });
     expect(identityAttempts).toBe(2);
+  });
+  it('retains the deadline through response-body consumption and caller cancellation', async () => {
+    const deadline = new AbortController();
+    const caller = new AbortController();
+    const timeout = jest
+      .spyOn(AbortSignal, 'timeout')
+      .mockReturnValue(deadline.signal);
+    let requestSignal: AbortSignal;
+    global.fetch = jest.fn(async (_url, init) => {
+      requestSignal = init!.signal as AbortSignal;
+      return {
+        ok: true,
+        json: () =>
+          new Promise((_resolve, reject) => {
+            requestSignal.addEventListener(
+              'abort',
+              () => reject(requestSignal.reason),
+              { once: true },
+            );
+          }),
+      };
+    }) as unknown as typeof fetch;
+    try {
+      const response = await generatedWorkflowPlatformFetch({
+        tenantId: 'tenant-a',
+        appKey: 'rates-review',
+        path: '/submissions/submission-1',
+        init: { signal: caller.signal },
+      });
+      const body = response.json();
+      deadline.abort(new DOMException('Response timed out', 'TimeoutError'));
+      await expect(body).rejects.toMatchObject({ name: 'TimeoutError' });
+      expect(timeout).toHaveBeenCalledWith(60_000);
+      timeout.mockReturnValueOnce(new AbortController().signal);
+      const second = await generatedWorkflowPlatformFetch({
+        tenantId: 'tenant-a',
+        appKey: 'rates-review',
+        path: '/workflow',
+        init: { signal: caller.signal },
+      });
+      const secondBody = second.json();
+      caller.abort(new DOMException('Caller cancelled', 'AbortError'));
+      await expect(secondBody).rejects.toMatchObject({ name: 'AbortError' });
+    } finally {
+      timeout.mockRestore();
+    }
   });
 });

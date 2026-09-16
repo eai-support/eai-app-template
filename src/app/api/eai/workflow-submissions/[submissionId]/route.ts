@@ -12,7 +12,10 @@ import {
 import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 import { hasSubmissionSession } from '@/lib/generated-workflow/submission-session';
-import { readOwnedSubmission } from '@/lib/generated-workflow/submission-store';
+import {
+  readOwnedSubmission,
+  submissionReadFailure,
+} from '@/lib/generated-workflow/submission-store';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -90,9 +93,13 @@ export async function GET(
       '[generated-workflow] submission read error:',
       error instanceof Error ? error.name : 'unknown',
     );
+    const failure = submissionReadFailure(error);
     return NextResponse.json(
-      { error: 'SUBMISSION_READ_FAILED' },
-      { status: 500, headers: NO_STORE_HEADERS },
+      { error: failure.error },
+      {
+        status: failure.status,
+        headers: NO_STORE_HEADERS,
+      },
     );
   }
 }

@@ -98,6 +98,25 @@ it('does not auto-call the model and retains a failed question for deliberate re
   expect(screen.getByRole('log')).toBeEmptyDOMElement();
 });
 
+it('explains a bounded timeout and exposes an explicit retry action', async () => {
+  const timeout = new Error('The operation timed out');
+  timeout.name = 'TimeoutError';
+  (global.fetch as jest.Mock).mockRejectedValue(timeout);
+  render(<WorkflowAssistant stepId='submit' stepTitle='Submit' />);
+  fireEvent.change(screen.getByLabelText('Ask about this workflow'), {
+    target: { value: 'What happens next?' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Ask assistant' }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'The assistant took too long. Retry your question.',
+  );
+  expect(screen.getByLabelText('Ask about this workflow')).toHaveValue(
+    'What happens next?',
+  );
+  expect(screen.getByRole('button', { name: 'Retry assistant' })).toBeEnabled();
+});
+
 it('renders model content as text without executing HTML', async () => {
   (global.fetch as jest.Mock).mockResolvedValue(
     streamingResponse('<img src=x onerror=alert(1)>'),

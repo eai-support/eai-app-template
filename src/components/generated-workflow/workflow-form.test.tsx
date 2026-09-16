@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 
 import { GeneratedWorkflowForm } from './workflow-form';
 import type { GeneratedAppRuntimeBinding } from '@/lib/generated-workflow/runtime-contract';
@@ -20,6 +26,15 @@ const binding: GeneratedAppRuntimeBinding = {
 
 describe('GeneratedWorkflowForm', () => {
   const originalFetch = global.fetch;
+  const originalTimeout = AbortSignal.timeout;
+
+  beforeAll(() => {
+    // jsdom's AbortSignal predates browser timeout support; control deadlines in fixtures.
+    AbortSignal.timeout = jest.fn(() => new AbortController().signal);
+  });
+  afterAll(() => {
+    AbortSignal.timeout = originalTimeout;
+  });
 
   beforeEach(() => {
     window.history.replaceState(null, '', '/');
@@ -87,6 +102,37 @@ describe('GeneratedWorkflowForm', () => {
     } finally {
       Reflect.deleteProperty(window.history, 'replaceState');
     }
+  });
+
+  it('accepts ordinary answers while the resumable submission is starting', () => {
+    global.fetch = jest.fn(() => new Promise<Response>(() => {}));
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        snapshot={{
+          steps: [
+            {
+              id: 'request',
+              title: 'Request',
+              fields: [
+                { id: 'details', label: 'Details', type: 'text' },
+                { id: 'evidence', label: 'Evidence', type: 'file' },
+              ],
+            },
+            { id: 'review', title: 'Review', fields: [] },
+          ],
+        }}
+      />,
+    );
+
+    const details = screen.getByLabelText('Details');
+    fireEvent.change(details, { target: { value: 'Prepared while starting' } });
+
+    expect(details).toHaveValue('Prepared while starting');
+    expect(details).toBeEnabled();
+    expect(screen.getByLabelText('Evidence')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Starting…' })).toBeDisabled();
   });
 
   it('renders exported fields, validates required answers, and completes anonymously', async () => {
@@ -414,5 +460,165 @@ describe('GeneratedWorkflowForm', () => {
       await screen.findByRole('button', { name: 'Submit' }),
     ).toBeDisabled();
     expect(screen.queryByText('Submitted')).not.toBeInTheDocument();
+  });
+  it.each(['unavailable', 'network', 'body-timeout'])(
+    'keeps the existing submission on a transient resume %s',
+    async (failure) => {
+      window.history.replaceState(null, '', '/?submission=existing');
+      global.fetch = jest.fn(async () => {
+        if (failure === 'network') throw new TypeError('fetch failed');
+        return {
+          ok: failure !== 'unavailable',
+          status: failure === 'unavailable' ? 503 : 200,
+          json: async () => {
+            throw new DOMException('Response timed out', 'TimeoutError');
+          },
+        };
+      }) as unknown as typeof fetch;
+      render(
+        <GeneratedWorkflowForm
+          appKey='rates-review'
+          binding={binding}
+          snapshot={{
+            steps: [{ id: 'request', title: 'Request', fields: [] }],
+          }}
+        />,
+      );
+      await screen.findByText(
+        failure === 'network'
+          ? 'fetch failed'
+          : failure === 'body-timeout'
+            ? 'Response timed out'
+            : 'Could not resume this form. Please reload and try again.',
+      );
+      expect(window.location.search).toBe('?submission=existing');
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/eai/workflow-submissions/existing',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    },
+  );
+
+  it('keeps required uploads invalid after failure and allows a successful retry', async () => {
+    const fileRef = {
+      submissionFileId: 'file-1',
+      fileName: 'guests.csv',
+      fileSize: 7,
+      contentType: 'text/csv',
+      uploadedAt: '2026-09-16T03:25:20Z',
+      stepId: 'guests',
+      fieldId: 'list',
+    };
+    let attempts = 0;
+    global.fetch = jest.fn(async (url) => {
+      if (String(url).endsWith('/files')) {
+        attempts += 1;
+        return {
+          ok: attempts > 1,
+          status: attempts > 1 ? 201 : 503,
+          json: async () => (attempts > 1 ? { file: fileRef } : {}),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ submissionId: 'submission-1' }),
+      };
+    }) as unknown as typeof fetch;
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        snapshot={{
+          steps: [
+            {
+              id: 'guests',
+              title: 'Guests',
+              fields: [
+                {
+                  id: 'list',
+                  label: 'Guest list',
+                  type: 'file',
+                  required: true,
+                },
+              ],
+            },
+            { id: 'review', title: 'Review', fields: [] },
+          ],
+        }}
+      />,
+    );
+    const next = await screen.findByRole('button', { name: 'Continue' });
+    expect(next).toBeDisabled();
+    const input = screen.getByLabelText(/Guest list/);
+    const file = new File(['a,b,c,d'], 'guests.csv', { type: 'text/csv' });
+    fireEvent.change(input, { target: { files: [file] } });
+    await screen.findByText('File upload failed.');
+    expect(next).toBeDisabled();
+    expect(input).toBeEnabled();
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => expect(next).toBeEnabled());
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      '/api/eai/workflow-submissions/submission-1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: expect.stringContaining('"submissionFileId":"file-1"'),
+      }),
+    );
+    fireEvent.click(next);
+    expect(await screen.findByRole('button', { name: 'Submit' })).toBeEnabled();
+  });
+  it('releases a stalled upload body at its deadline without satisfying a required file', async () => {
+    const deadline = new AbortController();
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        snapshot={{
+          steps: [
+            {
+              id: 'guests',
+              title: 'Guests',
+              fields: [
+                {
+                  id: 'list',
+                  label: 'Guest list',
+                  type: 'file',
+                  required: true,
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+    await screen.findByRole('button', { name: 'Submit' });
+    jest.mocked(AbortSignal.timeout).mockReturnValueOnce(deadline.signal);
+    (global.fetch as jest.Mock).mockImplementationOnce(async (_url, init) => ({
+      ok: true,
+      status: 201,
+      json: () =>
+        new Promise((_resolve, reject) => {
+          init.signal.addEventListener(
+            'abort',
+            () => reject(init.signal.reason),
+            { once: true },
+          );
+        }),
+    }));
+    fireEvent.change(screen.getByLabelText(/Guest list/), {
+      target: {
+        files: [new File(['a,b'], 'guests.csv', { type: 'text/csv' })],
+      },
+    });
+    await screen.findByText('Uploading…');
+    await act(async () => {
+      deadline.abort(new DOMException('Timed out', 'TimeoutError'));
+    });
+    await screen.findByText('File upload failed.');
+    expect(screen.queryByText('Uploading…')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Guest list/)).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Submit' })).toBeDisabled();
   });
 });

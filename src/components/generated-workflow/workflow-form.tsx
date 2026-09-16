@@ -1,8 +1,7 @@
 'use client';
 
-import { WorkflowAssistant } from './workflow-assistant';
-
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import {
   useCallback,
   useEffect,
@@ -20,13 +19,20 @@ import type {
   GeneratedWorkflowSnapshot,
   GeneratedWorkflowStep,
 } from '@/lib/generated-workflow/runtime-contract';
-import { validateSubmissionFile } from '@/lib/generated-workflow/submission-files';
+import {
+  isSubmissionFileRef,
+  validateSubmissionFile,
+} from '@/lib/generated-workflow/submission-files';
 import { validateFieldValue } from '@/lib/generated-workflow/field-validation';
 import { GeneratedWorkflowFieldInput } from './field-input';
 import {
   GeneratedWorkflowSmartBlock,
   isSupportedGeneratedWorkflowBlock,
 } from './smart-block';
+
+const WorkflowAssistant = dynamic(() =>
+  import('./workflow-assistant').then((module) => module.WorkflowAssistant),
+);
 
 interface GeneratedWorkflowFormProps {
   appKey: string;
@@ -167,6 +173,7 @@ export function GeneratedWorkflowForm({
   const startSubmission = useCallback(async () => {
     const response = await fetch(submissionEndpoint(), {
       method: 'POST',
+      signal: AbortSignal.timeout(90_000),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ device: detectDevice() }),
     });
@@ -192,39 +199,45 @@ export function GeneratedWorkflowForm({
       'submission',
     );
     const initialize = resumeId
-      ? fetch(submissionEndpoint(resumeId))
-          .then(async (response) => {
-            if (!response.ok) throw new Error('resume-failed');
-            const payload = (await response.json()) as {
-              submission?: {
-                status?: string;
-                currentStep?: number;
-                formData?: Record<string, Record<string, unknown>>;
-                userName?: string;
-                userEmail?: string;
-                assistantMessages?: WorkflowAssistantMessage[];
-              };
-            };
-            if (
-              !payload.submission ||
-              payload.submission.status !== 'in_progress'
-            ) {
-              throw new Error('resume-failed');
-            }
-            setSubmissionId(resumeId);
-            setFormData(payload.submission.formData ?? {});
-            setCurrentStepIndex(
-              Math.min(
-                Math.max(payload.submission.currentStep ?? 0, 0),
-                Math.max(steps.length - 1, 0),
-              ),
+      ? fetch(submissionEndpoint(resumeId), {
+          signal: AbortSignal.timeout(90_000),
+        }).then(async (response) => {
+          if (response.status === 404) return startSubmission();
+          if (!response.ok)
+            throw new Error(
+              'Could not resume this form. Please reload and try again.',
             );
-            setUserName(payload.submission.userName ?? '');
-            setUserEmail(payload.submission.userEmail ?? '');
-            setAssistantMessages(payload.submission.assistantMessages ?? []);
-            setSubmitState('idle');
-          })
-          .catch(() => startSubmission())
+          const payload = (await response.json()) as {
+            submission?: {
+              status?: string;
+              currentStep?: number;
+              formData?: Record<string, Record<string, unknown>>;
+              userName?: string;
+              userEmail?: string;
+              assistantMessages?: WorkflowAssistantMessage[];
+            };
+          };
+          if (
+            !payload.submission ||
+            payload.submission.status !== 'in_progress'
+          ) {
+            throw new Error(
+              'Could not resume this form. Please reload and try again.',
+            );
+          }
+          setSubmissionId(resumeId);
+          setFormData(payload.submission.formData ?? {});
+          setCurrentStepIndex(
+            Math.min(
+              Math.max(payload.submission.currentStep ?? 0, 0),
+              Math.max(steps.length - 1, 0),
+            ),
+          );
+          setUserName(payload.submission.userName ?? '');
+          setUserEmail(payload.submission.userEmail ?? '');
+          setAssistantMessages(payload.submission.assistantMessages ?? []);
+          setSubmitState('idle');
+        })
       : startSubmission();
 
     void initialize.catch((error) => {
@@ -242,6 +255,7 @@ export function GeneratedWorkflowForm({
         throw new Error('The assistant is unavailable. Please try again.');
       const response = await fetch(submissionEndpoint(submissionId), {
         method: 'PATCH',
+        signal: AbortSignal.timeout(90_000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ assistantMessages: messages }),
       });
@@ -346,6 +360,7 @@ export function GeneratedWorkflowForm({
       if (!submissionId) return;
       await fetch(submissionEndpoint(submissionId), {
         method: 'PATCH',
+        signal: AbortSignal.timeout(90_000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           currentStep: nextStep,
@@ -365,6 +380,7 @@ export function GeneratedWorkflowForm({
         return;
       }
       const key = fieldKey(stepId, fieldId);
+      setFieldValue(stepId, fieldId, '');
       const validationError = validateSubmissionFile(file);
       if (validationError) {
         setFieldErrors((current) => ({
@@ -388,13 +404,19 @@ export function GeneratedWorkflowForm({
         body.set('fieldId', fieldId);
         const response = await fetch(submissionEndpoint(submissionId, true), {
           method: 'POST',
+          signal: AbortSignal.timeout(90_000),
           body,
         });
         const payload = (await response.json().catch(() => ({}))) as {
           file?: unknown;
           message?: string;
         };
-        if (!response.ok || !payload.file) {
+        if (
+          !response.ok ||
+          !isSubmissionFileRef(payload.file) ||
+          payload.file.stepId !== stepId ||
+          payload.file.fieldId !== fieldId
+        ) {
           throw new Error(payload.message || 'File upload failed.');
         }
         setFieldValue(stepId, fieldId, payload.file);
@@ -431,6 +453,7 @@ export function GeneratedWorkflowForm({
     try {
       const response = await fetch(submissionEndpoint(submissionId), {
         method: 'PATCH',
+        signal: AbortSignal.timeout(90_000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'completed',
@@ -621,9 +644,9 @@ export function GeneratedWorkflowForm({
                       <GeneratedWorkflowFieldInput
                         id={key}
                         disabled={
-                          submitState === 'starting' ||
                           submitState === 'submitting' ||
-                          uploadingField === key
+                          uploadingField === key ||
+                          (submitState === 'starting' && field.type === 'file')
                         }
                         field={field}
                         value={formData[stepId]?.[fieldId]}
@@ -654,10 +677,7 @@ export function GeneratedWorkflowForm({
                     <div key={key}>
                       <GeneratedWorkflowSmartBlock
                         block={block}
-                        disabled={
-                          submitState === 'starting' ||
-                          submitState === 'submitting'
-                        }
+                        disabled={submitState === 'submitting'}
                         formData={formData}
                         stepId={stepId}
                         values={blockOutputValues(formData, stepId, block.id)}
@@ -735,7 +755,17 @@ export function GeneratedWorkflowForm({
                   submitState === 'starting' ||
                   submitState === 'submitting' ||
                   Boolean(uploadingField) ||
-                  currentStepHasUnsupportedBlocks
+                  currentStepHasUnsupportedBlocks ||
+                  Boolean(
+                    currentStep?.fields?.some(
+                      (field) =>
+                        field.type === 'file' &&
+                        field.required &&
+                        !isSubmissionFileRef(
+                          formData[currentStep.id ?? '']?.[field.id ?? ''],
+                        ),
+                    ),
+                  )
                 }
                 onClick={() => {
                   if (!currentStep || !validateStep(currentStep)) return;

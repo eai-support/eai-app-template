@@ -79,6 +79,7 @@
           "id": "generated-workflow-anonymous-container-runtime",
           "description": "Generated NCB apps render an immutable workflow snapshot, use an ACA managed-identity BFF for anonymous submissions and files, and expose semantic readiness proof.",
           "owned_paths": [
+            "next.config.ts",
             "src/app/globals.css",
             "src/app/home-client.tsx",
             "src/app/page.tsx",
@@ -98,6 +99,7 @@
             "src/app/api/eai/readiness/route.test.ts",
             "src/app/api/eai/workflow-submissions/route.test.ts",
             "src/app/api/eai/workflow-submissions/[submissionId]/route.test.ts",
+            "src/app/api/eai/workflow-submissions/[submissionId]/files/route.test.ts",
             "src/components/generated-workflow/workflow-form.test.tsx",
             "src/lib/generated-workflow/bounded-body.test.ts",
             "src/lib/generated-workflow/platform.test.ts",
@@ -105,6 +107,7 @@
             "src/lib/generated-workflow/runtime-contract.test.ts",
             "src/lib/generated-workflow/runtime.test.ts",
             "src/lib/generated-workflow/server-configuration.test.ts",
+            "src/lib/generated-workflow/submission-store.test.ts",
             "src/lib/generated-workflow/submission-session.test.ts",
             "src/app/api/eai/workflow-assistant/route.test.ts",
             "src/components/generated-workflow/workflow-assistant.test.tsx",
