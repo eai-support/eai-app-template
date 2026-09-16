@@ -15,3 +15,10 @@ panel. The image is a live hosted capture after a successful submission start,
 not a static mock or Storybook fixture.
 
 Open UX issues: none.
+
+![Current local builder preview](preview/local-builder-parity.jpg)
+
+The local builder preview retains the same workflow/Assistant composition,
+required inputs, step navigation and bottom action rail. This current
+loopback capture complements the deployed-runtime image rather than replacing
+its hosted receipt.

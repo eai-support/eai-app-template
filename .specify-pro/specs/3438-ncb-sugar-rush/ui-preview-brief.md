@@ -23,5 +23,7 @@ bounded right panel with its composer aligned to the form navigation.
 
 - Hosted URL: `https://i-need-help-with-sup-cfab5e43.jollyground-6e01a69c.australiaeast.azurecontainerapps.io/`.
 - Browser target: Google Chrome 1440 x 1000.
-- Evidence: `preview/hosted-two-panel-runtime.png`.
+- Evidence:
+  - `preview/hosted-two-panel-runtime.png` for the deployed generated runtime.
+  - `preview/local-builder-parity.jpg` for the current local builder preview.
 - Open issues: none.
