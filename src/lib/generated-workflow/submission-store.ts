@@ -16,6 +16,7 @@ export interface StoredSubmission {
   assistantMessages?: unknown;
 }
 
+/** Preserves the upstream status so the public route can map throttling and platform failures. */
 export class SubmissionReadUpstreamError extends Error {
   readonly status: number;
 
@@ -26,6 +27,7 @@ export class SubmissionReadUpstreamError extends Error {
   }
 }
 
+/** Maps submission-read failures to the stable public error envelope without exposing upstream detail. */
 export function submissionReadFailure(error: unknown): {
   error: 'PLATFORM_UNAVAILABLE' | 'RATE_LIMITED' | 'SUBMISSION_READ_FAILED';
   status: 429 | 502 | 503;
