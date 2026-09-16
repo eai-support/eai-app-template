@@ -84,6 +84,26 @@ describe('generated workflow runtime facade client', () => {
     });
   });
 
+  it('applies caller cancellation while managed identity is still resolving', async () => {
+    const caller = new AbortController();
+    __setGeneratedWorkflowTokenProviderForTests(
+      () => new Promise<string>(() => undefined),
+    );
+
+    const request = generatedWorkflowPlatformFetch({
+      tenantId: 'tenant-a',
+      appKey: 'rates-review',
+      path: '/assistant',
+      init: { method: 'POST', signal: caller.signal },
+    });
+    caller.abort(new DOMException('Caller timed out', 'TimeoutError'));
+
+    await expect(request).rejects.toEqual(
+      expect.any(GeneratedWorkflowPlatformUnavailableError),
+    );
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('shares one managed-identity lookup across concurrent platform calls', async () => {
     __setGeneratedWorkflowTokenProviderForTests(null);
     process.env.IDENTITY_ENDPOINT = 'http://127.0.0.1:42356/msi/token';

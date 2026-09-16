@@ -154,6 +154,41 @@ async function accessToken(): Promise<string> {
     : containerAppsManagedIdentityToken(audience);
 }
 
+function abortReason(signal: AbortSignal): unknown {
+  return (
+    signal.reason ??
+    new DOMException(
+      'Generated workflow platform request aborted.',
+      'AbortError',
+    )
+  );
+}
+
+async function awaitWithSignal<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  if (signal.aborted) throw abortReason(signal);
+  return new Promise<T>((resolve, reject) => {
+    const aborted = () => {
+      cleanup();
+      reject(abortReason(signal));
+    };
+    const cleanup = () => signal.removeEventListener('abort', aborted);
+    signal.addEventListener('abort', aborted, { once: true });
+    promise.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error: unknown) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
+}
+
 function runtimeFacadePath(
   tenantId: string,
   appKey: string,
@@ -174,6 +209,9 @@ export async function generatedWorkflowPlatformFetch(args: {
   init?: RequestInit;
 }): Promise<Response> {
   try {
+    const deadlineSignal = args.init?.signal
+      ? AbortSignal.any([args.init.signal, AbortSignal.timeout(60_000)])
+      : AbortSignal.timeout(60_000);
     const headers = new Headers(args.init?.headers);
     const isBinary = args.init?.body instanceof ArrayBuffer;
     if (
@@ -183,7 +221,10 @@ export async function generatedWorkflowPlatformFetch(args: {
     ) {
       headers.set('Content-Type', 'application/json');
     }
-    headers.set('Authorization', `Bearer ${await accessToken()}`);
+    headers.set(
+      'Authorization',
+      `Bearer ${await awaitWithSignal(accessToken(), deadlineSignal)}`,
+    );
     if (args.anonymousClientId) {
       headers.set('X-EAI-Anonymous-Client', args.anonymousClientId);
     }
@@ -197,10 +238,8 @@ export async function generatedWorkflowPlatformFetch(args: {
       {
         ...args.init,
         headers,
-        // Keep the deadline active through response-body consumption.
-        signal: args.init?.signal
-          ? AbortSignal.any([args.init.signal, AbortSignal.timeout(60_000)])
-          : AbortSignal.timeout(60_000),
+        // Keep one deadline active through identity acquisition and body consumption.
+        signal: deadlineSignal,
         cache: 'no-store',
       },
     );
