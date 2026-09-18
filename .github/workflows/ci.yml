@@ -49,6 +49,9 @@ jobs:
       - name: Object type generator regression test
         run: npm run test:object-types-generator
 
+      - name: Release version resolver test
+        run: npm run test:release-version
+
       - name: Unit tests
         run: npm run test:unit:ci
 

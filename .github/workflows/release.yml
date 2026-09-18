@@ -1,0 +1,91 @@
+# Cuts an immutable release tag for every main commit that passed CI.
+#
+# Consumers (eai-cli `linked-sources.json`, Admin-Portal generated-app export)
+# pin to these releases instead of tracking the main branch, so a template
+# revision can be named, reproduced, and rolled back.
+#
+# This workflow never commits to main: it tags the already-tested commit. That
+# keeps `package.json` out of the release path and avoids the CI -> release ->
+# CI loop a version-bump commit would create.
+name: Release
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Semver segment to bump for this release'
+        required: false
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+concurrency:
+  group: eai-app-template-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag reviewed template revision
+    # Only a green CI run on main is releasable; a manual dispatch is an
+    # explicit override for minor/major cuts.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Skip commits that already carry a release tag
+        id: guard
+        run: |
+          EXISTING=$(git tag --points-at HEAD --list 'v*' | head -n1)
+          if [ -n "$EXISTING" ]; then
+            echo "::notice::$(git rev-parse --short HEAD) is already released as ${EXISTING}."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve the next release version
+        id: version
+        if: steps.guard.outputs.release == 'true'
+        run: |
+          LATEST=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          NEXT=$(node scripts/next-release-version.mjs "${LATEST}" "${{ inputs.bump || 'patch' }}")
+          echo "previous=${LATEST}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${NEXT}" >> "$GITHUB_OUTPUT"
+
+      - name: Push the release tag
+        if: steps.guard.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Template release $TAG"
+          git push origin "refs/tags/$TAG"
+
+      - name: Publish the GitHub release
+        if: steps.guard.outputs.release == 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          make_latest: true
