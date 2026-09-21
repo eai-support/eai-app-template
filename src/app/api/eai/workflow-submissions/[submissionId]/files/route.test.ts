@@ -155,4 +155,55 @@ describe('generated workflow file upload BFF', () => {
     });
     expect(mockPlatformFetch).not.toHaveBeenCalled();
   });
+
+  it('enforces the file types configured on the bound upload field', async () => {
+    mockGetRuntime.mockReturnValue({
+      status: 'ready',
+      runtime: {
+        appKey: 'rates-review',
+        tenantId: 'tenant-a',
+        binding: {
+          workflowTemplate: { digest: `sha256:${'a'.repeat(64)}` },
+        },
+        snapshot: {
+          steps: [
+            {
+              id: 'documents',
+              fields: [
+                {
+                  id: 'evidence',
+                  type: 'file',
+                  acceptedFileExtensions: ['pdf'],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    const form = new FormData();
+    form.set(
+      'file',
+      new File(['guest,email'], 'guests.csv', { type: 'text/csv' }),
+    );
+    form.set('stepId', 'documents');
+    form.set('fieldId', 'evidence');
+    parsedForm = form;
+    const response = await POST(
+      {
+        url: 'http://localhost/api/eai/workflow-submissions/submission-1/files',
+        headers: new Headers({
+          'content-type': 'multipart/form-data; boundary=test',
+        }),
+      } as never,
+      { params: Promise.resolve({ submissionId: 'submission-1' }) },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'INVALID_UPLOAD',
+      message: 'Unsupported file type.',
+    });
+    expect(mockPlatformFetch).not.toHaveBeenCalled();
+  });
 });

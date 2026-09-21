@@ -10,6 +10,7 @@ export interface GeneratedWorkflowField {
   required?: boolean;
   helpText?: string;
   options?: string[];
+  acceptedFileExtensions?: string[];
   replaces?: string[];
   validation?: FieldValidation;
 }
