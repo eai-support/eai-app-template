@@ -21,7 +21,9 @@ import type {
 } from '@/lib/generated-workflow/runtime-contract';
 import {
   isSubmissionFileRef,
+  type SubmissionFileRef,
   validateSubmissionFile,
+  validateSubmissionFileCollection,
 } from '@/lib/generated-workflow/submission-files';
 import { validateFieldValue } from '@/lib/generated-workflow/field-validation';
 import { GeneratedWorkflowFieldInput } from './field-input';
@@ -118,6 +120,21 @@ function blockOutputValues(
       .filter(([key]) => key.startsWith(prefix))
       .map(([key, value]) => [key.slice(prefix.length), value]),
   );
+}
+
+function submissionFiles(
+  data: Record<string, Record<string, unknown>>,
+): SubmissionFileRef[] {
+  return Object.values(data).flatMap((step) =>
+    Object.values(step).flatMap((value) => {
+      const file = asSubmissionFile(value);
+      return file ? [file] : [];
+    }),
+  );
+}
+
+function asSubmissionFile(value: unknown): SubmissionFileRef | null {
+  return isSubmissionFileRef(value) ? value : null;
 }
 
 function submissionEndpoint(submissionId?: string, files = false): string {
@@ -374,18 +391,39 @@ export function GeneratedWorkflowForm({
   );
 
   const uploadFile = useCallback(
-    async (stepId: string, fieldId: string, file: File | null) => {
+    async (
+      stepId: string,
+      fieldId: string,
+      acceptedFileExtensions: readonly string[] | undefined,
+      file: File | null,
+    ) => {
       if (!file) {
         setFieldValue(stepId, fieldId, '');
         return;
       }
       const key = fieldKey(stepId, fieldId);
       setFieldValue(stepId, fieldId, '');
-      const validationError = validateSubmissionFile(file);
+      const validationError = validateSubmissionFile(
+        file,
+        acceptedFileExtensions,
+      );
       if (validationError) {
         setFieldErrors((current) => ({
           ...current,
           [key]: validationError,
+        }));
+        return;
+      }
+      const retainedFiles = submissionFiles(formDataRef.current);
+      const collectionError = validateSubmissionFileCollection(retainedFiles, {
+        stepId,
+        fieldId,
+        fileSize: file.size,
+      });
+      if (collectionError) {
+        setFieldErrors((current) => ({
+          ...current,
+          [key]: collectionError,
         }));
         return;
       }
@@ -654,7 +692,12 @@ export function GeneratedWorkflowForm({
                           setFieldValue(stepId, fieldId, value)
                         }
                         onFileSelect={(file) =>
-                          void uploadFile(stepId, fieldId, file)
+                          void uploadFile(
+                            stepId,
+                            fieldId,
+                            field.acceptedFileExtensions,
+                            file,
+                          )
                         }
                       />
                       {uploadingField === key ? (

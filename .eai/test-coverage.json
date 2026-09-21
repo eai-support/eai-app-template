@@ -107,6 +107,7 @@
             "src/lib/generated-workflow/runtime-contract.test.ts",
             "src/lib/generated-workflow/runtime.test.ts",
             "src/lib/generated-workflow/server-configuration.test.ts",
+            "src/lib/generated-workflow/submission-files.test.ts",
             "src/lib/generated-workflow/submission-store.test.ts",
             "src/lib/generated-workflow/submission-session.test.ts",
             "src/app/api/eai/workflow-assistant/route.test.ts",
