@@ -38,6 +38,27 @@ describe('generated workflow public request guards', () => {
     ).toMatchObject({ ok: false });
   });
 
+  it('accepts bounded assistant history and rejects malformed history', () => {
+    const assistantMessages = [
+      { role: 'user', content: 'What happens next?' },
+      { role: 'assistant', content: 'Continue to the next step.' },
+    ];
+    expect(validateSubmissionPatch({ assistantMessages })).toEqual({
+      ok: true,
+      value: { assistantMessages },
+    });
+    expect(
+      validateSubmissionPatch({
+        assistantMessages: [{ role: 'system', content: 'unsafe' }],
+      }),
+    ).toMatchObject({ ok: false });
+    expect(
+      validateSubmissionPatch({
+        assistantMessages: [{ role: 'user', content: 'x'.repeat(2001) }],
+      }),
+    ).toMatchObject({ ok: false });
+  });
+
   it('uses the proxy-appended address instead of a spoofed forwarded prefix', () => {
     const headers = new Headers({
       'x-forwarded-for': '198.51.100.88, 192.0.2.10',

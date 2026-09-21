@@ -12,7 +12,7 @@ import {
   SUBMISSION_FILE_MAX_BYTES,
   validateSubmissionFile,
 } from '@/lib/generated-workflow/submission-files';
-import { readOwnedSubmission } from '@/lib/generated-workflow/submission-store';
+import { hasSubmissionSession } from '@/lib/generated-workflow/submission-session';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -45,6 +45,14 @@ export async function POST(
   if (resolved.status !== 'ready') return notFound();
   const { submissionId } = await context.params;
   if (!SUBMISSION_ID_PATTERN.test(submissionId)) return notFound();
+  if (
+    !hasSubmissionSession(
+      request,
+      submissionId,
+      resolved.runtime.binding.workflowTemplate.digest,
+    )
+  )
+    return notFound();
   const contentLength = request.headers.get('content-length');
   if (contentLength !== null && Number(contentLength) > MAX_REQUEST_BYTES) {
     return NextResponse.json(
@@ -107,13 +115,6 @@ export async function POST(
         ),
     );
     if (!fileFieldExists) return notFound();
-
-    const stored = await readOwnedSubmission({
-      request,
-      runtime: resolved.runtime,
-      submissionId,
-    });
-    if (!stored || stored.status !== 'in_progress') return notFound();
 
     const fileName = sanitizeSubmissionFileName(file.name);
     const upstreamForm = new FormData();

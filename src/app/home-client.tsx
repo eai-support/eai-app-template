@@ -1,13 +1,18 @@
 'use client';
 
-import { DemoPage } from '@enterpriseaigroup/demo';
+import dynamic from 'next/dynamic';
+
 import { GeneratedWorkflowForm } from '@/components/generated-workflow/workflow-form';
 import type { GeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime-contract';
+
+const DemoPage = dynamic(() =>
+  import('@enterpriseaigroup/demo').then((module) => module.DemoPage),
+);
 
 interface HomeClientProps {
   generatedWorkflow?: Pick<
     GeneratedWorkflowRuntime,
-    'appKey' | 'binding' | 'snapshot' | 'branding'
+    'appKey' | 'binding' | 'snapshot' | 'branding' | 'assistantEnabled'
   >;
   runtimeError?: string;
 }
@@ -45,6 +50,7 @@ export function HomeClient({
         appKey={generatedWorkflow.appKey}
         binding={generatedWorkflow.binding}
         branding={generatedWorkflow.branding}
+        assistantEnabled={generatedWorkflow.assistantEnabled}
         snapshot={generatedWorkflow.snapshot}
       />
     </div>

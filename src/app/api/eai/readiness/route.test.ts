@@ -1,9 +1,13 @@
 import { GET } from './route';
+import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 import { objectTypes } from '@/eai.config/object-types';
 
 jest.mock('@/lib/generated-workflow/runtime', () => ({
   getGeneratedWorkflowRuntime: jest.fn(),
+}));
+jest.mock('@/lib/generated-workflow/platform', () => ({
+  generatedWorkflowPlatformFetch: jest.fn(),
 }));
 
 const READINESS_PROBE_TOKEN_ENV = ['EAI', 'READINESS', 'PROBE', 'TOKEN'].join(
@@ -53,6 +57,25 @@ describe('readiness route', () => {
     };
     (getGeneratedWorkflowRuntime as jest.Mock).mockReturnValue({
       status: 'unconfigured',
+    });
+    (generatedWorkflowPlatformFetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        runtimeBinding: {
+          schemaVersion: 'eai.generated_app_runtime_binding.v1',
+          workflowTemplate: {
+            id: 'template-123',
+            version: 1,
+            digest: `sha256:${'a'.repeat(64)}`,
+            title: 'Rates Review',
+          },
+          respondentAccess: {
+            mode: 'anonymous',
+            submissionObjectType: 'workflow-submission',
+            fileObjectType: 'submission-file',
+          },
+        },
+      }),
     });
   });
 
@@ -172,10 +195,20 @@ describe('readiness route', () => {
     (getGeneratedWorkflowRuntime as jest.Mock).mockReturnValue({
       status: 'ready',
       runtime: {
+        tenantId: 'tenant-template',
+        appKey: 'contract-test',
         binding: {
+          schemaVersion: 'eai.generated_app_runtime_binding.v1',
           workflowTemplate: {
+            id: 'template-123',
+            version: 1,
             digest: `sha256:${'a'.repeat(64)}`,
             title: 'Rates Review',
+          },
+          respondentAccess: {
+            mode: 'anonymous',
+            submissionObjectType: 'workflow-submission',
+            fileObjectType: 'submission-file',
           },
         },
       },
@@ -190,6 +223,50 @@ describe('readiness route', () => {
         digest: `sha256:${'a'.repeat(64)}`,
         title: 'Rates Review',
       },
+    });
+    expect(generatedWorkflowPlatformFetch).toHaveBeenCalledWith({
+      tenantId: 'tenant-template',
+      appKey: 'contract-test',
+      path: '/workflow',
+    });
+  });
+
+  it('fails readiness when the generated workflow platform is unreachable', async () => {
+    (getGeneratedWorkflowRuntime as jest.Mock).mockReturnValue({
+      status: 'ready',
+      runtime: {
+        tenantId: 'tenant-template',
+        appKey: 'contract-test',
+        binding: {
+          schemaVersion: 'eai.generated_app_runtime_binding.v1',
+          workflowTemplate: {
+            id: 'template-123',
+            version: 1,
+            digest: `sha256:${'a'.repeat(64)}`,
+            title: 'Rates Review',
+          },
+          respondentAccess: {
+            mode: 'anonymous',
+            submissionObjectType: 'workflow-submission',
+            fileObjectType: 'submission-file',
+          },
+        },
+      },
+    });
+    (generatedWorkflowPlatformFetch as jest.Mock).mockRejectedValue(
+      new TypeError('fetch failed'),
+    );
+
+    const response = await GET(readinessRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.ok).toBe(false);
+    expect(body.failureCategories).toContain('publicapi_unreachable');
+    expect(body.checks).toContainEqual({
+      name: 'generated-workflow-platform',
+      ok: false,
+      category: 'publicapi_unreachable',
     });
   });
 });

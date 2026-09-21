@@ -1,0 +1,459 @@
+[
+  {
+    "name": "required whitespace",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "required": true
+    },
+    "value": "  ",
+    "error": "required"
+  },
+  {
+    "name": "optional whitespace",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text"
+    },
+    "value": " ",
+    "error": null
+  },
+  {
+    "name": "text rejects objects",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text"
+    },
+    "value": {},
+    "error": "invalid_type"
+  },
+  {
+    "name": "inferred email bad",
+    "field": {
+      "id": "answer",
+      "label": "Work email",
+      "type": "text"
+    },
+    "value": "not-an-email",
+    "error": "invalid_format"
+  },
+  {
+    "name": "inferred email valid",
+    "field": {
+      "id": "answer",
+      "label": "Work email",
+      "type": "text"
+    },
+    "value": "alex@example.com",
+    "error": null
+  },
+  {
+    "name": "explicit validation disabled",
+    "field": {
+      "id": "answer",
+      "label": "Email",
+      "type": "text",
+      "validation": {
+        "format": "none"
+      }
+    },
+    "value": "bad",
+    "error": null
+  },
+  {
+    "name": "email explicit valid",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": " a@b.com ",
+    "error": null
+  },
+  {
+    "name": "email explicit bad",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": "a@b",
+    "error": "invalid_format"
+  },
+  {
+    "name": "email textarea accepts one address",
+    "field": {
+      "id": "guest_emails",
+      "label": "Guest emails",
+      "type": "textarea",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": "ada@example.test",
+    "error": null
+  },
+  {
+    "name": "email textarea accepts comma separated addresses",
+    "field": {
+      "id": "guest_emails",
+      "label": "Guest emails",
+      "type": "textarea",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": " ada@example.test, grace@example.test ",
+    "error": null
+  },
+  {
+    "name": "email textarea rejects an invalid member",
+    "field": {
+      "id": "guest_emails",
+      "label": "Guest emails",
+      "type": "textarea",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": "ada@example.test, invalid",
+    "error": "invalid_format"
+  },
+  {
+    "name": "email textarea rejects an empty member",
+    "field": {
+      "id": "guest_emails",
+      "label": "Guest emails",
+      "type": "textarea",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": "ada@example.test, ",
+    "error": "invalid_format"
+  },
+  {
+    "name": "email text remains single address",
+    "field": {
+      "id": "email",
+      "label": "Email",
+      "type": "text",
+      "validation": {
+        "format": "email"
+      }
+    },
+    "value": "ada@example.test, grace@example.test",
+    "error": "invalid_format"
+  },
+  {
+    "name": "phone valid",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "phone"
+      }
+    },
+    "value": "+61 (2) 1234-5678",
+    "error": null
+  },
+  {
+    "name": "phone too short",
+    "field": {
+      "id": "answer",
+      "label": "Mobile",
+      "type": "text"
+    },
+    "value": "123",
+    "error": "invalid_format"
+  },
+  {
+    "name": "phone letters",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "phone"
+      }
+    },
+    "value": "123ABC4567",
+    "error": "invalid_format"
+  },
+  {
+    "name": "url valid",
+    "field": {
+      "id": "answer",
+      "label": "Website",
+      "type": "text"
+    },
+    "value": "https://example.com",
+    "error": null
+  },
+  {
+    "name": "url bad",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "url"
+      }
+    },
+    "value": "example",
+    "error": "invalid_format"
+  },
+  {
+    "name": "number min",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "number",
+        "min": -2,
+        "max": 4
+      }
+    },
+    "value": "-2",
+    "error": null
+  },
+  {
+    "name": "number below min",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "number",
+        "min": -2
+      }
+    },
+    "value": "-3",
+    "error": "invalid_format"
+  },
+  {
+    "name": "number above max",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "number",
+        "max": 4
+      }
+    },
+    "value": "5",
+    "error": "invalid_format"
+  },
+  {
+    "name": "number exponent rejected",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "number"
+      }
+    },
+    "value": "1e3",
+    "error": "invalid_format"
+  },
+  {
+    "name": "currency valid",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "currency"
+      }
+    },
+    "value": "14.99",
+    "error": null
+  },
+  {
+    "name": "currency precision",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "currency"
+      }
+    },
+    "value": "1.999",
+    "error": "invalid_format"
+  },
+  {
+    "name": "currency negative",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "format": "currency"
+      }
+    },
+    "value": "-1",
+    "error": "invalid_format"
+  },
+  {
+    "name": "minimum length",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "minLength": 2
+      }
+    },
+    "value": "a",
+    "error": "invalid_format"
+  },
+  {
+    "name": "maximum length",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "maxLength": 2
+      }
+    },
+    "value": "abc",
+    "error": "invalid_format"
+  },
+  {
+    "name": "utf16 length",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "maxLength": 1
+      }
+    },
+    "value": "😀",
+    "error": "invalid_format"
+  },
+  {
+    "name": "pattern valid",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "pattern": "^[A-Z0-9]{4}$"
+      }
+    },
+    "value": "AB12",
+    "error": null
+  },
+  {
+    "name": "pattern rejected",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "text",
+      "validation": {
+        "pattern": "^[A-Z0-9]{4}$"
+      }
+    },
+    "value": "Ab12",
+    "error": "invalid_format"
+  },
+  {
+    "name": "textarea no inferred email",
+    "field": {
+      "id": "answer",
+      "label": "Email message",
+      "type": "textarea"
+    },
+    "value": "unformatted",
+    "error": null
+  },
+  {
+    "name": "boolean false counts answered",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "boolean",
+      "required": true
+    },
+    "value": false,
+    "error": null
+  },
+  {
+    "name": "checkbox wrong type",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "checkbox"
+    },
+    "value": "false",
+    "error": "invalid_type"
+  },
+  {
+    "name": "date leap year",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "date"
+    },
+    "value": "2024-02-29",
+    "error": null
+  },
+  {
+    "name": "date invalid leap year",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "date"
+    },
+    "value": "2025-02-29",
+    "error": "invalid_date"
+  },
+  {
+    "name": "date invalid month",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "date"
+    },
+    "value": "2026-13-01",
+    "error": "invalid_date"
+  },
+  {
+    "name": "select valid",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "select",
+      "options": ["Yes", "No"]
+    },
+    "value": "Yes",
+    "error": null
+  },
+  {
+    "name": "select not in options",
+    "field": {
+      "id": "answer",
+      "label": "Answer",
+      "type": "select",
+      "options": ["Yes", "No"]
+    },
+    "value": "Maybe",
+    "error": "invalid_option"
+  }
+]

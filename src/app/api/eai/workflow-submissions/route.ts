@@ -5,7 +5,10 @@ import {
   RequestBodyTooLargeError,
 } from '@/lib/generated-workflow/bounded-body';
 import { requestClientFingerprint } from '@/lib/generated-workflow/public-guards';
-import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
+import {
+  GeneratedWorkflowPlatformUnavailableError,
+  generatedWorkflowPlatformFetch,
+} from '@/lib/generated-workflow/platform';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 import { setSubmissionSession } from '@/lib/generated-workflow/submission-session';
 
@@ -128,8 +131,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       error instanceof Error ? error.name : 'unknown',
     );
     return NextResponse.json(
-      { error: 'SUBMISSION_CREATE_FAILED' },
-      { status: 500, headers: NO_STORE_HEADERS },
+      {
+        error:
+          error instanceof GeneratedWorkflowPlatformUnavailableError
+            ? 'PLATFORM_UNAVAILABLE'
+            : 'SUBMISSION_CREATE_FAILED',
+      },
+      {
+        status:
+          error instanceof GeneratedWorkflowPlatformUnavailableError
+            ? 503
+            : 500,
+        headers: NO_STORE_HEADERS,
+      },
     );
   }
 }
