@@ -39,6 +39,14 @@ describe('submission file policy', () => {
 
   it('fails closed for invalid configured suffixes and extensionless names', () => {
     expect(submissionFileAcceptedExtensions(['pdf', 'exe'])).toEqual([]);
+    expect(submissionFileAcceptedExtensions([])).toEqual([]);
+    expect(submissionFileAccept([])).toBe('');
+    expect(
+      validateSubmissionFile(
+        { name: 'evidence.pdf', size: 10, type: 'application/pdf' },
+        [],
+      ),
+    ).toBe('Unsupported file type.');
     expect(
       validateSubmissionFile(
         { name: 'pdf', size: 10, type: 'application/pdf' },

@@ -65,7 +65,7 @@ export type SubmissionFileExtension =
 export function submissionFileAcceptedExtensions(
   configured: readonly string[] | undefined,
 ): readonly SubmissionFileExtension[] {
-  if (!configured?.length) return SUBMISSION_FILE_ACCEPTED_EXTENSIONS;
+  if (configured === undefined) return SUBMISSION_FILE_ACCEPTED_EXTENSIONS;
   const supported = configured.filter(
     (extension): extension is SubmissionFileExtension =>
       (SUBMISSION_FILE_ACCEPTED_EXTENSIONS as readonly string[]).includes(
