@@ -4,6 +4,10 @@ import Home from './page';
 import { getAccessToken } from '@enterpriseaigroup/core/server';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
+jest.mock('@/lib/generated-workflow/runtime', () => ({
+  getGeneratedWorkflowRuntime: jest.fn(() => ({ status: 'unconfigured' })),
+}));
 import {
   resolvePublicApiBaseUrl,
   getRoutingRedirectUrl,
@@ -23,7 +27,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('./home-client', () => ({
-  HomeClient: () => <div data-testid="home-client">home</div>,
+  HomeClient: () => <div data-testid='home-client'>home</div>,
 }));
 
 jest.mock('@/lib/platform/session-resolve', () => ({
@@ -31,7 +35,11 @@ jest.mock('@/lib/platform/session-resolve', () => ({
     statusCode: number;
     responseBody: unknown;
 
-    constructor(message: string, statusCode: number, responseBody: unknown = null) {
+    constructor(
+      message: string,
+      statusCode: number,
+      responseBody: unknown = null,
+    ) {
       super(message);
       this.name = 'RoutingResolutionError';
       this.statusCode = statusCode;
@@ -55,6 +63,45 @@ describe('Home routing bootstrap', () => {
       },
     });
     jest.clearAllMocks();
+    jest
+      .mocked(getGeneratedWorkflowRuntime)
+      .mockReturnValue({ status: 'unconfigured' });
+  });
+
+  it('passes the configured assistant to the browser without its server tenant context', async () => {
+    (getAccessToken as jest.Mock).mockResolvedValue(null);
+    const runtime = {
+      tenantId: 'private-server-tenant',
+      appKey: 'leave',
+      assistantEnabled: true,
+      snapshot: { steps: [] },
+      binding: {
+        schemaVersion: 'eai.generated_app_runtime_binding.v1' as const,
+        workflowTemplate: {
+          id: 'template',
+          version: 1,
+          digest: `sha256:${'a'.repeat(64)}` as `sha256:${string}`,
+          title: 'Leave',
+        },
+        respondentAccess: {
+          mode: 'anonymous' as const,
+          submissionObjectType: 'workflow-submission' as const,
+          fileObjectType: 'submission-file' as const,
+        },
+      },
+    };
+    jest
+      .mocked(getGeneratedWorkflowRuntime)
+      .mockReturnValue({ status: 'ready', runtime });
+    const element = await Home();
+    expect(element.props.generatedWorkflow).toMatchObject({
+      appKey: 'leave',
+      assistantEnabled: true,
+    });
+    expect(element.props.generatedWorkflow).not.toHaveProperty('tenantId');
+    expect(getAccessToken).not.toHaveBeenCalled();
+    expect(headers).not.toHaveBeenCalled();
+    expect(resolvePublicApiBaseUrl).not.toHaveBeenCalled();
   });
 
   it('redirects to the resolved app host when routing requires correction', async () => {
@@ -63,7 +110,9 @@ describe('Home routing bootstrap', () => {
       baseUrl: 'https://api.eu.example.com',
       routing: { routingMode: 'redirect', status: 'resolved' },
     });
-    (getRoutingRedirectUrl as jest.Mock).mockReturnValue('https://app.eu.example.com');
+    (getRoutingRedirectUrl as jest.Mock).mockReturnValue(
+      'https://app.eu.example.com',
+    );
 
     await Home();
 

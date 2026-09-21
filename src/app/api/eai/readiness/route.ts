@@ -1,5 +1,7 @@
 import { evaluateRuntimeReadiness } from '@/lib/platform/readiness';
+import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
+import { validateGeneratedAppRuntimeBinding } from '@/lib/generated-workflow/runtime-contract';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -75,6 +77,47 @@ function validateTenantInfraProbe(request: Request): Response | null {
   return null;
 }
 
+async function generatedWorkflowPlatformCheck(
+  workflowRuntime: ReturnType<typeof getGeneratedWorkflowRuntime>,
+) {
+  if (workflowRuntime.status !== 'ready') {
+    return null;
+  }
+  try {
+    const response = await generatedWorkflowPlatformFetch({
+      tenantId: workflowRuntime.runtime.tenantId,
+      appKey: workflowRuntime.runtime.appKey,
+      path: '/workflow',
+    });
+    if (!response.ok) {
+      return {
+        name: 'generated-workflow-platform',
+        ok: false,
+        category: 'publicapi_unreachable' as const,
+      };
+    }
+    const payload = (await response.json()) as { runtimeBinding?: unknown };
+    const binding = payload.runtimeBinding;
+    const expected = workflowRuntime.runtime.binding.workflowTemplate;
+    const matches =
+      validateGeneratedAppRuntimeBinding(binding) &&
+      binding.workflowTemplate.id === expected.id &&
+      binding.workflowTemplate.version === expected.version &&
+      binding.workflowTemplate.digest === expected.digest;
+    return {
+      name: 'generated-workflow-platform',
+      ok: matches,
+      category: matches ? undefined : ('tenant_assignment_invalid' as const),
+    };
+  } catch {
+    return {
+      name: 'generated-workflow-platform',
+      ok: false,
+      category: 'publicapi_unreachable' as const,
+    };
+  }
+}
+
 /** Returns authenticated deployment checks plus bound workflow proof when configured. */
 export async function GET(request: Request): Promise<Response> {
   const probeFailureResponse = validateTenantInfraProbe(request);
@@ -84,10 +127,26 @@ export async function GET(request: Request): Promise<Response> {
 
   const readiness = evaluateRuntimeReadiness();
   const workflowRuntime = getGeneratedWorkflowRuntime();
+  const platformCheck = await generatedWorkflowPlatformCheck(workflowRuntime);
+  const checks = platformCheck
+    ? [...readiness.checks, platformCheck]
+    : readiness.checks;
+  const platformFailureCategories = platformCheck?.category
+    ? [platformCheck.category]
+    : [];
+  const failureCategories = Array.from(
+    new Set([...readiness.failureCategories, ...platformFailureCategories]),
+  ).sort();
+  const platformReadiness = {
+    ...readiness,
+    ok: checks.every((check) => check.ok),
+    checks,
+    failureCategories,
+  };
   const responseBody =
     workflowRuntime.status === 'ready'
       ? {
-          ...readiness,
+          ...platformReadiness,
           runtimeBinding: {
             workflowTemplate: {
               digest: workflowRuntime.runtime.binding.workflowTemplate.digest,
@@ -97,10 +156,10 @@ export async function GET(request: Request): Promise<Response> {
         }
       : workflowRuntime.status === 'invalid'
         ? {
-            ...readiness,
+            ...platformReadiness,
             ok: false,
             checks: [
-              ...readiness.checks,
+              ...platformReadiness.checks,
               {
                 name: 'generated-workflow-snapshot',
                 ok: false,
@@ -109,10 +168,13 @@ export async function GET(request: Request): Promise<Response> {
               },
             ],
             failureCategories: Array.from(
-              new Set([...readiness.failureCategories, 'config_missing']),
+              new Set([
+                ...platformReadiness.failureCategories,
+                'config_missing',
+              ]),
             ).sort(),
           }
-        : readiness;
+        : platformReadiness;
 
   return Response.json(responseBody, {
     status: responseBody.ok ? 200 : 503,

@@ -7,6 +7,8 @@ import Script from 'next/script';
 import './globals.css';
 import { Providers } from './providers';
 import { tenantConfigs } from '@/eai.config';
+import { generatedWorkflowDocumentMetadata } from '@/lib/generated-workflow/document-metadata';
+import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 
 // Fonts
 const geistSans = Geist({
@@ -14,10 +16,10 @@ const geistSans = Geist({
   subsets: ['latin'],
 });
 
-export const metadata: Metadata = {
-  title: 'EAI App Template',
-  description: 'Enterprise AI application template',
-};
+/** Bind document title and icon to the same validated generated-workflow branding. */
+export function generateMetadata(): Metadata {
+  return generatedWorkflowDocumentMetadata(getGeneratedWorkflowRuntime());
+}
 
 export default async function RootLayout({
   children,
@@ -30,15 +32,12 @@ export default async function RootLayout({
   return (
     <html lang='en' suppressHydrationWarning>
       <head>
-        <link rel='icon' href='/favicon.ico' sizes='any' />
         <Script id='init' nonce={nonce} strategy='afterInteractive'>
           {`console.log("Nonce is attached securely!")`}
         </Script>
       </head>
       <body className={`${geistSans.variable} antialiased`}>
-        <Providers tenants={tenantConfigs}>
-          {children}
-        </Providers>
+        <Providers tenants={tenantConfigs}>{children}</Providers>
       </body>
     </html>
   );

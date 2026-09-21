@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import {
   useCallback,
   useEffect,
@@ -11,24 +12,34 @@ import {
 } from 'react';
 
 import { apiUrl } from '@/lib/api-helpers';
+import type { WorkflowAssistantMessage } from '@/lib/generated-workflow/assistant-contract';
 import type {
   GeneratedAppRuntimeBinding,
   GeneratedWorkflowBranding,
   GeneratedWorkflowSnapshot,
   GeneratedWorkflowStep,
 } from '@/lib/generated-workflow/runtime-contract';
-import { validateSubmissionFile } from '@/lib/generated-workflow/submission-files';
+import {
+  isSubmissionFileRef,
+  validateSubmissionFile,
+} from '@/lib/generated-workflow/submission-files';
+import { validateFieldValue } from '@/lib/generated-workflow/field-validation';
 import { GeneratedWorkflowFieldInput } from './field-input';
 import {
   GeneratedWorkflowSmartBlock,
   isSupportedGeneratedWorkflowBlock,
 } from './smart-block';
 
+const WorkflowAssistant = dynamic(() =>
+  import('./workflow-assistant').then((module) => module.WorkflowAssistant),
+);
+
 interface GeneratedWorkflowFormProps {
   appKey: string;
   binding: GeneratedAppRuntimeBinding;
   snapshot: GeneratedWorkflowSnapshot;
   branding?: GeneratedWorkflowBranding;
+  assistantEnabled?: boolean;
 }
 
 type SubmitState = 'starting' | 'idle' | 'submitting' | 'submitted' | 'error';
@@ -37,6 +48,24 @@ function detectDevice(): 'Desktop' | 'Mobile' | 'Tablet' {
   if (window.innerWidth < 640) return 'Mobile';
   if (window.innerWidth < 1024) return 'Tablet';
   return 'Desktop';
+}
+
+function useCompactViewport(): boolean {
+  const [compact, setCompact] = useState(() =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 767px)').matches
+      : false,
+  );
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia('(max-width: 767px)');
+    const update = () => setCompact(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  return compact;
 }
 
 function readableTextColor(background: string): string {
@@ -99,11 +128,24 @@ function submissionEndpoint(submissionId?: string, files = false): string {
   );
 }
 
+function replaceSubmissionInAddressBar(submissionId: string): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set('submission', submissionId);
+  // INVARIANT: The resumable URL must not notify Next's router, which remounts the form and repeats runtime authority checks.
+  History.prototype.replaceState.call(
+    window.history,
+    window.history.state,
+    '',
+    url.toString(),
+  );
+}
+
 export function GeneratedWorkflowForm({
   appKey,
   binding,
   snapshot,
   branding,
+  assistantEnabled = false,
 }: GeneratedWorkflowFormProps) {
   const steps = useMemo(() => normalizeSteps(snapshot), [snapshot]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -117,8 +159,12 @@ export function GeneratedWorkflowForm({
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [assistantMessages, setAssistantMessages] = useState<
+    WorkflowAssistantMessage[]
+  >([]);
   const initialized = useRef(false);
   const formDataRef = useRef(formData);
+  const compactViewport = useCompactViewport();
 
   useEffect(() => {
     formDataRef.current = formData;
@@ -127,6 +173,7 @@ export function GeneratedWorkflowForm({
   const startSubmission = useCallback(async () => {
     const response = await fetch(submissionEndpoint(), {
       method: 'POST',
+      signal: AbortSignal.timeout(90_000),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ device: detectDevice() }),
     });
@@ -142,9 +189,7 @@ export function GeneratedWorkflowForm({
     }
     setSubmissionId(payload.submissionId);
     setSubmitState('idle');
-    const url = new URL(window.location.href);
-    url.searchParams.set('submission', payload.submissionId);
-    window.history.replaceState(null, '', url.toString());
+    replaceSubmissionInAddressBar(payload.submissionId);
   }, []);
 
   useEffect(() => {
@@ -154,37 +199,45 @@ export function GeneratedWorkflowForm({
       'submission',
     );
     const initialize = resumeId
-      ? fetch(submissionEndpoint(resumeId))
-          .then(async (response) => {
-            if (!response.ok) throw new Error('resume-failed');
-            const payload = (await response.json()) as {
-              submission?: {
-                status?: string;
-                currentStep?: number;
-                formData?: Record<string, Record<string, unknown>>;
-                userName?: string;
-                userEmail?: string;
-              };
-            };
-            if (
-              !payload.submission ||
-              payload.submission.status !== 'in_progress'
-            ) {
-              throw new Error('resume-failed');
-            }
-            setSubmissionId(resumeId);
-            setFormData(payload.submission.formData ?? {});
-            setCurrentStepIndex(
-              Math.min(
-                Math.max(payload.submission.currentStep ?? 0, 0),
-                Math.max(steps.length - 1, 0),
-              ),
+      ? fetch(submissionEndpoint(resumeId), {
+          signal: AbortSignal.timeout(90_000),
+        }).then(async (response) => {
+          if (response.status === 404) return startSubmission();
+          if (!response.ok)
+            throw new Error(
+              'Could not resume this form. Please reload and try again.',
             );
-            setUserName(payload.submission.userName ?? '');
-            setUserEmail(payload.submission.userEmail ?? '');
-            setSubmitState('idle');
-          })
-          .catch(() => startSubmission())
+          const payload = (await response.json()) as {
+            submission?: {
+              status?: string;
+              currentStep?: number;
+              formData?: Record<string, Record<string, unknown>>;
+              userName?: string;
+              userEmail?: string;
+              assistantMessages?: WorkflowAssistantMessage[];
+            };
+          };
+          if (
+            !payload.submission ||
+            payload.submission.status !== 'in_progress'
+          ) {
+            throw new Error(
+              'Could not resume this form. Please reload and try again.',
+            );
+          }
+          setSubmissionId(resumeId);
+          setFormData(payload.submission.formData ?? {});
+          setCurrentStepIndex(
+            Math.min(
+              Math.max(payload.submission.currentStep ?? 0, 0),
+              Math.max(steps.length - 1, 0),
+            ),
+          );
+          setUserName(payload.submission.userName ?? '');
+          setUserEmail(payload.submission.userEmail ?? '');
+          setAssistantMessages(payload.submission.assistantMessages ?? []);
+          setSubmitState('idle');
+        })
       : startSubmission();
 
     void initialize.catch((error) => {
@@ -196,6 +249,22 @@ export function GeneratedWorkflowForm({
   }, [startSubmission, steps.length]);
 
   const currentStep = steps[currentStepIndex];
+  const persistAssistantMessages = useCallback(
+    async (messages: WorkflowAssistantMessage[]) => {
+      if (!submissionId)
+        throw new Error('The assistant is unavailable. Please try again.');
+      const response = await fetch(submissionEndpoint(submissionId), {
+        method: 'PATCH',
+        signal: AbortSignal.timeout(90_000),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assistantMessages: messages }),
+      });
+      if (!response.ok)
+        throw new Error('The assistant is unavailable. Please try again.');
+      setAssistantMessages(messages);
+    },
+    [submissionId],
+  );
   const setFieldValue = useCallback(
     (stepId: string, fieldId: string, value: unknown) => {
       setFormData((current) => ({
@@ -239,20 +308,16 @@ export function GeneratedWorkflowForm({
     [],
   );
 
-  const validateStep = useCallback(
-    (step: GeneratedWorkflowStep): boolean => {
+  const stepErrors = useCallback(
+    (step: GeneratedWorkflowStep): Record<string, string> => {
       const errors: Record<string, string> = {};
       for (const field of step.fields ?? []) {
         if (field.type === 'smart_block') continue;
         const stepId = step.id ?? '';
         const fieldId = field.id ?? '';
         const value = formData[stepId]?.[fieldId];
-        if (
-          field.required &&
-          (value === undefined || value === null || value === '')
-        ) {
-          errors[fieldKey(stepId, fieldId)] = 'This field is required.';
-        }
+        const error = validateFieldValue(field, value, true);
+        if (error) errors[fieldKey(stepId, fieldId)] = error;
       }
       for (const block of step.blocks ?? []) {
         const stepId = step.id ?? '';
@@ -279,17 +344,23 @@ export function GeneratedWorkflowForm({
           errors[key] = 'Complete the required guided activity outputs.';
         }
       }
-      setFieldErrors(errors);
-      return Object.keys(errors).length === 0;
+      return errors;
     },
     [formData],
   );
+
+  const validateStep = (step: GeneratedWorkflowStep): boolean => {
+    const errors = stepErrors(step);
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const saveProgress = useCallback(
     async (nextStep: number, data = formDataRef.current) => {
       if (!submissionId) return;
       await fetch(submissionEndpoint(submissionId), {
         method: 'PATCH',
+        signal: AbortSignal.timeout(90_000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           currentStep: nextStep,
@@ -309,6 +380,7 @@ export function GeneratedWorkflowForm({
         return;
       }
       const key = fieldKey(stepId, fieldId);
+      setFieldValue(stepId, fieldId, '');
       const validationError = validateSubmissionFile(file);
       if (validationError) {
         setFieldErrors((current) => ({
@@ -332,13 +404,19 @@ export function GeneratedWorkflowForm({
         body.set('fieldId', fieldId);
         const response = await fetch(submissionEndpoint(submissionId, true), {
           method: 'POST',
+          signal: AbortSignal.timeout(90_000),
           body,
         });
         const payload = (await response.json().catch(() => ({}))) as {
           file?: unknown;
           message?: string;
         };
-        if (!response.ok || !payload.file) {
+        if (
+          !response.ok ||
+          !isSubmissionFileRef(payload.file) ||
+          payload.file.stepId !== stepId ||
+          payload.file.fieldId !== fieldId
+        ) {
           throw new Error(payload.message || 'File upload failed.');
         }
         setFieldValue(stepId, fieldId, payload.file);
@@ -360,12 +438,22 @@ export function GeneratedWorkflowForm({
   );
 
   const submit = useCallback(async () => {
-    if (!currentStep || !validateStep(currentStep) || !submissionId) return;
+    if (!currentStep || !submissionId) return;
+    const errorsByStep = steps.map(stepErrors);
+    const firstInvalid = errorsByStep.findIndex(
+      (errors) => Object.keys(errors).length > 0,
+    );
+    if (firstInvalid >= 0) {
+      setFieldErrors(Object.assign({}, ...errorsByStep));
+      setCurrentStepIndex(firstInvalid);
+      return;
+    }
     setSubmitState('submitting');
     setErrorMessage(null);
     try {
       const response = await fetch(submissionEndpoint(submissionId), {
         method: 'PATCH',
+        signal: AbortSignal.timeout(90_000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'completed',
@@ -395,7 +483,8 @@ export function GeneratedWorkflowForm({
     submissionId,
     userEmail,
     userName,
-    validateStep,
+    stepErrors,
+    steps,
   ]);
 
   if (steps.length === 0) {
@@ -403,15 +492,17 @@ export function GeneratedWorkflowForm({
   }
   if (submitState === 'submitted') {
     return (
-      <div className='mx-auto max-w-xl px-6 py-24 text-center'>
-        <div className='mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700'>
-          ✓
+      <main className='flex min-h-svh items-center justify-center px-6 py-12 text-center'>
+        <div className='max-w-xl'>
+          <div className='mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700'>
+            ✓
+          </div>
+          <h1 className='text-2xl font-semibold text-slate-950'>Submitted</h1>
+          <p className='mt-2 text-slate-600'>
+            Thank you. Your response has been received.
+          </p>
         </div>
-        <h1 className='text-2xl font-semibold text-slate-950'>Submitted</h1>
-        <p className='mt-2 text-slate-600'>
-          Thank you. Your response has been received.
-        </p>
-      </div>
+      </main>
     );
   }
 
@@ -422,231 +513,293 @@ export function GeneratedWorkflowForm({
     ) ?? false;
   const primaryColor = branding?.primaryColor ?? '#1d4ed8';
   const secondaryColor = branding?.secondaryColor ?? '#f8fafc';
-  const accentColor = branding?.accentColor ?? primaryColor;
-  const brandStyle = {
-    backgroundColor: secondaryColor,
-  } satisfies CSSProperties;
+  const brandName = branding?.displayName ?? appKey.replace(/-/g, ' ');
+  const themeStyle = {
+    '--primary': primaryColor,
+    '--primary-foreground': readableTextColor(primaryColor),
+    '--secondary': secondaryColor,
+    '--secondary-foreground': readableTextColor(secondaryColor),
+  } as CSSProperties;
   return (
-    <div className='min-h-svh overflow-y-auto' style={brandStyle}>
-      <header className='border-b border-slate-200 bg-white'>
-        <div className='mx-auto max-w-3xl px-5 py-7'>
-          <div className='flex items-center gap-4'>
-            {branding?.logoDataUrl ? (
-              <Image
-                alt={`${branding.displayName ?? binding.workflowTemplate.title} logo`}
-                className='h-12 w-12 rounded-lg border bg-white object-contain p-1'
-                height={48}
-                src={branding.logoDataUrl}
-                style={{ borderColor: accentColor }}
-                unoptimized
-                width={48}
-              />
-            ) : null}
-            <div>
-              <p
-                className='text-xs font-semibold tracking-widest uppercase'
-                style={{ color: primaryColor }}
-              >
-                {branding?.displayName ?? appKey.replace(/-/g, ' ')}
-              </p>
-              <h1 className='mt-2 text-2xl font-semibold text-slate-950'>
+    <main className='bg-muted/30 flex h-svh min-h-0 flex-col p-4'>
+      <section
+        aria-label='Published workflow'
+        className='bg-background @container/workflow mx-auto flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border shadow-sm'
+        style={themeStyle}
+      >
+        <header
+          aria-label={`${brandName} branding`}
+          className='flex shrink-0 items-center gap-3 px-5 py-4'
+          style={{
+            background: secondaryColor,
+            color: readableTextColor(secondaryColor),
+          }}
+        >
+          {branding?.logoDataUrl ? (
+            <Image
+              alt={`${brandName} logo`}
+              className='size-9 object-contain'
+              height={36}
+              src={branding.logoDataUrl}
+              unoptimized
+              width={36}
+            />
+          ) : (
+            <span className='flex size-9 items-center justify-center rounded-lg border text-sm font-bold'>
+              {brandName.slice(0, 1).toUpperCase()}
+            </span>
+          )}
+          <span className='truncate font-semibold'>{brandName}</span>
+        </header>
+
+        <div className='relative flex min-h-0 flex-1 flex-row'>
+          <div className='flex min-h-0 min-w-0 flex-1 flex-col'>
+            <div className='min-h-0 flex-1 overflow-y-auto px-5 py-5'>
+              <h1 className='text-xl font-semibold tracking-tight'>
                 {binding.workflowTemplate.title}
               </h1>
-            </div>
-          </div>
-          <div className='mt-5 flex gap-2' aria-label='Workflow progress'>
-            {steps.map((step, index) => (
-              <div
-                key={step.id}
-                className='h-1.5 flex-1 rounded-full'
+              <nav
+                aria-label='Workflow steps'
+                className='mt-4 grid gap-2'
                 style={{
-                  backgroundColor:
-                    index <= currentStepIndex ? primaryColor : '#e2e8f0',
+                  gridTemplateColumns: `repeat(${Math.min(steps.length, 4)}, minmax(0, 1fr))`,
                 }}
-              />
-            ))}
-          </div>
-        </div>
-      </header>
+              >
+                {steps.map((step, index) => {
+                  const active = index === currentStepIndex;
+                  const selectable = index <= currentStepIndex;
+                  return (
+                    <button
+                      key={step.id ?? index}
+                      type='button'
+                      aria-current={active ? 'step' : undefined}
+                      disabled={!selectable}
+                      onClick={() => {
+                        if (!selectable) return;
+                        setFieldErrors({});
+                        setCurrentStepIndex(index);
+                      }}
+                      className={`flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                        active
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      } ${selectable && !active ? 'hover:text-foreground' : 'cursor-default'}`}
+                    >
+                      <span
+                        className={`flex size-4 shrink-0 items-center justify-center rounded-full border text-[10px] ${
+                          active
+                            ? 'border-primary-foreground bg-primary-foreground text-primary'
+                            : 'border-current'
+                        }`}
+                      >
+                        {index + 1}
+                      </span>
+                      <span className='truncate'>{step.title}</span>
+                    </button>
+                  );
+                })}
+              </nav>
 
-      <main className='mx-auto max-w-3xl px-5 py-8'>
-        <section className='rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8'>
-          <p className='text-sm font-medium text-slate-500'>
-            Step {currentStepIndex + 1} of {steps.length}
-          </p>
-          <h2 className='mt-2 text-xl font-semibold text-slate-950'>
-            {currentStep?.title}
-          </h2>
-          {currentStep?.description ? (
-            <p className='mt-2 text-sm leading-6 text-slate-600'>
-              {currentStep.description}
-            </p>
-          ) : null}
+              <div className='mt-5'>
+                <h2 className='text-base font-semibold'>
+                  {currentStep?.title}
+                </h2>
+                {currentStep?.description ? (
+                  <p className='text-muted-foreground mt-1 text-sm'>
+                    {currentStep.description}
+                  </p>
+                ) : null}
+              </div>
 
-          <div className='mt-7 space-y-6'>
-            {currentStep?.fields?.map((field) => {
-              const stepId = currentStep.id ?? '';
-              const fieldId = field.id ?? '';
-              const key = fieldKey(stepId, fieldId);
-              if (field.type === 'smart_block') {
-                return (
-                  <div
-                    key={key}
-                    className='rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900'
-                  >
-                    {field.label || 'Guided workflow activity'}
+              <div className='mt-5 space-y-4'>
+                {currentStep?.fields?.map((field) => {
+                  const stepId = currentStep.id ?? '';
+                  const fieldId = field.id ?? '';
+                  const key = fieldKey(stepId, fieldId);
+                  if (field.type === 'smart_block') {
+                    return (
+                      <div
+                        key={key}
+                        className='bg-muted rounded-md border p-4 text-sm'
+                      >
+                        {field.label || 'Guided workflow activity'}
+                      </div>
+                    );
+                  }
+                  return (
+                    <label
+                      key={key}
+                      htmlFor={key}
+                      className='block text-sm font-medium'
+                    >
+                      {field.label}
+                      {field.required ? (
+                        <span className='text-destructive ml-1'>*</span>
+                      ) : null}
+                      {field.helpText ? (
+                        <span className='text-muted-foreground mt-1 block text-xs font-normal'>
+                          {field.helpText}
+                        </span>
+                      ) : null}
+                      <GeneratedWorkflowFieldInput
+                        id={key}
+                        disabled={
+                          submitState === 'submitting' ||
+                          uploadingField === key ||
+                          (submitState === 'starting' && field.type === 'file')
+                        }
+                        field={field}
+                        value={formData[stepId]?.[fieldId]}
+                        onChange={(value) =>
+                          setFieldValue(stepId, fieldId, value)
+                        }
+                        onFileSelect={(file) =>
+                          void uploadFile(stepId, fieldId, file)
+                        }
+                      />
+                      {uploadingField === key ? (
+                        <span className='text-muted-foreground mt-1 block text-xs'>
+                          Uploading…
+                        </span>
+                      ) : null}
+                      {fieldErrors[key] ? (
+                        <span className='text-destructive mt-1 block text-xs'>
+                          {fieldErrors[key]}
+                        </span>
+                      ) : null}
+                    </label>
+                  );
+                })}
+                {currentStep?.blocks?.map((block) => {
+                  const stepId = currentStep.id ?? '';
+                  const key = blockKey(stepId, block.id);
+                  return (
+                    <div key={key}>
+                      <GeneratedWorkflowSmartBlock
+                        block={block}
+                        disabled={submitState === 'submitting'}
+                        formData={formData}
+                        stepId={stepId}
+                        values={blockOutputValues(formData, stepId, block.id)}
+                        onOutputChange={(outputName, value) =>
+                          setBlockOutputValue(
+                            stepId,
+                            block.id,
+                            outputName,
+                            value,
+                          )
+                        }
+                      />
+                      {fieldErrors[key] ? (
+                        <span className='text-destructive mt-1 block text-xs'>
+                          {fieldErrors[key]}
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+
+                {isLastStep ? (
+                  <div className='@container/contact grid gap-5 border-t pt-7 @xl/contact:grid-cols-2'>
+                    <label className='text-sm font-medium'>
+                      Name
+                      <input
+                        className='bg-background mt-2 w-full rounded-md border px-3 py-2'
+                        value={userName}
+                        maxLength={200}
+                        onChange={(event) => setUserName(event.target.value)}
+                      />
+                    </label>
+                    <label className='text-sm font-medium'>
+                      Email
+                      <input
+                        type='email'
+                        className='bg-background mt-2 w-full rounded-md border px-3 py-2'
+                        value={userEmail}
+                        maxLength={200}
+                        onChange={(event) => setUserEmail(event.target.value)}
+                      />
+                    </label>
                   </div>
-                );
-              }
-              return (
-                <label
-                  key={key}
-                  htmlFor={key}
-                  className='block text-sm font-medium text-slate-800'
-                >
-                  {field.label}
-                  {field.required ? (
-                    <span className='ml-1 text-red-600'>*</span>
-                  ) : null}
-                  {field.helpText ? (
-                    <span className='mt-1 block text-xs font-normal text-slate-500'>
-                      {field.helpText}
-                    </span>
-                  ) : null}
-                  <GeneratedWorkflowFieldInput
-                    id={key}
-                    disabled={
-                      submitState === 'starting' ||
-                      submitState === 'submitting' ||
-                      uploadingField === key
-                    }
-                    field={field}
-                    value={formData[stepId]?.[fieldId]}
-                    onChange={(value) => setFieldValue(stepId, fieldId, value)}
-                    onFileSelect={(file) =>
-                      void uploadFile(stepId, fieldId, file)
-                    }
-                  />
-                  {uploadingField === key ? (
-                    <span className='mt-1 block text-xs text-slate-500'>
-                      Uploading…
-                    </span>
-                  ) : null}
-                  {fieldErrors[key] ? (
-                    <span className='mt-1 block text-xs text-red-600'>
-                      {fieldErrors[key]}
-                    </span>
-                  ) : null}
-                </label>
-              );
-            })}
-            {currentStep?.blocks?.map((block) => {
-              const stepId = currentStep.id ?? '';
-              const key = blockKey(stepId, block.id);
-              return (
-                <div key={key}>
-                  <GeneratedWorkflowSmartBlock
-                    block={block}
-                    disabled={
-                      submitState === 'starting' || submitState === 'submitting'
-                    }
-                    formData={formData}
-                    stepId={stepId}
-                    values={blockOutputValues(formData, stepId, block.id)}
-                    onOutputChange={(outputName, value) =>
-                      setBlockOutputValue(stepId, block.id, outputName, value)
-                    }
-                  />
-                  {fieldErrors[key] ? (
-                    <span className='mt-1 block text-xs text-red-600'>
-                      {fieldErrors[key]}
-                    </span>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
+                ) : null}
 
-          {isLastStep ? (
-            <div className='mt-8 grid gap-5 border-t border-slate-200 pt-7 sm:grid-cols-2'>
-              <label className='text-sm font-medium text-slate-800'>
-                Name
-                <input
-                  className='mt-2 w-full rounded-lg border border-slate-300 px-3 py-2'
-                  value={userName}
-                  maxLength={200}
-                  onChange={(event) => setUserName(event.target.value)}
-                />
-              </label>
-              <label className='text-sm font-medium text-slate-800'>
-                Email
-                <input
-                  type='email'
-                  className='mt-2 w-full rounded-lg border border-slate-300 px-3 py-2'
-                  value={userEmail}
-                  maxLength={200}
-                  onChange={(event) => setUserEmail(event.target.value)}
-                />
-              </label>
+                {errorMessage ? (
+                  <div
+                    role='alert'
+                    className='border-destructive/40 bg-destructive/5 rounded-md border px-4 py-3'
+                  >
+                    <p className='text-destructive text-sm'>{errorMessage}</p>
+                  </div>
+                ) : null}
+              </div>
             </div>
-          ) : null}
 
-          {errorMessage ? (
-            <p
-              role='alert'
-              className='mt-6 rounded-lg bg-red-50 p-3 text-sm text-red-700'
-            >
-              {errorMessage}
-            </p>
-          ) : null}
-
-          <div className='mt-8 flex justify-between'>
-            <button
-              type='button'
-              className='rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40'
-              disabled={currentStepIndex === 0 || submitState === 'submitting'}
-              onClick={() => {
-                setFieldErrors({});
-                setCurrentStepIndex((current) => Math.max(0, current - 1));
-              }}
-            >
-              Back
-            </button>
-            <button
-              type='button'
-              className='rounded-lg px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50'
-              style={{
-                backgroundColor: primaryColor,
-                color: readableTextColor(primaryColor),
-              }}
-              disabled={
-                submitState === 'starting' ||
-                submitState === 'submitting' ||
-                Boolean(uploadingField) ||
-                currentStepHasUnsupportedBlocks
-              }
-              onClick={() => {
-                if (!currentStep || !validateStep(currentStep)) return;
-                if (isLastStep) {
-                  void submit();
-                  return;
+            <div className='bg-background flex h-16 shrink-0 items-center justify-between gap-3 border-t px-5'>
+              <button
+                type='button'
+                className='hover:bg-muted rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-40'
+                disabled={
+                  currentStepIndex === 0 || submitState === 'submitting'
                 }
-                const next = currentStepIndex + 1;
-                setCurrentStepIndex(next);
-                void saveProgress(next);
-              }}
-            >
-              {submitState === 'starting'
-                ? 'Starting…'
-                : submitState === 'submitting'
-                  ? 'Submitting…'
-                  : isLastStep
-                    ? 'Submit'
-                    : 'Next'}
-            </button>
+                onClick={() => {
+                  setFieldErrors({});
+                  setCurrentStepIndex((current) => Math.max(0, current - 1));
+                }}
+              >
+                Back
+              </button>
+              <button
+                type='button'
+                className='bg-primary text-primary-foreground rounded-md px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50'
+                disabled={
+                  submitState === 'starting' ||
+                  submitState === 'submitting' ||
+                  Boolean(uploadingField) ||
+                  currentStepHasUnsupportedBlocks ||
+                  Boolean(
+                    currentStep?.fields?.some(
+                      (field) =>
+                        field.type === 'file' &&
+                        field.required &&
+                        !isSubmissionFileRef(
+                          formData[currentStep.id ?? '']?.[field.id ?? ''],
+                        ),
+                    ),
+                  )
+                }
+                onClick={() => {
+                  if (!currentStep || !validateStep(currentStep)) return;
+                  if (isLastStep) {
+                    void submit();
+                    return;
+                  }
+                  const next = currentStepIndex + 1;
+                  setCurrentStepIndex(next);
+                  void saveProgress(next);
+                }}
+              >
+                {submitState === 'starting'
+                  ? 'Starting…'
+                  : submitState === 'submitting'
+                    ? 'Submitting…'
+                    : isLastStep
+                      ? 'Submit'
+                      : 'Continue'}
+              </button>
+            </div>
           </div>
-        </section>
-      </main>
-    </div>
+
+          {assistantEnabled ? (
+            <WorkflowAssistant
+              variant={compactViewport ? 'bubble' : 'rail'}
+              stepId={currentStep?.id ?? ''}
+              stepTitle={currentStep?.title ?? 'this step'}
+              initialMessages={assistantMessages}
+              onMessagesChange={persistAssistantMessages}
+            />
+          ) : null}
+        </div>
+      </section>
+    </main>
   );
 }

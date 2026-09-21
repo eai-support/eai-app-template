@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   basePath: basePath || undefined,
   assetPrefix: basePath || undefined,
   transpilePackages: ['@enterpriseaigroup/client', '@enterpriseaigroup/core', '@enterpriseaigroup/platform-sdk'],
-  compress: false,
+  compress: true,
   turbopack: {
     resolveAlias: {
       // Ensure @tanstack/react-query from packages/client uses the same instance as the main app

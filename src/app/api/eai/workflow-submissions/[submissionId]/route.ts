@@ -6,11 +6,16 @@ import {
 } from '@/lib/generated-workflow/bounded-body';
 import {
   requestClientFingerprint,
+  readPersistedAssistantMessages,
   validateSubmissionPatch,
 } from '@/lib/generated-workflow/public-guards';
 import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
-import { readOwnedSubmission } from '@/lib/generated-workflow/submission-store';
+import { hasSubmissionSession } from '@/lib/generated-workflow/submission-session';
+import {
+  readOwnedSubmission,
+  submissionReadFailure,
+} from '@/lib/generated-workflow/submission-store';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -76,6 +81,9 @@ export async function GET(
           formData: stored.formData ?? {},
           userName: stored.userName ?? '',
           userEmail: stored.userEmail ?? '',
+          assistantMessages: readPersistedAssistantMessages(
+            stored.assistantMessages,
+          ),
         },
       },
       { headers: NO_STORE_HEADERS },
@@ -85,9 +93,13 @@ export async function GET(
       '[generated-workflow] submission read error:',
       error instanceof Error ? error.name : 'unknown',
     );
+    const failure = submissionReadFailure(error);
     return NextResponse.json(
-      { error: 'SUBMISSION_READ_FAILED' },
-      { status: 500, headers: NO_STORE_HEADERS },
+      { error: failure.error },
+      {
+        status: failure.status,
+        headers: NO_STORE_HEADERS,
+      },
     );
   }
 }
@@ -125,16 +137,24 @@ export async function PATCH(
       );
     }
 
-    const stored = await readOwnedSubmission({
-      request,
-      runtime: route.runtime,
-      submissionId: route.submissionId,
-    });
-    if (!stored) return notFound();
-    if (stored.status === 'completed' || stored.status === 'abandoned') {
+    if (
+      !hasSubmissionSession(
+        request,
+        route.submissionId,
+        route.runtime.binding.workflowTemplate.digest,
+      )
+    )
+      return notFound();
+    if (
+      parsed.value.assistantMessages !== undefined &&
+      !route.runtime.assistantEnabled
+    ) {
       return NextResponse.json(
-        { error: 'SUBMISSION_FINALIZED' },
-        { status: 409, headers: NO_STORE_HEADERS },
+        {
+          error: 'INVALID_BODY',
+          message: 'Workflow assistant is not enabled.',
+        },
+        { status: 400, headers: NO_STORE_HEADERS },
       );
     }
 
@@ -154,6 +174,24 @@ export async function PATCH(
           { error: 'RATE_LIMITED' },
           { status: 429, headers: NO_STORE_HEADERS },
         );
+      }
+      if (updateResponse.status === 409) {
+        const upstream = (await updateResponse.json().catch(() => null)) as {
+          error?: unknown;
+          detail?: { error?: unknown };
+        } | null;
+        const upstreamError =
+          typeof upstream?.error === 'string'
+            ? upstream.error
+            : typeof upstream?.detail?.error === 'string'
+              ? upstream.detail.error
+              : null;
+        if (upstreamError === 'ALREADY_COMPLETED') {
+          return NextResponse.json(
+            { error: 'SUBMISSION_FINALIZED' },
+            { status: 409, headers: NO_STORE_HEADERS },
+          );
+        }
       }
       console.error(
         '[generated-workflow] submission update failed:',

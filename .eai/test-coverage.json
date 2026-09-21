@@ -5,6 +5,167 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "tenant-bound-document-lifecycle",
+          "description": "The document SDK uses the Curate-backed V4 upload lifecycle for stored-file processing, requires paired app and workflow classifier selection, and sends the deployed V4 documentUrl and tenantId contract for direct URL classification.",
+          "owned_paths": [
+            "packages/platform-sdk/src/modules/documents.ts",
+            "packages/platform-sdk/src/index.ts",
+            "src/hooks/useDocuments.ts",
+            "docs/platform/documents-and-files.md",
+            "docs/platform/eai-service-patterns.md"
+          ],
+          "required_repo_tests": [
+            "packages/platform-sdk/__tests__/documents.test.ts",
+            "src/hooks/useDocuments.test.tsx",
+            "src/lib/platform/publicapi-route-family.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": []
+        },
+        {
+          "id": "canonical-object-type-routing",
+          "description": "The template validates exact Object Type name/slug pairs and routes every SDK resource identifier through the canonical v1 slug owner.",
+          "owned_paths": [
+            "packages/platform-sdk/src/resource-routing.ts",
+            "packages/platform-sdk/src/object-types.ts",
+            "packages/platform-sdk/src/modules/resources.ts",
+            "packages/platform-sdk/src/types.ts",
+            "scripts/generate-object-types-json.mjs",
+            "src/eai.config/object-types.ts",
+            "src/eai.config/object-types.json",
+            "src/eai.config/object-types.provisioning.json",
+            "src/lib/platform/verify-platform.ts"
+          ],
+          "required_repo_tests": [
+            "packages/platform-sdk/__tests__/object-types.test.ts",
+            "packages/platform-sdk/__tests__/resources.test.ts",
+            "tests/generate-object-types-json.test.mjs",
+            "src/lib/platform/verify-platform.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "backend"
+          ]
+        },
+        {
+          "id": "generated-app-object-type-seeding",
+          "description": "Generated apps seed tenant-scoped Object Types with owner-private and shared-private authorization metadata.",
+          "owned_paths": [
+            "src/eai.config/object-types.ts",
+            "src/lib/platform/seed-object-types.ts"
+          ],
+          "required_repo_tests": [
+            "src/lib/platform/seed-object-types.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "admin-portal"
+          ]
+        },
+        {
+          "id": "generated-app-platform-sdk-resource-count-policy",
+          "description": "Generated apps can opt out of exact ResourceAPI totals while preserving exact-count behavior for existing list callers.",
+          "owned_paths": [
+            "packages/platform-sdk/src/modules/resources.ts",
+            "packages/platform-sdk/src/types.ts"
+          ],
+          "required_repo_tests": [
+            "packages/platform-sdk/__tests__/resources.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "backend"
+          ],
+          "required_deployed_contracts": [
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/backend/v4-data-resources-authz.spec.ts"
+            }
+          ]
+        },
+        {
+          "id": "generated-workflow-anonymous-container-runtime",
+          "description": "Generated NCB apps render an immutable workflow snapshot, use an ACA managed-identity BFF for anonymous submissions and files, and expose semantic readiness proof.",
+          "owned_paths": [
+            "next.config.ts",
+            "src/app/globals.css",
+            "src/app/home-client.tsx",
+            "src/app/page.tsx",
+            "src/app/api/eai/readiness/route.ts",
+            "src/app/api/eai/generated-workflow/readiness/**",
+            "src/app/api/eai/workflow-submissions/**",
+            "src/components/generated-workflow/**",
+            "src/eai.config/index.ts",
+            "src/lib/generated-workflow/**",
+            "src/app/api/eai/workflow-assistant/**",
+            "tests/fixtures/ncb/**"
+          ],
+          "required_repo_tests": [
+            "src/app/globals.test.ts",
+            "src/app/home-client.test.tsx",
+            "src/app/api/eai/generated-workflow/readiness/route.test.ts",
+            "src/app/api/eai/readiness/route.test.ts",
+            "src/app/api/eai/workflow-submissions/route.test.ts",
+            "src/app/api/eai/workflow-submissions/[submissionId]/route.test.ts",
+            "src/app/api/eai/workflow-submissions/[submissionId]/files/route.test.ts",
+            "src/components/generated-workflow/workflow-form.test.tsx",
+            "src/lib/generated-workflow/bounded-body.test.ts",
+            "src/lib/generated-workflow/platform.test.ts",
+            "src/lib/generated-workflow/public-guards.test.ts",
+            "src/lib/generated-workflow/runtime-contract.test.ts",
+            "src/lib/generated-workflow/runtime.test.ts",
+            "src/lib/generated-workflow/server-configuration.test.ts",
+            "src/lib/generated-workflow/submission-store.test.ts",
+            "src/lib/generated-workflow/submission-session.test.ts",
+            "src/app/api/eai/workflow-assistant/route.test.ts",
+            "src/components/generated-workflow/workflow-assistant.test.tsx",
+            "src/lib/generated-workflow/assistant-contract.test.ts",
+            "src/lib/generated-workflow/field-validation.test.ts",
+            "src/app/page.test.tsx"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "admin-portal",
+            "ncb-sugar-hit"
+          ],
+          "required_deployed_contracts": [
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/adminportal-adminapi/generated-workflow-public-routes.spec.ts"
+            },
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/ncb/ncb-boundaries.spec.ts"
+            }
+          ]
+        },
+        {
+          "id": "eai-app-template-nextjs-runtime-dependencies",
+          "description": "Root Next.js dependency and lockfile changes are validated by the repository's stable CI gate.",
+          "ci_only": true,
+          "owned_paths": [
+            ".eai/test-coverage.json",
+            "package.json",
+            "package-lock.json"
+          ],
+          "required_repo_tests": [],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [],
+          "required_deployed_contracts": []
+        },
+        {
           "id": "application-package-and-installed-access-defaults",
           "description": "Reusable package generation, delegated installed-app BFF access, short-lived workload callbacks and lifecycle documentation.",
           "owned_paths": [
@@ -28,113 +189,9 @@
             "packages/platform-sdk/__tests__/workload.test.ts",
             "src/eai.config/deployment-contract.test.ts"
           ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": [],
-          "required_deployed_contracts": []
-        },
-        {
-          "id": "canonical-object-type-routing",
-          "description": "The template validates exact Object Type name/slug pairs and routes every SDK resource identifier through the canonical v1 slug owner.",
-          "owned_paths": [
-            "packages/platform-sdk/src/resource-routing.ts",
-            "packages/platform-sdk/src/object-types.ts",
-            "packages/platform-sdk/src/modules/resources.ts",
-            "packages/platform-sdk/src/types.ts",
-            "scripts/generate-object-types-json.mjs",
-            "src/eai.config/object-types.ts",
-            "src/eai.config/object-types.json",
-            "src/eai.config/object-types.provisioning.json",
-            "src/lib/platform/verify-platform.ts"
+          "required_ci_checks": [
+            "validate"
           ],
-          "required_repo_tests": [
-            "packages/platform-sdk/__tests__/object-types.test.ts",
-            "packages/platform-sdk/__tests__/resources.test.ts",
-            "tests/generate-object-types-json.test.mjs",
-            "src/lib/platform/verify-platform.test.ts"
-          ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["backend"]
-        },
-        {
-          "id": "generated-app-object-type-seeding",
-          "description": "Generated apps seed tenant-scoped Object Types with owner-private and shared-private authorization metadata.",
-          "owned_paths": [
-            "src/eai.config/object-types.ts",
-            "src/lib/platform/seed-object-types.ts"
-          ],
-          "required_repo_tests": ["src/lib/platform/seed-object-types.test.ts"],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": [
-            "adminportal-generated-app-builder-export"
-          ]
-        },
-        {
-          "id": "generated-app-platform-sdk-resource-count-policy",
-          "description": "Generated apps can opt out of exact ResourceAPI totals while preserving exact-count behavior for existing list callers.",
-          "owned_paths": [
-            "packages/platform-sdk/src/modules/resources.ts",
-            "packages/platform-sdk/src/types.ts"
-          ],
-          "required_repo_tests": [
-            "packages/platform-sdk/__tests__/resources.test.ts"
-          ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["backend"],
-          "required_deployed_contracts": [
-            {
-              "repository": "eai-testing-dev",
-              "path": "tests/cross-service/contracts/backend/v4-data-resources-authz.spec.ts"
-            }
-          ]
-        },
-        {
-          "id": "generated-workflow-anonymous-container-runtime",
-          "description": "Generated NCB apps render an immutable workflow snapshot, use an ACA managed-identity BFF for anonymous submissions and files, and expose semantic readiness proof.",
-          "owned_paths": [
-            "src/app/globals.css",
-            "src/app/home-client.tsx",
-            "src/app/page.tsx",
-            "src/app/api/eai/readiness/route.ts",
-            "src/app/api/eai/generated-workflow/readiness/**",
-            "src/app/api/eai/workflow-submissions/**",
-            "src/components/generated-workflow/**",
-            "src/eai.config/index.ts",
-            "src/lib/generated-workflow/**"
-          ],
-          "required_repo_tests": [
-            "src/app/globals.test.ts",
-            "src/app/home-client.test.tsx",
-            "src/app/api/eai/generated-workflow/readiness/route.test.ts",
-            "src/app/api/eai/readiness/route.test.ts",
-            "src/app/api/eai/workflow-submissions/route.test.ts",
-            "src/components/generated-workflow/workflow-form.test.tsx",
-            "src/lib/generated-workflow/bounded-body.test.ts",
-            "src/lib/generated-workflow/platform.test.ts",
-            "src/lib/generated-workflow/public-guards.test.ts",
-            "src/lib/generated-workflow/runtime-contract.test.ts",
-            "src/lib/generated-workflow/server-configuration.test.ts",
-            "src/lib/generated-workflow/submission-session.test.ts"
-          ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["admin-portal"],
-          "required_deployed_contracts": [
-            {
-              "repository": "eai-testing-dev",
-              "path": "tests/cross-service/contracts/adminportal-adminapi/generated-workflow-public-routes.spec.ts"
-            }
-          ]
-        },
-        {
-          "id": "eai-app-template-nextjs-runtime-dependencies",
-          "description": "Root Next.js dependency and lockfile changes are validated by the repository's stable CI gate.",
-          "ci_only": true,
-          "owned_paths": [
-            ".eai/test-coverage.json",
-            "package.json",
-            "package-lock.json"
-          ],
-          "required_repo_tests": [],
-          "required_ci_checks": ["validate"],
           "required_cross_service_surfaces": [],
           "required_deployed_contracts": []
         }

@@ -43,6 +43,7 @@
     "test:source-unknown-evidence": "node --test tests/source-unknown-deployment-evidence.test.mjs",
     "test:ai-workspace-guidance": "node --test tests/ai-workspace-guidance.test.mjs",
     "test:object-types-generator": "node --test tests/generate-object-types-json.test.mjs",
+    "test:release-version": "node --test tests/next-release-version.test.mjs",
     "test:smoke": "npm run check:route-exports && npm run eai:config:validate && npm run check:object-types && npm run test:ai-workspace-guidance && npm run test:cross-platform-lifecycle",
     "test:e2e": "playwright test tests/e2e tests/business-scenarios",
     "test:business-scenarios": "playwright test tests/business-scenarios",

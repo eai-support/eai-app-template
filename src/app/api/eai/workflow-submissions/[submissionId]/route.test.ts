@@ -4,6 +4,8 @@ import { TextEncoder } from 'node:util';
 const mockPlatformFetch = jest.fn();
 const mockGetRuntime = jest.fn();
 const mockReadOwnedSubmission = jest.fn();
+const mockHasSubmissionSession = jest.fn();
+const mockSubmissionReadFailure = jest.fn();
 
 jest.mock('next/server', () => ({
   NextResponse: class MockNextResponse {
@@ -38,9 +40,16 @@ jest.mock('@/lib/generated-workflow/runtime', () => ({
 
 jest.mock('@/lib/generated-workflow/submission-store', () => ({
   readOwnedSubmission: (...args: unknown[]) => mockReadOwnedSubmission(...args),
+  submissionReadFailure: (...args: unknown[]) =>
+    mockSubmissionReadFailure(...args),
 }));
 
-import { PATCH } from './route';
+jest.mock('@/lib/generated-workflow/submission-session', () => ({
+  hasSubmissionSession: (...args: unknown[]) =>
+    mockHasSubmissionSession(...args),
+}));
+
+import { GET, PATCH } from './route';
 
 function oversizedChunkedPatch(): Request {
   const encoder = new TextEncoder();
@@ -69,6 +78,19 @@ function oversizedChunkedPatch(): Request {
   } as unknown as Request;
 }
 
+function jsonPatch(value: unknown): Request {
+  const encoded = new TextEncoder().encode(JSON.stringify(value));
+  return {
+    headers: new Headers({ 'content-type': 'application/json' }),
+    body: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoded);
+        controller.close();
+      },
+    }),
+  } as unknown as Request;
+}
+
 describe('generated workflow anonymous submission update BFF', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -77,8 +99,39 @@ describe('generated workflow anonymous submission update BFF', () => {
       runtime: {
         appKey: 'rates-review',
         tenantId: 'tenant-a',
+        assistantEnabled: true,
+        binding: {
+          workflowTemplate: {
+            digest: `sha256:${'a'.repeat(64)}`,
+          },
+        },
       },
     });
+    mockHasSubmissionSession.mockReturnValue(true);
+    mockPlatformFetch.mockResolvedValue({ ok: true, status: 200 });
+    mockSubmissionReadFailure.mockReturnValue({
+      error: 'SUBMISSION_READ_FAILED',
+      status: 502,
+    });
+  });
+
+  it('keeps an upstream availability failure retryable instead of returning 404', async () => {
+    const upstreamError = new Error('upstream unavailable');
+    mockReadOwnedSubmission.mockRejectedValue(upstreamError);
+    mockSubmissionReadFailure.mockReturnValue({
+      error: 'PLATFORM_UNAVAILABLE',
+      status: 503,
+    });
+
+    const response = await GET({} as never, {
+      params: Promise.resolve({ submissionId: 'submission-1' }),
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      error: 'PLATFORM_UNAVAILABLE',
+    });
+    expect(mockSubmissionReadFailure).toHaveBeenCalledWith(upstreamError);
   });
 
   it('rejects a false-small chunked JSON body before ownership or platform access', async () => {
@@ -93,4 +146,90 @@ describe('generated workflow anonymous submission update BFF', () => {
     expect(mockReadOwnedSubmission).not.toHaveBeenCalled();
     expect(mockPlatformFetch).not.toHaveBeenCalled();
   });
+
+  it('uses the signed browser capability and one platform update request', async () => {
+    const request = jsonPatch({
+      currentStep: 1,
+      formData: { contact: { name: 'Ada' } },
+    });
+    request.headers.set('x-forwarded-for', '192.0.2.10');
+
+    const response = await PATCH(request as never, {
+      params: Promise.resolve({ submissionId: 'submission-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockHasSubmissionSession).toHaveBeenCalledWith(
+      request,
+      'submission-1',
+      `sha256:${'a'.repeat(64)}`,
+    );
+    expect(mockReadOwnedSubmission).not.toHaveBeenCalled();
+    expect(mockPlatformFetch).toHaveBeenCalledTimes(1);
+    expect(mockPlatformFetch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: 'tenant-a',
+        appKey: 'rates-review',
+        path: '/submissions/submission-1',
+        init: expect.objectContaining({ method: 'PATCH' }),
+      }),
+    );
+  });
+
+  it('rejects an update without a signed browser capability', async () => {
+    mockHasSubmissionSession.mockReturnValue(false);
+
+    const response = await PATCH(jsonPatch({ currentStep: 1 }) as never, {
+      params: Promise.resolve({ submissionId: 'submission-1' }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(mockPlatformFetch).not.toHaveBeenCalled();
+  });
+
+  it('preserves the finalized response without a preflight platform read', async () => {
+    mockPlatformFetch.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        detail: {
+          error: 'ALREADY_COMPLETED',
+          message: 'This submission has already been completed.',
+        },
+      }),
+    });
+
+    const response = await PATCH(jsonPatch({ status: 'completed' }) as never, {
+      params: Promise.resolve({ submissionId: 'submission-1' }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: 'SUBMISSION_FINALIZED',
+    });
+    expect(mockReadOwnedSubmission).not.toHaveBeenCalled();
+    expect(mockPlatformFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['RUNTIME_BINDING_MISMATCH', 'WORKFLOW_SNAPSHOT_MISMATCH'])(
+    'does not misclassify the upstream %s conflict as a finalized submission',
+    async (error) => {
+      mockPlatformFetch.mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ detail: { error } }),
+      });
+
+      const response = await PATCH(jsonPatch({ currentStep: 1 }) as never, {
+        params: Promise.resolve({ submissionId: 'submission-1' }),
+      });
+
+      expect(response.status).toBe(502);
+      await expect(response.json()).resolves.toEqual({
+        error: 'SUBMISSION_UPDATE_FAILED',
+      });
+      expect(mockReadOwnedSubmission).not.toHaveBeenCalled();
+      expect(mockPlatformFetch).toHaveBeenCalledTimes(1);
+    },
+  );
 });
