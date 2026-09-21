@@ -1,4 +1,6 @@
 export const SUBMISSION_FILE_MAX_BYTES = 10 * 1024 * 1024;
+export const SUBMISSION_FILE_MAX_COUNT = 5;
+export const SUBMISSION_FILE_MAX_TOTAL_BYTES = 25 * 1024 * 1024;
 
 /** Opaque uploaded-file reference accepted in a workflow submission payload. */
 export interface SubmissionFileRef {
@@ -9,6 +11,12 @@ export interface SubmissionFileRef {
   uploadedAt: string;
   stepId: string;
   fieldId: string;
+}
+
+interface PendingSubmissionFile {
+  stepId: string;
+  fieldId: string;
+  fileSize: number;
 }
 
 /** Validate the bounded file-reference shape before it enters a submission. */
@@ -49,9 +57,35 @@ export const SUBMISSION_FILE_ACCEPTED_EXTENSIONS = [
   'json',
   'geojson',
 ] as const;
-export const SUBMISSION_FILE_ACCEPT = SUBMISSION_FILE_ACCEPTED_EXTENSIONS.map(
-  (extension) => `.${extension}`,
-).join(',');
+/** File suffixes supported by the generated-runtime upload boundary. */
+export type SubmissionFileExtension =
+  (typeof SUBMISSION_FILE_ACCEPTED_EXTENSIONS)[number];
+
+/** Resolve a file field's explicit allowlist, retaining compatibility with older snapshots. */
+export function submissionFileAcceptedExtensions(
+  configured: readonly string[] | undefined,
+): readonly SubmissionFileExtension[] {
+  if (!configured?.length) return SUBMISSION_FILE_ACCEPTED_EXTENSIONS;
+  const supported = configured.filter(
+    (extension): extension is SubmissionFileExtension =>
+      (SUBMISSION_FILE_ACCEPTED_EXTENSIONS as readonly string[]).includes(
+        extension,
+      ),
+  );
+  return supported.length === configured.length &&
+    new Set(supported).size === supported.length
+    ? supported
+    : [];
+}
+
+/** Build the browser accept hint from the same allowlist enforced by the BFF. */
+export function submissionFileAccept(
+  configured: readonly string[] | undefined,
+): string {
+  return submissionFileAcceptedExtensions(configured)
+    .map((extension) => `.${extension}`)
+    .join(',');
+}
 
 const DENIED_MIME_TYPES = new Set(['text/html', 'image/svg+xml']);
 
@@ -62,23 +96,52 @@ export function sanitizeSubmissionFileName(value: string): string {
 }
 
 /** Applies the same size, extension, and active-content denylist as the facade. */
-export function validateSubmissionFile(file: {
-  name: string;
-  size: number;
-  type: string;
-}): string | null {
+export function validateSubmissionFile(
+  file: {
+    name: string;
+    size: number;
+    type: string;
+  },
+  configuredExtensions?: readonly string[],
+): string | null {
   if (file.size <= 0) return 'File is empty.';
   if (file.size > SUBMISSION_FILE_MAX_BYTES) {
     return 'File is too large (max 10MB).';
   }
-  const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
+  const lastDot = file.name.lastIndexOf('.');
+  const extension =
+    lastDot > 0 && lastDot < file.name.length - 1
+      ? file.name.slice(lastDot + 1).toLowerCase()
+      : '';
+  const acceptedExtensions =
+    submissionFileAcceptedExtensions(configuredExtensions);
   if (
-    !(SUBMISSION_FILE_ACCEPTED_EXTENSIONS as readonly string[]).includes(
-      extension,
-    ) ||
+    !acceptedExtensions.includes(extension as SubmissionFileExtension) ||
     DENIED_MIME_TYPES.has(file.type.toLowerCase())
   ) {
     return 'Unsupported file type.';
+  }
+  return null;
+}
+
+/** Enforce aggregate limits while allowing an existing field upload to be replaced. */
+export function validateSubmissionFileCollection(
+  files: readonly SubmissionFileRef[],
+  pending: PendingSubmissionFile,
+): string | null {
+  const retainedFiles = files.filter(
+    (file) =>
+      file.stepId !== pending.stepId || file.fieldId !== pending.fieldId,
+  );
+  if (retainedFiles.length + 1 > SUBMISSION_FILE_MAX_COUNT) {
+    return 'A submission can contain up to 5 files.';
+  }
+  const totalBytes = retainedFiles.reduce(
+    (total, file) => total + file.fileSize,
+    pending.fileSize,
+  );
+  if (totalBytes > SUBMISSION_FILE_MAX_TOTAL_BYTES) {
+    return 'Submission files can total up to 25MB.';
   }
   return null;
 }
