@@ -156,7 +156,10 @@ test('collect writes source-unknown handoff evidence and GitHub outputs', () => 
 test('workflow sends OIDC evidence directly to the canonical PublicAPI route', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   assert.match(workflow, /^on:\n  workflow_dispatch:/m);
-  assert.doesNotMatch(workflow, /^  (push|pull_request|workflow_call|schedule):/m);
+  assert.doesNotMatch(
+    workflow,
+    /^  (push|pull_request|workflow_call|schedule):/m,
+  );
   assert.match(workflow, /^  packages: read$/m);
   assert.match(workflow, /name: eai-generated-app-image/);
   assert.match(workflow, /--platform linux\/amd64/);
@@ -164,6 +167,16 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(workflow, /source-unknown\/workflow-evidence/);
   assert.doesNotMatch(workflow, /EAI_ACCESS_TOKEN/);
   assert.doesNotMatch(workflow, /publicapi_base_url/);
+});
+
+test('workflow runs independent validations concurrently and waits for both', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+
+  assert.match(workflow, /npm run typecheck &\n\s+typecheck_pid=\$!/);
+  assert.match(workflow, /npm run test:unit:ci &\n\s+tests_pid=\$!/);
+  assert.match(workflow, /wait "\$typecheck_pid" \|\| validation_status=1/);
+  assert.match(workflow, /wait "\$tests_pid" \|\| validation_status=1/);
+  assert.match(workflow, /exit "\$validation_status"/);
 });
 
 test('image context uses the runtime minimum Node major', () => {
