@@ -8,6 +8,7 @@
           "id": "source-unknown-eai-managed-deployment",
           "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact and submit nonce-bound GitHub OIDC evidence to PublicAPI without a stored platform token.",
           "owned_paths": [
+            ".eai/test-coverage.json",
             ".github/workflows/eai-app.yml",
             "scripts/source-unknown-deployment-evidence.mjs"
           ],
@@ -15,11 +16,19 @@
             "tests/source-unknown-deployment-evidence.test.mjs"
           ],
           "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["backend", "eai-cli"],
+          "required_cross_service_surfaces": ["backend", "eai-cli", "eai-managed-deploy"],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",
               "path": "tests/cross-service/contracts/platform-lifecycle/publicapi-v4-platform-lifecycle.spec.ts"
+            },
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/eai-cli/eai-managed-deploy.spec.ts"
+            },
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/eai-cli/eai-managed-deploy-mutation.spec.ts"
             }
           ]
         },
