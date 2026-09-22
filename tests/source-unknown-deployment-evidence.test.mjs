@@ -120,7 +120,15 @@ test('collect normalizes upload-artifact bare hex and writes canonical handoff d
       '.eai-build/evidence/source-unknown-deployment-evidence.json',
     );
     const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
-    assert.deepEqual(JSON.parse(stdout), evidence);
+    const summary = JSON.parse(stdout);
+    assert.equal(evidence.nonce, 'single-use-nonce');
+    assert.equal(Object.hasOwn(summary, 'nonce'), false);
+    assert.equal(stdout.includes('single-use-nonce'), false);
+    assert.equal(summary.operationId, evidence.operationId);
+    assert.equal(summary.evidencePath, evidencePath);
+    assert.equal(summary.configHash, evidence.configHash);
+    assert.equal(summary.artifactDigest, evidence.artifactDigest);
+    assert.equal(summary.imageDigest, evidence.imageDigest);
     assert.equal(evidence.operationId, 'source-op-1');
     assert.equal(evidence.validationSummary.status, 'passed');
     assert.match(evidence.configHash, digestPattern);
