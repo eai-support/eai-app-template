@@ -70,7 +70,7 @@ function runEvidenceScript(args, options = {}) {
   });
 }
 
-test('collect writes source-unknown handoff evidence and GitHub outputs', () => {
+test('collect normalizes upload-artifact bare hex and writes canonical handoff digests', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-evidence-'));
   try {
     const fixtureRoot = join(workDir, 'app');
@@ -108,7 +108,7 @@ test('collect writes source-unknown handoff evidence and GitHub outputs', () => 
       '--artifact-id',
       '987654321',
       '--artifact-digest',
-      `sha256:${'d'.repeat(64)}`,
+      'd'.repeat(64),
       '--image-digest',
       `sha256:${'c'.repeat(64)}`,
       '--github-output',
@@ -125,6 +125,7 @@ test('collect writes source-unknown handoff evidence and GitHub outputs', () => 
     assert.equal(evidence.validationSummary.status, 'passed');
     assert.match(evidence.configHash, digestPattern);
     assert.match(evidence.artifactDigest, digestPattern);
+    assert.equal(evidence.artifactDigest, `sha256:${'d'.repeat(64)}`);
     assert.match(evidence.imageArtifact.archiveDigest, digestPattern);
     assert.match(evidence.imageDigest, digestPattern);
     assert.equal(
@@ -293,58 +294,151 @@ test('collect rejects a config hash that does not bind the checked-out files', (
   }
 });
 
-test('assert-evidence-accepted accepts only accepted workflow evidence', () => {
+test('collect rejects malformed upload-artifact digests without weakening image validation', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-digest-'));
+  try {
+    writeFixtureApp(workDir);
+    const configHash = runEvidenceScript([
+      'config-hash',
+      '--root',
+      workDir,
+    ]).trim();
+    for (const artifactDigest of [
+      'd'.repeat(63),
+      'D'.repeat(64),
+      `md5:${'d'.repeat(64)}`,
+      `sha256:sha256:${'d'.repeat(64)}`,
+    ]) {
+      const result = spawnSync(
+        process.execPath,
+        [
+          evidenceScript,
+          'collect',
+          '--root',
+          workDir,
+          '--artifact-id',
+          '987654321',
+          '--artifact-digest',
+          artifactDigest,
+          '--image-digest',
+          `sha256:${'c'.repeat(64)}`,
+          '--expected-config-hash',
+          configHash,
+        ],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /artifactDigest must be a sha256 digest/);
+    }
+    const result = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        'collect',
+        '--root',
+        workDir,
+        '--artifact-id',
+        '987654321',
+        '--artifact-digest',
+        'd'.repeat(64),
+        '--image-digest',
+        'c'.repeat(64),
+        '--expected-config-hash',
+        configHash,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /imageDigest must be a sha256 digest/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('assert-evidence-accepted accepts persisted evidence with accepted or deferred handoff', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-handoff-'));
   try {
-    for (const status of ['accepted']) {
-      const responsePath = join(workDir, `deployment-response-${status}.json`);
-      writeFileSync(
-        responsePath,
-        JSON.stringify({
-          response: {
-            status,
-            deploymentRequestId: 'source-unknown-deploy-1',
-            requiresTenantInfra: status === 'handoff_pending',
-          },
-        }),
-      );
+    for (const status of ['accepted', 'handoff_pending']) {
+      for (const nested of [false, true]) {
+        const responsePath = join(
+          workDir,
+          `deployment-response-${status}.json`,
+        );
+        const response = {
+          status,
+          deploymentRequestId: 'source-unknown-deploy-1',
+          requiresTenantInfra: status === 'handoff_pending',
+        };
+        writeFileSync(
+          responsePath,
+          JSON.stringify(nested ? { response } : response),
+        );
 
-      const stdout = runEvidenceScript([
-        'assert-evidence-accepted',
-        '--response',
-        responsePath,
-      ]);
-      assert.match(stdout, new RegExp(`^${status} source-unknown-deploy-1`));
+        const stdout = runEvidenceScript([
+          'assert-evidence-accepted',
+          '--response',
+          responsePath,
+        ]);
+        assert.match(stdout, new RegExp(`^${status} source-unknown-deploy-1`));
+      }
     }
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
 });
 
-test('assert-evidence-accepted rejects non-accepted responses', () => {
+test('assert-evidence-accepted rejects unknown states and unpersisted pending handoff', () => {
   const workDir = mkdtempSync(
     join(tmpdir(), 'eai-source-unknown-handoff-bad-'),
   );
   try {
     const responsePath = join(workDir, 'deployment-response-bad.json');
-    writeFileSync(
-      responsePath,
-      JSON.stringify({
-        response: {
-          status: 'deployed',
-          deploymentRequestId: 'source-unknown-deploy-1',
-          requiresTenantInfra: false,
-        },
-      }),
-    );
-
-    const result = spawnSync(
-      process.execPath,
-      [evidenceScript, 'assert-evidence-accepted', '--response', responsePath],
-      { encoding: 'utf8' },
-    );
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /Expected workflow evidence status accepted/);
+    for (const response of [
+      {
+        status: 'deployed',
+        deploymentRequestId: 'request',
+        requiresTenantInfra: false,
+      },
+      {
+        status: 'failed',
+        deploymentRequestId: 'request',
+        requiresTenantInfra: true,
+      },
+      {
+        status: 'handoff_pending',
+        deploymentRequestId: 'request',
+        requiresTenantInfra: false,
+      },
+      {
+        status: 'handoff_pending',
+        deploymentRequestId: 'request',
+        requiresTenantInfra: 'true',
+      },
+      { status: 'handoff_pending', requiresTenantInfra: true },
+      {
+        status: 'handoff_pending',
+        deploymentRequestId: ' ',
+        requiresTenantInfra: true,
+      },
+      {},
+    ]) {
+      writeFileSync(responsePath, JSON.stringify({ response }));
+      const result = spawnSync(
+        process.execPath,
+        [
+          evidenceScript,
+          'assert-evidence-accepted',
+          '--response',
+          responsePath,
+        ],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1);
+      assert.match(
+        result.stderr,
+        /Expected accepted evidence or a persisted pending handoff/,
+      );
+    }
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }

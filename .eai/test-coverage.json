@@ -6,17 +6,25 @@
       "features": [
         {
           "id": "source-unknown-eai-managed-deployment",
-          "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact and submit nonce-bound GitHub OIDC evidence to PublicAPI without a stored platform token.",
+          "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact, submit nonce-bound GitHub OIDC evidence including recoverable pending handoffs, and verify scoped runtime readiness without requiring an unconfigured NCB workflow.",
           "owned_paths": [
             ".eai/test-coverage.json",
             ".github/workflows/eai-app.yml",
-            "scripts/source-unknown-deployment-evidence.mjs"
+            "scripts/source-unknown-deployment-evidence.mjs",
+            "src/lib/platform/readiness.ts",
+            "src/app/api/eai/readiness/route.ts"
           ],
           "required_repo_tests": [
-            "tests/source-unknown-deployment-evidence.test.mjs"
+            "tests/source-unknown-deployment-evidence.test.mjs",
+            "src/lib/platform/readiness.test.ts",
+            "src/app/api/eai/readiness/route.test.ts"
           ],
           "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["backend", "eai-cli", "eai-managed-deploy"],
+          "required_cross_service_surfaces": [
+            "backend",
+            "eai-cli",
+            "eai-managed-deploy"
+          ],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",

@@ -117,11 +117,17 @@ function checkAuth(env: NodeJS.ProcessEnv): ReadinessCheck {
   };
 }
 
-function checkTenantAssignment(env: NodeJS.ProcessEnv): ReadinessCheck {
+function checkTenantAssignment(
+  env: NodeJS.ProcessEnv,
+  requireWorkflowAssignment: boolean,
+): ReadinessCheck {
   const tenantKeys = splitTenantKeys(env);
   const missing = tenantKeys.flatMap((tenantKey) => {
     const envKey = envKeyForTenant(tenantKey);
-    return missingEnv(env, [`TENANT_${envKey}_ID`, `WORKFLOW_${envKey}_ID`]);
+    return missingEnv(env, [
+      `TENANT_${envKey}_ID`,
+      ...(requireWorkflowAssignment ? [`WORKFLOW_${envKey}_ID`] : []),
+    ]);
   });
 
   return {
@@ -171,14 +177,18 @@ function checkObjectTypes(env: NodeJS.ProcessEnv): ReadinessCheck {
   };
 }
 
+/** Workflow assignment may be omitted only for an unconfigured source-controlled workflow adapter. */
 export function evaluateRuntimeReadiness(
   env: NodeJS.ProcessEnv = process.env,
+  {
+    requireWorkflowAssignment = true,
+  }: { requireWorkflowAssignment?: boolean } = {},
 ): RuntimeReadiness {
   const checks = [
     checkRuntimeEnv(env),
     checkRequiredSecrets(env),
     checkAuth(env),
-    checkTenantAssignment(env),
+    checkTenantAssignment(env, requireWorkflowAssignment),
     checkPublicApi(env),
     checkObjectTypes(env),
   ];

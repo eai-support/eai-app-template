@@ -131,6 +131,18 @@ describe('readiness route', () => {
     expect(serialized).not.toContain('test-auth-secret');
   });
 
+  it('proves generic runtime readiness without an NCB workflow assignment', async () => {
+    delete process.env[`WORKFLOW_${TEST_TENANT_ENV_KEY}_ID`];
+
+    const response = await GET(readinessRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.failureCategories).toEqual([]);
+    expect(body.runtimeBinding).toBeUndefined();
+    expect(generatedWorkflowPlatformFetch).not.toHaveBeenCalled();
+  });
+
   it('rejects requests that are not TenantInfra readiness probes', async () => {
     const response = await GET({ headers: new Headers() } as Request);
     const body = await response.json();
@@ -229,6 +241,13 @@ describe('readiness route', () => {
       appKey: 'contract-test',
       path: '/workflow',
     });
+
+    delete process.env[`WORKFLOW_${TEST_TENANT_ENV_KEY}_ID`];
+    const missingAssignmentResponse = await GET(readinessRequest());
+    expect(missingAssignmentResponse.status).toBe(503);
+    expect(
+      (await missingAssignmentResponse.json()).failureCategories,
+    ).toContain('tenant_assignment_invalid');
   });
 
   it('fails readiness when the generated workflow platform is unreachable', async () => {
