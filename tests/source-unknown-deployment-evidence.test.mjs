@@ -1,13 +1,23 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const evidenceScript = join(repoRoot, 'scripts/source-unknown-deployment-evidence.mjs');
+const evidenceScript = join(
+  repoRoot,
+  'scripts/source-unknown-deployment-evidence.mjs',
+);
 const workflowPath = join(repoRoot, '.github/workflows/eai-app.yml');
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 
@@ -15,15 +25,37 @@ function writeFixtureApp(root) {
   mkdirSync(join(root, '.next/standalone'), { recursive: true });
   mkdirSync(join(root, '.next/static'), { recursive: true });
   mkdirSync(join(root, 'src/eai.config'), { recursive: true });
-  mkdirSync(join(root, 'tests/fixtures/schema-provenance'), { recursive: true });
+  mkdirSync(join(root, 'tests/fixtures/schema-provenance'), {
+    recursive: true,
+  });
   mkdirSync(join(root, '.eai-build'), { recursive: true });
 
-  writeFileSync(join(root, '.next/standalone/server.js'), 'console.log("ok");\n');
+  writeFileSync(
+    join(root, '.next/standalone/server.js'),
+    'console.log("ok");\n',
+  );
   writeFileSync(join(root, '.next/static/app.js'), 'static\n');
   writeFileSync(join(root, 'package.json'), '{"name":"fixture-app"}\n');
-  writeFileSync(join(root, 'eai.runtime.json'), '{"runtime":"fixture"}\n');
-  writeFileSync(join(root, 'src/eai.config/object-types.json'), '{"types":[]}\n');
-  writeFileSync(join(root, '.eai-build/eai-app-image.oci.tar'), 'oci image archive fixture\n');
+  writeFileSync(
+    join(root, 'eai.runtime.json'),
+    JSON.stringify({
+      runtime: 'fixture',
+      schemaProvenance: JSON.parse(
+        readFileSync(
+          join(repoRoot, 'tests/fixtures/schema-provenance/valid.json'),
+          'utf8',
+        ),
+      ),
+    }),
+  );
+  writeFileSync(
+    join(root, 'src/eai.config/object-types.json'),
+    '{"types":[]}\n',
+  );
+  writeFileSync(
+    join(root, '.eai-build/eai-generated-app-image.tar'),
+    'oci image archive fixture\n',
+  );
 
   cpSync(
     join(repoRoot, 'tests/fixtures/schema-provenance/valid.json'),
@@ -67,20 +99,42 @@ test('collect writes source-unknown handoff evidence and GitHub outputs', () => 
       '123456789',
       '--workflow-run-attempt',
       '1',
+      '--operation-id',
+      'source-op-1',
+      '--nonce',
+      'single-use-nonce',
+      '--expected-config-hash',
+      runEvidenceScript(['config-hash', '--root', fixtureRoot]).trim(),
+      '--artifact-id',
+      '987654321',
+      '--artifact-digest',
+      `sha256:${'d'.repeat(64)}`,
+      '--image-digest',
+      `sha256:${'c'.repeat(64)}`,
       '--github-output',
       outputFile,
     ]);
 
-    const evidencePath = join(fixtureRoot, '.eai-build/evidence/source-unknown-deployment-evidence.json');
+    const evidencePath = join(
+      fixtureRoot,
+      '.eai-build/evidence/source-unknown-deployment-evidence.json',
+    );
     const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
     assert.deepEqual(JSON.parse(stdout), evidence);
-    assert.equal(evidence.contract, 'source-unknown-app-template-deployment-handoff');
-    assert.equal(evidence.sourceMode, 'source-unknown');
-    assert.equal(evidence.handoff.expectedStatus, 'handoff_pending');
-    assert.equal(evidence.handoff.tenantInfraImplementedHere, false);
+    assert.equal(evidence.operationId, 'source-op-1');
+    assert.equal(evidence.validationSummary.status, 'passed');
     assert.match(evidence.configHash, digestPattern);
-    assert.match(evidence.artifact.digest, digestPattern);
-    assert.match(evidence.image.digest, digestPattern);
+    assert.match(evidence.artifactDigest, digestPattern);
+    assert.match(evidence.imageArtifact.archiveDigest, digestPattern);
+    assert.match(evidence.imageDigest, digestPattern);
+    assert.equal(
+      new Set([
+        evidence.artifactDigest,
+        evidence.imageArtifact.archiveDigest,
+        evidence.imageDigest,
+      ]).size,
+      3,
+    );
 
     const outputs = readFileSync(outputFile, 'utf8');
     for (const key of [
@@ -99,21 +153,134 @@ test('collect writes source-unknown handoff evidence and GitHub outputs', () => 
   }
 });
 
-test('workflow sends source metadata in deployment handoff', () => {
+test('workflow sends OIDC evidence directly to the canonical PublicAPI route', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
-  const handoffStep = workflow.match(
-    /- name: Request deployment handoff[\s\S]*?- name: Assert TenantInfra handoff submitted/,
-  )?.[0];
-
-  assert.ok(handoffStep, 'Request deployment handoff step must exist');
-  assert.match(handoffStep, /--repo "\$GITHUB_REPOSITORY"/);
-  assert.match(handoffStep, /--workflow-run-id "\$GITHUB_RUN_ID"/);
+  assert.match(workflow, /name: eai-generated-app-image/);
+  assert.match(workflow, /--platform linux\/amd64/);
+  assert.match(workflow, /vars\.EAI_PUBLIC_API_URL/);
+  assert.match(workflow, /source-unknown\/workflow-evidence/);
+  assert.doesNotMatch(workflow, /EAI_ACCESS_TOKEN/);
+  assert.doesNotMatch(workflow, /publicapi_base_url/);
 });
 
-test('assert-handoff-submitted accepts pending and accepted TenantInfra handoff responses', () => {
+test('image context uses the runtime minimum Node major', () => {
+  const workDir = mkdtempSync(
+    join(tmpdir(), 'eai-source-unknown-image-context-'),
+  );
+  try {
+    const fixtureRoot = join(workDir, 'app');
+    writeFixtureApp(fixtureRoot);
+    runEvidenceScript(['prepare-image-context', '--root', fixtureRoot]);
+    assert.match(
+      readFileSync(
+        join(fixtureRoot, '.eai-build/image-context/Dockerfile'),
+        'utf8',
+      ),
+      /^FROM node:24-alpine$/m,
+    );
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('schema provenance falls back to the compatibility fixture only when runtime provenance is absent', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-provenance-'));
+  try {
+    const fixtureRoot = join(workDir, 'app');
+    const outputFile = join(workDir, 'github-output.txt');
+    writeFixtureApp(fixtureRoot);
+    writeFileSync(
+      join(fixtureRoot, 'eai.runtime.json'),
+      '{"runtime":"legacy"}\n',
+    );
+    runEvidenceScript([
+      'collect',
+      '--root',
+      fixtureRoot,
+      '--repo',
+      'enterpriseaigroup/rates-review',
+      '--ref',
+      'refs/heads/main',
+      '--branch',
+      'main',
+      '--commit',
+      'abcdef1234567890abcdef1234567890abcdef12',
+      '--artifact-id',
+      '987654321',
+      '--artifact-digest',
+      `sha256:${'d'.repeat(64)}`,
+      '--image-digest',
+      `sha256:${'c'.repeat(64)}`,
+      '--expected-config-hash',
+      runEvidenceScript(['config-hash', '--root', fixtureRoot]).trim(),
+      '--github-output',
+      outputFile,
+    ]);
+    const evidence = JSON.parse(
+      readFileSync(
+        join(
+          fixtureRoot,
+          '.eai-build/evidence/source-unknown-deployment-evidence.json',
+        ),
+        'utf8',
+      ),
+    );
+    assert.deepEqual(
+      evidence.schemaProvenance,
+      JSON.parse(
+        readFileSync(
+          join(fixtureRoot, 'tests/fixtures/schema-provenance/valid.json'),
+          'utf8',
+        ),
+      ),
+    );
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('collect rejects a config hash that does not bind the checked-out files', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-tamper-'));
+  try {
+    const fixtureRoot = join(workDir, 'app');
+    writeFixtureApp(fixtureRoot);
+    const result = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        'collect',
+        '--root',
+        fixtureRoot,
+        '--repo',
+        'enterpriseaigroup/rates-review',
+        '--ref',
+        'refs/heads/main',
+        '--branch',
+        'main',
+        '--commit',
+        'abcdef1234567890abcdef1234567890abcdef12',
+        '--artifact-id',
+        '987654321',
+        '--artifact-digest',
+        `sha256:${'d'.repeat(64)}`,
+        '--image-digest',
+        `sha256:${'c'.repeat(64)}`,
+        '--expected-config-hash',
+        `sha256:${'f'.repeat(64)}`,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /config hash does not match/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('assert-evidence-accepted accepts only accepted workflow evidence', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-handoff-'));
   try {
-    for (const status of ['handoff_pending', 'accepted']) {
+    for (const status of ['accepted']) {
       const responsePath = join(workDir, `deployment-response-${status}.json`);
       writeFileSync(
         responsePath,
@@ -126,7 +293,11 @@ test('assert-handoff-submitted accepts pending and accepted TenantInfra handoff 
         }),
       );
 
-      const stdout = runEvidenceScript(['assert-handoff-submitted', '--response', responsePath]);
+      const stdout = runEvidenceScript([
+        'assert-evidence-accepted',
+        '--response',
+        responsePath,
+      ]);
       assert.match(stdout, new RegExp(`^${status} source-unknown-deploy-1`));
     }
   } finally {
@@ -134,8 +305,10 @@ test('assert-handoff-submitted accepts pending and accepted TenantInfra handoff 
   }
 });
 
-test('assert-handoff-submitted rejects completed or missing handoff responses', () => {
-  const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-handoff-bad-'));
+test('assert-evidence-accepted rejects non-accepted responses', () => {
+  const workDir = mkdtempSync(
+    join(tmpdir(), 'eai-source-unknown-handoff-bad-'),
+  );
   try {
     const responsePath = join(workDir, 'deployment-response-bad.json');
     writeFileSync(
@@ -151,14 +324,11 @@ test('assert-handoff-submitted rejects completed or missing handoff responses', 
 
     const result = spawnSync(
       process.execPath,
-      [evidenceScript, 'assert-handoff-submitted', '--response', responsePath],
+      [evidenceScript, 'assert-evidence-accepted', '--response', responsePath],
       { encoding: 'utf8' },
     );
     assert.equal(result.status, 1);
-    assert.match(
-      result.stderr,
-      /Expected deployment handoff status handoff_pending or accepted/,
-    );
+    assert.match(result.stderr, /Expected workflow evidence status accepted/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }

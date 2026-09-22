@@ -5,6 +5,25 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "source-unknown-eai-managed-deployment",
+          "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact and submit nonce-bound GitHub OIDC evidence to PublicAPI without a stored platform token.",
+          "owned_paths": [
+            ".github/workflows/eai-app.yml",
+            "scripts/source-unknown-deployment-evidence.mjs"
+          ],
+          "required_repo_tests": [
+            "tests/source-unknown-deployment-evidence.test.mjs"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["backend", "eai-cli"],
+          "required_deployed_contracts": [
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/platform-lifecycle/publicapi-v4-platform-lifecycle.spec.ts"
+            }
+          ]
+        },
+        {
           "id": "tenant-bound-document-lifecycle",
           "description": "The document SDK uses the Curate-backed V4 upload lifecycle for stored-file processing, requires paired app and workflow classifier selection, and sends the deployed V4 documentUrl and tenantId contract for direct URL classification.",
           "owned_paths": [

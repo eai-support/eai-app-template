@@ -1,8 +1,15 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { appendFile } from 'node:fs/promises';
-import { dirname, join, relative, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const SHA256_DIGEST = /^sha256:[a-f0-9]{64}$/;
@@ -15,7 +22,9 @@ function parseArgs(argv) {
     if (!arg.startsWith('--')) {
       throw new Error(`Unexpected argument: ${arg}`);
     }
-    const key = arg.slice(2).replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+    const key = arg
+      .slice(2)
+      .replace(/-([a-z])/g, (_, char) => char.toUpperCase());
     const next = rest[index + 1];
     if (!next || next.startsWith('--')) {
       options[key] = 'true';
@@ -43,18 +52,6 @@ function assertExists(path, label) {
   }
 }
 
-function listFiles(root, relativeRoot = '.') {
-  const absoluteRoot = join(root, relativeRoot);
-  if (!existsSync(absoluteRoot)) return [];
-  return readdirSync(absoluteRoot, { withFileTypes: true })
-    .flatMap((entry) => {
-      const relativePath = join(relativeRoot, entry.name);
-      if (entry.isDirectory()) return listFiles(root, relativePath);
-      return entry.isFile() ? [relativePath.replaceAll('\\', '/')] : [];
-    })
-    .sort();
-}
-
 async function digestFile(path) {
   const hash = createHash('sha256');
   await new Promise((resolvePromise, reject) => {
@@ -68,7 +65,9 @@ async function digestFile(path) {
 
 function digestFiles(root, paths) {
   const hash = createHash('sha256');
-  for (const relativePath of paths.filter((path) => existsSync(join(root, path))).sort()) {
+  for (const relativePath of paths
+    .filter((path) => existsSync(join(root, path)))
+    .sort()) {
     hash.update(relativePath);
     hash.update('\0');
     hash.update(readFileSync(join(root, relativePath)));
@@ -78,16 +77,24 @@ function digestFiles(root, paths) {
 }
 
 function readSchemaProvenance(root) {
-  const fixture = join(root, 'tests/fixtures/schema-provenance/valid.json');
-  assertExists(fixture, 'Schema provenance fixture');
-  const provenance = JSON.parse(readFileSync(fixture, 'utf8'));
+  const runtimePath = join(root, 'eai.runtime.json');
+  assertExists(runtimePath, 'eai.runtime.json');
+  const runtime = JSON.parse(readFileSync(runtimePath, 'utf8'));
+  let provenance = runtime.schemaProvenance;
+  if (!provenance) {
+    const fixture = join(root, 'tests/fixtures/schema-provenance/valid.json');
+    assertExists(fixture, 'Runtime schema provenance or compatibility fixture');
+    provenance = JSON.parse(readFileSync(fixture, 'utf8'));
+  }
   for (const key of ['schemaDigest', 'validatorDigest']) {
     if (!SHA256_DIGEST.test(provenance[key] || '')) {
       throw new Error(`Schema provenance ${key} must be a sha256 digest.`);
     }
   }
   if (!/^[a-f0-9]{40}$/.test(provenance.baseTemplateSha || '')) {
-    throw new Error('Schema provenance baseTemplateSha must be a 40 character lowercase git SHA.');
+    throw new Error(
+      'Schema provenance baseTemplateSha must be a 40 character lowercase git SHA.',
+    );
   }
   if (!provenance.templateVersion) {
     throw new Error('Schema provenance templateVersion is required.');
@@ -96,6 +103,7 @@ function readSchemaProvenance(root) {
 }
 
 function buildConfigHash(root) {
+  assertExists(join(root, 'eai.runtime.json'), 'eai.runtime.json');
   return digestFiles(root, [
     'eai.runtime.json',
     'src/eai.config/default.ts',
@@ -107,27 +115,13 @@ function buildConfigHash(root) {
   ]);
 }
 
-function packageAppArtifact(root, archivePath) {
-  const required = ['.next/standalone', '.next/static', 'package.json', 'eai.runtime.json'];
-  for (const path of required) assertExists(join(root, path), path);
-
-  const entries = [...required];
-  if (existsSync(join(root, 'public'))) entries.push('public');
-  if (existsSync(join(root, 'src/eai.config/object-types.json'))) entries.push('src/eai.config/object-types.json');
-  if (existsSync(join(root, 'src/eai.config/object-types.provisioning.json'))) {
-    entries.push('src/eai.config/object-types.provisioning.json');
-  }
-
-  ensureDir(dirname(archivePath));
-  rmSync(archivePath, { force: true });
-  execFileSync('tar', ['-czf', archivePath, ...entries], { cwd: root, stdio: 'inherit' });
-  return entries;
-}
-
 function prepareImageContext(options) {
   const root = resolve(option(options, 'root', process.cwd()));
   const buildDir = resolve(root, option(options, 'buildDir', '.next'));
-  const contextDir = resolve(root, option(options, 'contextDir', '.eai-build/image-context'));
+  const contextDir = resolve(
+    root,
+    option(options, 'contextDir', '.eai-build/image-context'),
+  );
   const standaloneDir = join(buildDir, 'standalone');
   const staticDir = join(buildDir, 'static');
 
@@ -139,14 +133,18 @@ function prepareImageContext(options) {
   ensureDir(join(contextDir, '.next'));
   execFileSync('cp', ['-R', staticDir, join(contextDir, '.next/static')]);
   if (existsSync(join(root, 'public'))) {
-    execFileSync('cp', ['-R', join(root, 'public'), join(contextDir, 'public')]);
+    execFileSync('cp', [
+      '-R',
+      join(root, 'public'),
+      join(contextDir, 'public'),
+    ]);
   } else {
     ensureDir(join(contextDir, 'public'));
   }
   writeFileSync(
     join(contextDir, 'Dockerfile'),
     [
-      'FROM node:20-alpine',
+      'FROM node:24-alpine',
       'WORKDIR /app',
       'ENV NODE_ENV=production',
       'ENV PORT=3000',
@@ -162,66 +160,113 @@ function prepareImageContext(options) {
 
 async function appendOutputs(path, outputs) {
   if (!path) return;
-  const lines = Object.entries(outputs).map(([key, value]) => `${key}=${value}\n`).join('');
+  const lines = Object.entries(outputs)
+    .map(([key, value]) => `${key}=${value}\n`)
+    .join('');
   await appendFile(path, lines, 'utf8');
 }
 
 async function collectEvidence(options) {
   const root = resolve(option(options, 'root', process.cwd()));
-  const outputDir = resolve(root, option(options, 'outputDir', '.eai-build/evidence'));
-  const archivePath = resolve(root, option(options, 'artifactArchive', '.eai-build/eai-app-build.tar.gz'));
-  const imageArchivePath = resolve(root, option(options, 'imageArchive', '.eai-build/eai-app-image.oci.tar'));
-  const evidencePath = resolve(outputDir, option(options, 'evidenceFile', 'source-unknown-deployment-evidence.json'));
-  const githubOutputPath = option(options, 'githubOutput', process.env.GITHUB_OUTPUT || '');
+  const outputDir = resolve(
+    root,
+    option(options, 'outputDir', '.eai-build/evidence'),
+  );
+  const imageArchivePath = resolve(
+    root,
+    option(options, 'imageArchive', '.eai-build/eai-generated-app-image.tar'),
+  );
+  const evidencePath = resolve(
+    outputDir,
+    option(options, 'evidenceFile', 'source-unknown-deployment-evidence.json'),
+  );
+  const githubOutputPath = option(
+    options,
+    'githubOutput',
+    process.env.GITHUB_OUTPUT || '',
+  );
 
   assertExists(imageArchivePath, 'OCI image archive');
-  const artifactEntries = packageAppArtifact(root, archivePath);
-  const artifactDigest = await digestFile(archivePath);
-  const imageDigest = await digestFile(imageArchivePath);
+  const artifactDigest = option(options, 'artifactDigest');
+  const artifactId = option(options, 'artifactId');
+  const archiveDigest = await digestFile(imageArchivePath);
+  const imageDigest = option(options, 'imageDigest');
   const configHash = buildConfigHash(root);
+  const expectedConfigHash = option(options, 'expectedConfigHash');
   const schemaProvenance = readSchemaProvenance(root);
 
-  const workflowPath = option(options, 'workflow', '.github/workflows/eai-app.yml');
-  const branch = option(options, 'branch', process.env.GITHUB_REF_NAME || 'main');
-  const ref = option(options, 'ref', process.env.GITHUB_REF || `refs/heads/${branch}`);
+  if (!/^[1-9][0-9]*$/.test(artifactId))
+    throw new Error('Artifact id must be numeric.');
+  for (const [label, digest] of Object.entries({
+    artifactDigest,
+    archiveDigest,
+    imageDigest,
+  })) {
+    if (!SHA256_DIGEST.test(digest))
+      throw new Error(`${label} must be a sha256 digest.`);
+  }
+  if (new Set([artifactDigest, archiveDigest, imageDigest]).size !== 3) {
+    throw new Error('Artifact, archive, and image digests must be distinct.');
+  }
+  if (!expectedConfigHash || configHash !== expectedConfigHash) {
+    throw new Error(
+      'Dispatched config hash does not match the exact checked-out runtime configuration.',
+    );
+  }
+
+  const workflowPath = option(
+    options,
+    'workflow',
+    '.github/workflows/eai-app.yml',
+  );
+  const branch = option(
+    options,
+    'branch',
+    process.env.GITHUB_REF_NAME || 'main',
+  );
+  const ref = option(
+    options,
+    'ref',
+    process.env.GITHUB_REF || `refs/heads/${branch}`,
+  );
   const commitSha = option(options, 'commit', process.env.GITHUB_SHA || '');
   const repo = option(options, 'repo', process.env.GITHUB_REPOSITORY || '');
   const environment = option(options, 'environment', 'preview');
+  if (!/^[^/\s]+\/[^/\s]+$/.test(repo))
+    throw new Error('Repository must be owner/name.');
+  if (!/^\.github\/workflows\/[^/]+\.ya?ml$/.test(workflowPath)) {
+    throw new Error('Workflow path must be a file under .github/workflows.');
+  }
+  if (ref !== `refs/heads/${branch}`)
+    throw new Error('Workflow ref and branch do not match.');
+  if (!/^[a-f0-9]{40}$/.test(commitSha))
+    throw new Error('Commit must be an exact 40 character git SHA.');
 
   const evidence = {
-    contract: 'source-unknown-app-template-deployment-handoff',
-    sourceMode: 'source-unknown',
-    appKey: option(options, 'appKey'),
-    tenantId: option(options, 'tenantId'),
     environment,
-    repository: repo,
     workflowPath,
     ref,
-    branch,
     commitSha,
     workflowRun: {
       id: option(options, 'workflowRunId', process.env.GITHUB_RUN_ID || ''),
-      attempt: option(options, 'workflowRunAttempt', process.env.GITHUB_RUN_ATTEMPT || ''),
+      attempt: option(
+        options,
+        'workflowRunAttempt',
+        process.env.GITHUB_RUN_ATTEMPT || '',
+      ),
     },
     configHash,
-    artifact: {
-      path: relative(root, archivePath).replaceAll('\\', '/'),
-      digest: artifactDigest,
-      entries: artifactEntries,
-      fileCount: listFiles(root, '.next/standalone').length + listFiles(root, '.next/static').length,
+    artifactDigest,
+    imageArtifact: {
+      id: artifactId,
+      name: 'eai-generated-app-image',
+      archiveDigest,
     },
-    image: {
-      path: relative(root, imageArchivePath).replaceAll('\\', '/'),
-      format: 'oci-archive',
-      digest: imageDigest,
-      bytes: statSync(imageArchivePath).size,
-    },
+    imageDigest,
     schemaProvenance,
-    handoff: {
-      requestedThrough: 'eai app deploy-source-unknown',
-      expectedStatus: 'handoff_pending',
-      tenantInfraImplementedHere: false,
-    },
+    operationId: option(options, 'operationId'),
+    nonce: option(options, 'nonce'),
+    validationSummary: { status: 'passed' },
   };
 
   ensureDir(outputDir);
@@ -229,6 +274,7 @@ async function collectEvidence(options) {
   await appendOutputs(githubOutputPath, {
     config_hash: configHash,
     artifact_digest: artifactDigest,
+    archive_digest: archiveDigest,
     image_digest: imageDigest,
     evidence_path: evidencePath,
     template_version: schemaProvenance.templateVersion,
@@ -262,24 +308,29 @@ function assertHandoffSubmitted(options) {
   const responsePath = resolve(option(options, 'response'));
   assertExists(responsePath, 'Deployment handoff response');
   const actual = responseStatus(readJson(responsePath));
-  if (!['handoff_pending', 'accepted'].includes(actual.status)) {
+  if (actual.status !== 'accepted')
     throw new Error(
-      `Expected deployment handoff status handoff_pending or accepted, got ${actual.status || '<missing>'}.`,
+      `Expected workflow evidence status accepted, got ${actual.status || '<missing>'}.`,
     );
-  }
-  if (actual.status === 'handoff_pending' && actual.requiresTenantInfra !== true) {
-    throw new Error('Expected deployment handoff to require TenantInfra.');
-  }
-  process.stdout.write(`${actual.status} ${actual.deploymentRequestId || ''}\n`);
+  process.stdout.write(
+    `${actual.status} ${actual.deploymentRequestId || ''}\n`,
+  );
 }
 
 const { command, options } = parseArgs(process.argv.slice(2));
 
-if (command === 'prepare-image-context') {
+if (command === 'config-hash') {
+  process.stdout.write(
+    `${buildConfigHash(resolve(option(options, 'root', process.cwd())))}\n`,
+  );
+} else if (command === 'prepare-image-context') {
   prepareImageContext(options);
 } else if (command === 'collect') {
   await collectEvidence(options);
-} else if (command === 'assert-handoff-submitted' || command === 'assert-handoff-pending') {
+} else if (
+  command === 'assert-evidence-accepted' ||
+  command === 'assert-handoff-submitted'
+) {
   assertHandoffSubmitted(options);
 } else {
   throw new Error(`Unknown command: ${command}`);

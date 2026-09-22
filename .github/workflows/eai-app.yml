@@ -15,54 +15,20 @@ on:
       nonce:
         description: One-time nonce from eai app workflow-setup.
         required: true
-      environment:
+      config_hash:
+        description: Exact configuration hash approved by workflow setup.
+        required: true
+      env:
         description: Deployment environment to bind.
         required: true
         default: preview
-      release_channel:
-        description: Release channel for the deployment handoff.
-        required: true
-        default: preview
-      publicapi_base_url:
-        description: Optional PublicAPI base URL override.
-        required: false
-  workflow_call:
-    inputs:
-      app_key:
-        required: true
-        type: string
-      tenant_id:
-        required: true
-        type: string
-      operation_id:
-        required: true
-        type: string
-      nonce:
-        required: true
-        type: string
-      environment:
-        required: false
-        type: string
-        default: preview
-      release_channel:
-        required: false
-        type: string
-        default: preview
-      publicapi_base_url:
-        required: false
-        type: string
-    secrets:
-      EAI_ACCESS_TOKEN:
-        required: true
-      EAI_PUBLIC_API_URL:
-        required: false
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: eai-app-source-unknown-${{ inputs.app_key }}-${{ inputs.environment }}-${{ github.ref }}
+  group: eai-app-source-unknown-${{ inputs.app_key }}-${{ inputs.env }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -77,10 +43,9 @@ jobs:
       TENANT_ID: ${{ inputs.tenant_id }}
       OPERATION_ID: ${{ inputs.operation_id }}
       NONCE: ${{ inputs.nonce }}
-      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
-      RELEASE_CHANNEL: ${{ inputs.release_channel }}
-      BASE_URL_PUBLIC_API: ${{ inputs.publicapi_base_url || secrets.EAI_PUBLIC_API_URL }}
-      EAI_ACCESS_TOKEN: ${{ secrets.EAI_ACCESS_TOKEN }}
+      CONFIG_HASH: ${{ inputs.config_hash }}
+      DEPLOY_ENVIRONMENT: ${{ inputs.env }}
+      EAI_PUBLIC_API_URL: ${{ vars.EAI_PUBLIC_API_URL }}
 
     steps:
       - name: Check out repository
@@ -98,16 +63,18 @@ jobs:
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install Linux native CSS bindings
         run: npm install --no-save lightningcss-linux-x64-gnu@1.30.2 @tailwindcss/oxide-linux-x64-gnu@4.1.18
 
-      - name: Install EAI CLI
-        run: npm install -g @enterpriseai/cli
-
       - name: Build object types
         run: npm run build:object-types
+
+      - name: Validate application
+        run: |
+          npm run typecheck
+          npm run test:unit:ci
 
       - name: Build generated app
         run: npm run build
@@ -122,16 +89,30 @@ jobs:
         run: |
           mkdir -p .eai-build
           docker buildx build \
+            --platform linux/amd64 \
             --file .eai-build/image-context/Dockerfile \
-            --output type=oci,dest=.eai-build/eai-app-image.oci.tar \
+            --metadata-file .eai-build/image-metadata.json \
+            --output type=oci,dest=.eai-build/eai-generated-app-image.tar \
             .eai-build/image-context
+
+      - name: Upload immutable image artifact
+        id: image-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: eai-generated-app-image
+          if-no-files-found: error
+          retention-days: 14
+          path: .eai-build/eai-generated-app-image.tar
 
       - name: Collect immutable build evidence
         id: evidence
         run: |
+          image_digest="$(node -e "const v=require('./.eai-build/image-metadata.json')['containerimage.digest']; if(!v) process.exit(1); process.stdout.write(v)")"
           node scripts/source-unknown-deployment-evidence.mjs collect \
             --app-key "$APP_KEY" \
             --tenant-id "$TENANT_ID" \
+            --operation-id "$OPERATION_ID" \
+            --nonce "$NONCE" \
             --repo "$GITHUB_REPOSITORY" \
             --workflow "$EAI_WORKFLOW_PATH" \
             --ref "$GITHUB_REF" \
@@ -139,18 +120,11 @@ jobs:
             --commit "$GITHUB_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID" \
             --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
-            --environment "$DEPLOY_ENVIRONMENT"
-
-      - name: Upload immutable build evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: eai-source-unknown-build-${{ github.run_id }}
-          if-no-files-found: error
-          retention-days: 14
-          path: |
-            .eai-build/eai-app-build.tar.gz
-            .eai-build/eai-app-image.oci.tar
-            .eai-build/evidence/source-unknown-deployment-evidence.json
+            --environment "$DEPLOY_ENVIRONMENT" \
+            --expected-config-hash "$CONFIG_HASH" \
+            --artifact-id "${{ steps.image-artifact.outputs.artifact-id }}" \
+            --artifact-digest "${{ steps.image-artifact.outputs.artifact-digest }}" \
+            --image-digest "$image_digest"
 
       - name: Request GitHub OIDC token
         id: github-oidc
@@ -164,53 +138,18 @@ jobs:
 
       - name: Submit workflow evidence
         run: |
-          mkdir -p .eai-build/evidence
-          eai app workflow-evidence "$APP_KEY" \
-            --tenant-id "$TENANT_ID" \
-            --repo "$GITHUB_REPOSITORY" \
-            --operation-id "$OPERATION_ID" \
-            --nonce "$NONCE" \
-            --environment "$DEPLOY_ENVIRONMENT" \
-            --branch "$GITHUB_REF_NAME" \
-            --workflow "$EAI_WORKFLOW_PATH" \
-            --ref "$GITHUB_REF" \
-            --commit "$GITHUB_SHA" \
-            --config-hash "${{ steps.evidence.outputs.config_hash }}" \
-            --artifact-digest "${{ steps.evidence.outputs.artifact_digest }}" \
-            --image-digest "${{ steps.evidence.outputs.image_digest }}" \
-            --template-version "${{ steps.evidence.outputs.template_version }}" \
-            --base-template-sha "${{ steps.evidence.outputs.base_template_sha }}" \
-            --schema-digest "${{ steps.evidence.outputs.schema_digest }}" \
-            --validator-digest "${{ steps.evidence.outputs.validator_digest }}" \
-            --workflow-run-id "$GITHUB_RUN_ID" \
-            --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
-            --github-oidc-token "${{ steps.github-oidc.outputs.token }}" \
-            --format json \
+          test -n "$EAI_PUBLIC_API_URL"
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer ${{ steps.github-oidc.outputs.token }}" \
+            -H "Content-Type: application/json" \
+            --data-binary @.eai-build/evidence/source-unknown-deployment-evidence.json \
+            "${EAI_PUBLIC_API_URL%/}/v4/platform/tenants/${TENANT_ID}/apps/${APP_KEY}/source-unknown/workflow-evidence" \
             | tee .eai-build/evidence/workflow-evidence-response.json
 
-      - name: Request deployment handoff
+      - name: Assert evidence accepted
         run: |
-          eai app deploy-source-unknown "$APP_KEY" \
-            --tenant-id "$TENANT_ID" \
-            --operation-id "$OPERATION_ID" \
-            --environment "$DEPLOY_ENVIRONMENT" \
-            --repo "$GITHUB_REPOSITORY" \
-            --workflow "$EAI_WORKFLOW_PATH" \
-            --ref "$GITHUB_REF" \
-            --commit "$GITHUB_SHA" \
-            --workflow-run-id "$GITHUB_RUN_ID" \
-            --config-hash "${{ steps.evidence.outputs.config_hash }}" \
-            --artifact-digest "${{ steps.evidence.outputs.artifact_digest }}" \
-            --image-digest "${{ steps.evidence.outputs.image_digest }}" \
-            --target-kind tenantinfra \
-            --release-channel "$RELEASE_CHANNEL" \
-            --format json \
-            | tee .eai-build/evidence/deployment-handoff-response.json
-
-      - name: Assert TenantInfra handoff submitted
-        run: |
-          node scripts/source-unknown-deployment-evidence.mjs assert-handoff-submitted \
-            --response .eai-build/evidence/deployment-handoff-response.json
+          node scripts/source-unknown-deployment-evidence.mjs assert-evidence-accepted \
+            --response .eai-build/evidence/workflow-evidence-response.json
 
       - name: Upload handoff responses
         if: always()
@@ -221,4 +160,3 @@ jobs:
           retention-days: 14
           path: |
             .eai-build/evidence/workflow-evidence-response.json
-            .eai-build/evidence/deployment-handoff-response.json
