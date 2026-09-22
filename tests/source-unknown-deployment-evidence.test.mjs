@@ -155,6 +155,9 @@ test('collect writes source-unknown handoff evidence and GitHub outputs', () => 
 
 test('workflow sends OIDC evidence directly to the canonical PublicAPI route', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
+  assert.match(workflow, /^on:\n  workflow_dispatch:/m);
+  assert.doesNotMatch(workflow, /^  (push|pull_request|workflow_call|schedule):/m);
+  assert.match(workflow, /^  packages: read$/m);
   assert.match(workflow, /name: eai-generated-app-image/);
   assert.match(workflow, /--platform linux\/amd64/);
   assert.match(workflow, /vars\.EAI_PUBLIC_API_URL/);
