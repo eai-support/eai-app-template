@@ -85,7 +85,13 @@ jobs:
         run: |
           node scripts/source-unknown-deployment-evidence.mjs validate-dispatch \
             --source-mode "$SOURCE_MODE" \
+            --app-key "$APP_KEY" \
+            --tenant-id "$TENANT_ID" \
             --target-tenant-id "$TARGET_TENANT_ID" \
+            --operation-id "$OPERATION_ID" \
+            --nonce "$NONCE" \
+            --expected-config-hash "$CONFIG_HASH" \
+            --environment "$DEPLOY_ENVIRONMENT" \
             --public-api-url "$EAI_PUBLIC_API_URL" \
             --commit "$SOURCE_COMMIT_SHA" \
             --workflow-sha "$GITHUB_SHA"

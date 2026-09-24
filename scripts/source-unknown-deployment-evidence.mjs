@@ -14,6 +14,7 @@ import { execFileSync } from 'node:child_process';
 
 const SHA256_DIGEST = /^sha256:[a-f0-9]{64}$/;
 const SOURCE_MODES = new Set(['source-unknown', 'eai-cli-generated']);
+const SAFE_PATH_SEGMENT = /^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,254}[A-Za-z0-9])?$/;
 
 function sourceMode(options) {
   const mode = option(options, 'sourceMode', 'source-unknown');
@@ -36,8 +37,40 @@ function targetTenantId(options, mode) {
   return targetTenant;
 }
 
+function validateCliGrant(options, mode) {
+  const targetTenant = targetTenantId(options, mode);
+  if (mode !== 'eai-cli-generated') return targetTenant;
+  for (const key of ['appKey', 'tenantId', 'operationId']) {
+    if (!SAFE_PATH_SEGMENT.test(option(options, key))) {
+      throw new Error(
+        `CLI generated source requires a safe ${key} path segment.`,
+      );
+    }
+  }
+  if (!/^[a-f0-9]{64}$/.test(option(options, 'nonce'))) {
+    throw new Error('CLI generated source requires its exact signed nonce.');
+  }
+  const expectedConfigHash = option(options, 'expectedConfigHash');
+  if (
+    expectedConfigHash !== 'auto' &&
+    !SHA256_DIGEST.test(expectedConfigHash)
+  ) {
+    throw new Error(
+      'CLI generated source requires an approved config hash or auto grant.',
+    );
+  }
+  if (
+    !['preview', 'dev', 'test', 'prod'].includes(option(options, 'environment'))
+  ) {
+    throw new Error(
+      'CLI generated source requires an approved deployment environment.',
+    );
+  }
+  return targetTenant;
+}
+
 function validateDispatch(options) {
-  targetTenantId(options, sourceMode(options));
+  validateCliGrant(options, sourceMode(options));
   const endpoint = option(options, 'publicApiUrl');
   if (
     !/^https:\/\/(?:dev-api\.au|(?:test-api|api)\.(?:au|ca|eu))\.myenterprise\.ai\/public\/?$/.test(
@@ -221,7 +254,7 @@ async function appendOutputs(path, outputs) {
 
 async function collectEvidence(options) {
   const mode = sourceMode(options);
-  const targetTenant = targetTenantId(options, mode);
+  const targetTenant = validateCliGrant(options, mode);
   const root = resolve(option(options, 'root', process.cwd()));
   const outputDir = resolve(
     root,

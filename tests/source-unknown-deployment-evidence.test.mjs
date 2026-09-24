@@ -173,6 +173,12 @@ test('CLI managed source computes checked-out config hash and labels its evidenc
       root,
       '--repo',
       'eai-generated-apps/demo',
+      '--app-key',
+      'demo',
+      '--tenant-id',
+      'company-1',
+      '--environment',
+      'preview',
       '--ref',
       'refs/heads/main',
       '--branch',
@@ -188,7 +194,7 @@ test('CLI managed source computes checked-out config hash and labels its evidenc
       '--operation-id',
       'cli-op-1',
       '--nonce',
-      'nonce-1',
+      'a'.repeat(64),
       '--expected-config-hash',
       'auto',
       '--target-tenant-id',
@@ -236,6 +242,94 @@ test('CLI managed source computes checked-out config hash and labels its evidenc
   }
 });
 
+test('CLI evidence binds each merged commit and remains repository-owner agnostic', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-cli-managed-update-'));
+  try {
+    const root = join(workDir, 'app');
+    writeFixtureApp(root);
+    const evidencePath = join(
+      root,
+      '.eai-build/evidence/source-unknown-deployment-evidence.json',
+    );
+    const states = [
+      {
+        repo: 'eai-generated-apps/demo',
+        commit: 'a'.repeat(40),
+        operation: 'cli-managed-initial',
+        nonce: '1'.repeat(64),
+      },
+      {
+        repo: 'eai-generated-apps/demo',
+        commit: 'b'.repeat(40),
+        operation: 'cli-managed-update',
+        nonce: '2'.repeat(64),
+      },
+      {
+        repo: 'customer-org/demo',
+        commit: 'c'.repeat(40),
+        operation: 'cli-managed-relocated',
+        nonce: '3'.repeat(64),
+      },
+    ];
+    const configHashes = new Set();
+    for (const [index, state] of states.entries()) {
+      const runtimePath = join(root, 'eai.runtime.json');
+      const runtime = JSON.parse(readFileSync(runtimePath, 'utf8'));
+      runtime.release = index;
+      writeFileSync(runtimePath, `${JSON.stringify(runtime)}\n`);
+      runEvidenceScript([
+        'collect',
+        '--root',
+        root,
+        '--source-mode',
+        'eai-cli-generated',
+        '--target-tenant-id',
+        'hosting-tenant-1',
+        '--app-key',
+        'demo',
+        '--tenant-id',
+        'company-1',
+        '--environment',
+        'preview',
+        '--repo',
+        state.repo,
+        '--ref',
+        'refs/heads/main',
+        '--branch',
+        'main',
+        '--commit',
+        state.commit,
+        '--operation-id',
+        state.operation,
+        '--nonce',
+        state.nonce,
+        '--expected-config-hash',
+        'auto',
+        '--artifact-id',
+        '123',
+        '--artifact-digest',
+        'd'.repeat(64),
+        '--image-digest',
+        `sha256:${'c'.repeat(64)}`,
+      ]);
+      const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
+      assert.equal(evidence.sourceMode, 'eai-cli-generated');
+      assert.equal(evidence.targetTenantId, 'hosting-tenant-1');
+      assert.equal(evidence.operationId, state.operation);
+      assert.equal(evidence.commitSha, state.commit);
+      assert.equal(evidence.nonce, state.nonce);
+      assert.equal(
+        evidence.configHash,
+        runEvidenceScript(['config-hash', '--root', root]).trim(),
+      );
+      configHashes.add(evidence.configHash);
+    }
+    assert.equal(configHashes.size, states.length);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test('workflow sends OIDC evidence directly to the canonical PublicAPI route', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   assert.match(workflow, /^on:\n  workflow_dispatch:/m);
@@ -263,6 +357,9 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(workflow, /api:\/\/enterprise-ai-publicapi\/eai-cli-generated/);
   assert.match(workflow, /--source-mode "\$SOURCE_MODE"/);
   assert.match(workflow, /--target-tenant-id "\$TARGET_TENANT_ID"/);
+  assert.match(workflow, /--operation-id "\$OPERATION_ID"/);
+  assert.match(workflow, /--nonce "\$NONCE"/);
+  assert.match(workflow, /--expected-config-hash "\$CONFIG_HASH"/);
   assert.doesNotMatch(workflow, /EAI_ACCESS_TOKEN/);
   assert.doesNotMatch(workflow, /publicapi_base_url/);
 });
@@ -362,6 +459,76 @@ test('dispatch accepts only trusted endpoints and the exact source and workflow 
       );
       assert.equal(result.status, 1);
       assert.match(result.stderr, /source, and workflow identity must match/);
+    }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('CLI dispatch rejects an incomplete or malformed signed grant before the build', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-cli-dispatch-validation-'));
+  try {
+    execFileSync('git', ['init', '-q'], { cwd: workDir });
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=Fixture',
+        '-c',
+        'user.email=fixture@example.com',
+        'commit',
+        '--allow-empty',
+        '-m',
+        'fixture',
+      ],
+      { cwd: workDir },
+    );
+    const commit = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: workDir,
+      encoding: 'utf8',
+    }).trim();
+    const args = [
+      'validate-dispatch',
+      '--root',
+      workDir,
+      '--source-mode',
+      'eai-cli-generated',
+      '--app-key',
+      'demo',
+      '--tenant-id',
+      'company-1',
+      '--target-tenant-id',
+      'hosting-tenant-1',
+      '--operation-id',
+      'cli-managed-' + 'a'.repeat(32),
+      '--nonce',
+      'b'.repeat(64),
+      '--expected-config-hash',
+      'auto',
+      '--environment',
+      'preview',
+      '--public-api-url',
+      'https://dev-api.au.myenterprise.ai/public',
+      '--commit',
+      commit,
+      '--workflow-sha',
+      commit,
+    ];
+    runEvidenceScript(args);
+    for (const [flag, invalidValue, message] of [
+      ['--operation-id', '../other', /safe operationId path segment/],
+      ['--nonce', 'short', /exact signed nonce/],
+      ['--expected-config-hash', 'not-a-hash', /approved config hash/],
+      ['--environment', 'production', /approved deployment environment/],
+      ['--app-key', 'other/app', /safe appKey path segment/],
+    ]) {
+      const altered = [...args];
+      altered[altered.indexOf(flag) + 1] = invalidValue;
+      const result = spawnSync(process.execPath, [evidenceScript, ...altered], {
+        encoding: 'utf8',
+      });
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, message);
     }
   } finally {
     rmSync(workDir, { recursive: true, force: true });
