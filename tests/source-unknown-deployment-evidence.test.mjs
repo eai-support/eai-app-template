@@ -172,10 +172,119 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(workflow, /^  packages: read$/m);
   assert.match(workflow, /name: eai-generated-app-image/);
   assert.match(workflow, /--platform linux\/amd64/);
-  assert.match(workflow, /vars\.EAI_PUBLIC_API_URL/);
+  assert.match(workflow, /inputs\.public_api_url/);
+  assert.doesNotMatch(workflow, /vars\.EAI_PUBLIC_API_URL/);
+  assert.match(workflow, /ref: \$\{\{ inputs\.commit_sha \}\}/);
+  assert.match(workflow, /--commit "\$SOURCE_COMMIT_SHA"/);
+  assert.match(workflow, /--workflow-sha "\$GITHUB_SHA"/);
+  assert.ok(
+    workflow.indexOf('validate-dispatch') <
+      workflow.indexOf('Install dependencies'),
+  );
   assert.match(workflow, /source-unknown\/workflow-evidence/);
   assert.doesNotMatch(workflow, /EAI_ACCESS_TOKEN/);
   assert.doesNotMatch(workflow, /publicapi_base_url/);
+});
+
+test('dispatch accepts only trusted endpoints and the exact source and workflow identity', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-dispatch-validation-'));
+  try {
+    execFileSync('git', ['init', '-q'], { cwd: workDir });
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=Fixture',
+        '-c',
+        'user.email=fixture@example.com',
+        'commit',
+        '--allow-empty',
+        '-m',
+        'fixture',
+      ],
+      { cwd: workDir },
+    );
+    const commit = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: workDir,
+      encoding: 'utf8',
+    }).trim();
+    for (const host of [
+      'api.au',
+      'api.ca',
+      'api.eu',
+      'test-api.au',
+      'test-api.ca',
+      'test-api.eu',
+      'dev-api.au',
+    ]) {
+      runEvidenceScript([
+        'validate-dispatch',
+        '--root',
+        workDir,
+        '--commit',
+        commit,
+        '--workflow-sha',
+        commit,
+        '--public-api-url',
+        `https://${host}.myenterprise.ai/public`,
+      ]);
+    }
+    for (const endpoint of [
+      'https://attacker.example/public',
+      'https://api.au.myenterprise.ai.attacker.example/public',
+      'http://api.au.myenterprise.ai/public',
+      'https://api.au.myenterprise.ai:8443/public',
+      'https://user@api.au.myenterprise.ai/public',
+      'https://api.au.myenterprise.ai/public?redirect=bad',
+      'https://api.au.myenterprise.ai/public#fragment',
+      'https://api.au.myenterprise.ai/other',
+    ]) {
+      const result = spawnSync(
+        process.execPath,
+        [
+          evidenceScript,
+          'validate-dispatch',
+          '--root',
+          workDir,
+          '--commit',
+          commit,
+          '--workflow-sha',
+          commit,
+          '--public-api-url',
+          endpoint,
+        ],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /trusted EAI regional PublicAPI/);
+    }
+    for (const [sourceCommit, workflowSha] of [
+      ['a'.repeat(40), commit],
+      [commit, 'b'.repeat(40)],
+      ['main', commit],
+    ]) {
+      const result = spawnSync(
+        process.execPath,
+        [
+          evidenceScript,
+          'validate-dispatch',
+          '--root',
+          workDir,
+          '--commit',
+          sourceCommit,
+          '--workflow-sha',
+          workflowSha,
+          '--public-api-url',
+          'https://api.au.myenterprise.ai/public',
+        ],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /source, and workflow identity must match/);
+    }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
 });
 
 test('workflow runs independent validations concurrently and waits for both', () => {
