@@ -97,8 +97,7 @@ describe('ChatModule', () => {
       });
 
       const url = mockFetch.mock.calls[0][0] as string;
-      expect(url).toStartWith('/api/eai/stream/');
-      expect(url).not.toStartWith('/api/eai/v3/');
+      expect(url).toStartWith('/api/eai/stream/v4/');
     });
   });
 

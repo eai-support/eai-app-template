@@ -20,8 +20,7 @@ interface TraceHeaderContext {
   tracestate: string | null;
 }
 
-const TRACEPARENT_PATTERN =
-  /^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/i;
+const TRACEPARENT_PATTERN = /^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/i;
 
 function validTraceparent(traceparent: string | null): string | null {
   if (!traceparent) return null;
@@ -122,7 +121,10 @@ function isBinaryContentType(contentType: string | null): boolean {
   );
 }
 
-function resolveTenantScopedPlatformPath(path: string, tenantId?: string): string {
+function resolveTenantScopedPlatformPath(
+  path: string,
+  tenantId?: string,
+): string {
   if (!tenantId) return path;
 
   const encodedTenantId = encodeURIComponent(tenantId);
@@ -130,7 +132,9 @@ function resolveTenantScopedPlatformPath(path: string, tenantId?: string): strin
     return `v4/platform/tenants/${encodedTenantId}/users/by-email`;
   }
 
-  const membershipMatch = path.match(/^v4\/platform\/users\/([^/]+)\/memberships$/);
+  const membershipMatch = path.match(
+    /^v4\/platform\/users\/([^/]+)\/memberships$/,
+  );
   if (membershipMatch?.[1]) {
     return `v4/platform/tenants/${encodedTenantId}/users/${membershipMatch[1]}/memberships`;
   }
@@ -284,7 +288,7 @@ async function proxyRequest(
     if (error instanceof UnsupportedPublicApiRouteError) {
       return new NextResponse(
         JSON.stringify({
-          error: 'Legacy PublicAPI route retired',
+          error: 'Unsupported PublicAPI route',
           message: error.message,
         }),
         {

@@ -116,10 +116,10 @@ describe('EAI proxy v4 route-family routing', () => {
     );
   });
 
-  it('BP001 rejects retired PublicAPI route families before proxying upstream', async () => {
+  it('BP001 rejects paths outside PublicAPI V4 before proxying upstream', async () => {
     const response = await GET(
-      createRequest('v3/resources/tenant-a/Application?limit=5'),
-      createContext('v3/resources/tenant-a/Application'),
+      createRequest('resources/tenant-a/Application?limit=5'),
+      createContext('resources/tenant-a/Application'),
     );
 
     expect(response.status).toBe(410);
