@@ -15,14 +15,14 @@ export class UnsupportedPublicApiRouteError extends Error {
   readonly statusCode = 410;
 
   constructor(readonly routePath: string) {
-    super('Legacy PublicAPI route families are retired; use PublicAPI v4.');
+    super('Unsupported PublicAPI route. Use a PublicAPI V4 route.');
     this.name = 'UnsupportedPublicApiRouteError';
   }
 }
 
 export function resolvePublicApiRoutePath(path: string): string {
   const { routePath, query } = splitPathAndQuery(path);
-  if (/^v[1-3](?:\/|$)/.test(routePath)) {
+  if (!/^v4(?:\/|$)/.test(routePath)) {
     throw new UnsupportedPublicApiRouteError(routePath);
   }
 

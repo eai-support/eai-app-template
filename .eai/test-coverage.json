@@ -5,6 +5,24 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "publicapi-v4-only-guidance",
+          "description": "Repository documentation, examples, tests, and app proxy guidance use PublicAPI V4 interfaces only.",
+          "owned_paths": [
+            "README.md",
+            "docs/**",
+            "src/lib/platform/publicapi-route-family.ts",
+            "src/app/api/eai/[[...rest]]/**",
+            "packages/platform-sdk/**"
+          ],
+          "required_repo_tests": [
+            "tests/publicapi-v4-guidance.test.ts",
+            "src/lib/platform/publicapi-route-family.test.ts",
+            "src/app/api/eai/[[...rest]]/route.test.ts"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": []
+        },
+        {
           "id": "tenant-bound-document-lifecycle",
           "description": "The document SDK uses the Curate-backed V4 upload lifecycle for stored-file processing, requires paired app and workflow classifier selection, and sends the deployed V4 documentUrl and tenantId contract for direct URL classification.",
           "owned_paths": [

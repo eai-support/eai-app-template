@@ -23,24 +23,24 @@ eai update --check
 
 ## Quick Reference
 
-| Command | Description |
-|---------|-------------|
-| `eai init` | Scaffold a new app |
-| `eai login` | Authenticate with Entra CIAM |
-| `eai dev` | Start local development server |
-| `eai types` | Manage Object Type definitions |
-| `eai tenant` | Manage tenants on the platform |
-| `eai resources` | CRUD operations on platform resources |
-| `eai chat` | Chat with AI workflows |
-| `eai docs` | Document upload, classification, and indexing |
-| `eai deploy` | Deployment management |
-| `eai env` | Manage environment variables |
-| `eai verify` | Run platform connectivity checks |
-| `eai doctor` | Diagnose common issues and suggest fixes |
-| `eai whoami` | Show auth status and tenant info |
-| `eai errors` | Explain known CLI/platform errors and recovery commands |
-| `eai agent guide` | Print AI-readable EAI CLI operating guidance |
-| `eai update` | Check for and install newer CLI releases |
+| Command           | Description                                             |
+| ----------------- | ------------------------------------------------------- |
+| `eai init`        | Scaffold a new app                                      |
+| `eai login`       | Authenticate with Entra CIAM                            |
+| `eai dev`         | Start local development server                          |
+| `eai types`       | Manage Object Type definitions                          |
+| `eai tenant`      | Manage tenants on the platform                          |
+| `eai resources`   | CRUD operations on platform resources                   |
+| `eai chat`        | Chat with AI workflows                                  |
+| `eai docs`        | Document upload, classification, and indexing           |
+| `eai deploy`      | Deployment management                                   |
+| `eai env`         | Manage environment variables                            |
+| `eai verify`      | Run platform connectivity checks                        |
+| `eai doctor`      | Diagnose common issues and suggest fixes                |
+| `eai whoami`      | Show auth status and tenant info                        |
+| `eai errors`      | Explain known CLI/platform errors and recovery commands |
+| `eai agent guide` | Print AI-readable EAI CLI operating guidance            |
+| `eai update`      | Check for and install newer CLI releases                |
 
 ## AI Agent Discovery
 
@@ -70,7 +70,7 @@ tenant app runtime, use tenant-scoped routes like
 `/v4/platform/tenants/<tenant-id>/users/by-email?email=<email>` and
 `/v4/platform/tenants/<tenant-id>/users/<oid>/memberships`. Tenant app
 ResourceAPI access should go through the signed-in-user `/api/eai` BFF path. If
-a root `/v4/platform/users/...` call reports `MISSING_TENANT` or "Tenant context
+a tenant-scoped platform request reports `MISSING_TENANT` or "Tenant context
 required for app tokens", run:
 
 ```bash
@@ -143,9 +143,9 @@ eai deploy status
 
 ## Global Options
 
-| Flag | Description |
-|------|-------------|
-| `-V, --version` | Display CLI version |
-| `-h, --help` | Display help for any command |
+| Flag            | Description                  |
+| --------------- | ---------------------------- |
+| `-V, --version` | Display CLI version          |
+| `-h, --help`    | Display help for any command |
 
 Use `eai help <command>` to see detailed help for any command.
