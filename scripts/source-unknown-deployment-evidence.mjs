@@ -13,8 +13,31 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const SHA256_DIGEST = /^sha256:[a-f0-9]{64}$/;
+const SOURCE_MODES = new Set(['source-unknown', 'eai-cli-generated']);
+
+function sourceMode(options) {
+  const mode = option(options, 'sourceMode', 'source-unknown');
+  if (!SOURCE_MODES.has(mode)) {
+    throw new Error('Unsupported managed deployment source mode.');
+  }
+  return mode;
+}
+
+function targetTenantId(options, mode) {
+  const targetTenant = option(options, 'targetTenantId');
+  if (
+    mode === 'eai-cli-generated' &&
+    (!targetTenant || targetTenant.length > 128)
+  ) {
+    throw new Error(
+      'CLI generated source requires its exact signed target tenant ID.',
+    );
+  }
+  return targetTenant;
+}
 
 function validateDispatch(options) {
+  targetTenantId(options, sourceMode(options));
   const endpoint = option(options, 'publicApiUrl');
   if (
     !/^https:\/\/(?:dev-api\.au|(?:test-api|api)\.(?:au|ca|eu))\.myenterprise\.ai\/public\/?$/.test(
@@ -197,6 +220,8 @@ async function appendOutputs(path, outputs) {
 }
 
 async function collectEvidence(options) {
+  const mode = sourceMode(options);
+  const targetTenant = targetTenantId(options, mode);
   const root = resolve(option(options, 'root', process.cwd()));
   const outputDir = resolve(
     root,
@@ -242,7 +267,11 @@ async function collectEvidence(options) {
   if (new Set([artifactDigest, archiveDigest, imageDigest]).size !== 3) {
     throw new Error('Artifact, archive, and image digests must be distinct.');
   }
-  if (!expectedConfigHash || configHash !== expectedConfigHash) {
+  if (
+    !expectedConfigHash ||
+    (expectedConfigHash !== configHash &&
+      !(mode === 'eai-cli-generated' && expectedConfigHash === 'auto'))
+  ) {
     throw new Error(
       'Dispatched config hash does not match the exact checked-out runtime configuration.',
     );
@@ -280,6 +309,8 @@ async function collectEvidence(options) {
     throw new Error('Commit must be an exact 40 character git SHA.');
 
   const evidence = {
+    ...(mode === 'eai-cli-generated' ? { sourceMode: mode } : {}),
+    ...(mode === 'eai-cli-generated' ? { targetTenantId: targetTenant } : {}),
     environment,
     workflowPath,
     ref,

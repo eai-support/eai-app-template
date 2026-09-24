@@ -162,6 +162,80 @@ test('collect normalizes upload-artifact bare hex and writes canonical handoff d
   }
 });
 
+test('CLI managed source computes checked-out config hash and labels its evidence', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-cli-managed-evidence-'));
+  try {
+    const root = join(workDir, 'app');
+    writeFixtureApp(root);
+    const args = [
+      'collect',
+      '--root',
+      root,
+      '--repo',
+      'eai-generated-apps/demo',
+      '--ref',
+      'refs/heads/main',
+      '--branch',
+      'main',
+      '--commit',
+      'a'.repeat(40),
+      '--artifact-id',
+      '123',
+      '--artifact-digest',
+      'd'.repeat(64),
+      '--image-digest',
+      `sha256:${'c'.repeat(64)}`,
+      '--operation-id',
+      'cli-op-1',
+      '--nonce',
+      'nonce-1',
+      '--expected-config-hash',
+      'auto',
+      '--target-tenant-id',
+      'hosting-tenant-1',
+    ];
+    runEvidenceScript([...args, '--source-mode', 'eai-cli-generated']);
+    const evidence = JSON.parse(
+      readFileSync(
+        join(
+          root,
+          '.eai-build/evidence/source-unknown-deployment-evidence.json',
+        ),
+        'utf8',
+      ),
+    );
+    assert.equal(evidence.sourceMode, 'eai-cli-generated');
+    assert.equal(evidence.targetTenantId, 'hosting-tenant-1');
+    assert.equal(
+      evidence.configHash,
+      runEvidenceScript(['config-hash', '--root', root]).trim(),
+    );
+
+    for (const sourceMode of ['source-unknown', 'unreviewed-source']) {
+      const failure = spawnSync(
+        process.execPath,
+        [evidenceScript, ...args, '--source-mode', sourceMode],
+        { encoding: 'utf8' },
+      );
+      assert.equal(failure.status, 1);
+    }
+    const missingTarget = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        ...args.slice(0, -2),
+        '--source-mode',
+        'eai-cli-generated',
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(missingTarget.status, 1);
+    assert.match(missingTarget.stderr, /signed target tenant ID/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test('workflow sends OIDC evidence directly to the canonical PublicAPI route', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   assert.match(workflow, /^on:\n  workflow_dispatch:/m);
@@ -182,6 +256,13 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
       workflow.indexOf('Install dependencies'),
   );
   assert.match(workflow, /source-unknown\/workflow-evidence/);
+  assert.match(
+    workflow,
+    /cli-managed-source\/operations\/\$\{OPERATION_ID\}\/workflow-evidence/,
+  );
+  assert.match(workflow, /api:\/\/enterprise-ai-publicapi\/eai-cli-generated/);
+  assert.match(workflow, /--source-mode "\$SOURCE_MODE"/);
+  assert.match(workflow, /--target-tenant-id "\$TARGET_TENANT_ID"/);
   assert.doesNotMatch(workflow, /EAI_ACCESS_TOKEN/);
   assert.doesNotMatch(workflow, /publicapi_base_url/);
 });

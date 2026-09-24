@@ -6,7 +6,7 @@
       "features": [
         {
           "id": "source-unknown-eai-managed-deployment",
-          "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact, submit nonce-bound GitHub OIDC evidence including recoverable pending handoffs, and verify scoped runtime readiness without requiring an unconfigured NCB workflow.",
+          "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact, submit nonce-bound GitHub OIDC evidence for exact source-unknown or reviewed CLI-generated authority, and verify scoped runtime readiness without requiring an unconfigured NCB workflow.",
           "owned_paths": [
             ".eai/test-coverage.json",
             ".github/workflows/eai-app.yml",
