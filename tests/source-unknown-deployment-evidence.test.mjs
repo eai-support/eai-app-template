@@ -1098,6 +1098,28 @@ test('configuration digest rejects dangling governed root links', () => {
   }
 });
 
+test(
+  'configuration digest rejects nonregular governed entries',
+  { skip: process.platform === 'win32' },
+  () => {
+    const workDir = mkdtempSync(join(tmpdir(), 'eai-config-special-file-'));
+    try {
+      writeFixtureApp(workDir);
+      const fifoPath = join(workDir, 'src/eai.config/runtime-input');
+      execFileSync('mkfifo', [fifoPath]);
+      const result = spawnSync(
+        process.execPath,
+        [evidenceScript, 'config-hash', '--root', workDir],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /regular file or directory/);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  },
+);
+
 test('dispatch rejects auto config grants, unsafe source-unknown paths, and conflicting aliases', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-dispatch-aliases-'));
   try {
