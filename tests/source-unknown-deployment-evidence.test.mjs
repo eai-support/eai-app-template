@@ -683,6 +683,134 @@ test('schema provenance must be present in the governed runtime manifest', () =>
   }
 });
 
+test('schema provenance accepts every approved source anchor and preserves it in evidence', () => {
+  const anchors = [
+    ['baseTemplateSha', 'a'.repeat(40), 'base_template_sha'],
+    ['approvedSourceSha', 'b'.repeat(40), 'approved_source_sha'],
+    ['approvedReleaseId', 'approved-release-2026-09-25', 'approved_release_id'],
+  ];
+  for (const [key, value, outputKey] of anchors) {
+    const workDir = mkdtempSync(
+      join(tmpdir(), `eai-source-unknown-${key}-`),
+    );
+    try {
+      const fixtureRoot = join(workDir, 'app');
+      const outputFile = join(workDir, 'github-output.txt');
+      writeFixtureApp(fixtureRoot);
+      writeFileSync(
+        join(fixtureRoot, 'eai.runtime.json'),
+        JSON.stringify({
+          runtime: 'fixture',
+          schemaProvenance: {
+            templateVersion: '0.1.0',
+            [key]: value,
+            schemaDigest: `sha256:${'c'.repeat(64)}`,
+            validatorDigest: `sha256:${'d'.repeat(64)}`,
+          },
+        }),
+      );
+      runEvidenceScript([
+        'collect',
+        '--root',
+        fixtureRoot,
+        ...sourceUnknownBindingArgs(fixtureRoot),
+        '--artifact-id',
+        '987654321',
+        '--artifact-digest',
+        `sha256:${'e'.repeat(64)}`,
+        '--image-digest',
+        `sha256:${'f'.repeat(64)}`,
+        '--github-output',
+        outputFile,
+      ]);
+      const evidence = JSON.parse(
+        readFileSync(
+          join(
+            fixtureRoot,
+            '.eai-build/evidence/source-unknown-deployment-evidence.json',
+          ),
+          'utf8',
+        ),
+      );
+      assert.equal(evidence.schemaProvenance[key], value);
+      assert.match(
+        readFileSync(outputFile, 'utf8'),
+        new RegExp(`^${outputKey}=${value}$`, 'm'),
+      );
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('schema provenance rejects missing and malformed approved source anchors', () => {
+  const invalidProvenance = [
+    {
+      templateVersion: '0.1.0',
+      schemaDigest: `sha256:${'c'.repeat(64)}`,
+      validatorDigest: `sha256:${'d'.repeat(64)}`,
+    },
+    {
+      templateVersion: '0.1.0',
+      approvedSourceSha: 'not-a-commit',
+      schemaDigest: `sha256:${'c'.repeat(64)}`,
+      validatorDigest: `sha256:${'d'.repeat(64)}`,
+    },
+    {
+      templateVersion: '0.1.0',
+      approvedReleaseId: '',
+      schemaDigest: `sha256:${'c'.repeat(64)}`,
+      validatorDigest: `sha256:${'d'.repeat(64)}`,
+    },
+    {
+      templateVersion: '0.1.0',
+      approvedReleaseId: ' release-with-whitespace ',
+      schemaDigest: `sha256:${'c'.repeat(64)}`,
+      validatorDigest: `sha256:${'d'.repeat(64)}`,
+    },
+    {
+      templateVersion: '0.1.0',
+      approvedReleaseId: 'release-1',
+      unexpectedAnchor: 'not-canonical',
+      schemaDigest: `sha256:${'c'.repeat(64)}`,
+      validatorDigest: `sha256:${'d'.repeat(64)}`,
+    },
+  ];
+  for (const schemaProvenance of invalidProvenance) {
+    const workDir = mkdtempSync(
+      join(tmpdir(), 'eai-source-unknown-invalid-provenance-'),
+    );
+    try {
+      writeFixtureApp(workDir);
+      writeFileSync(
+        join(workDir, 'eai.runtime.json'),
+        JSON.stringify({ runtime: 'fixture', schemaProvenance }),
+      );
+      const result = spawnSync(
+        process.execPath,
+        [
+          evidenceScript,
+          'collect',
+          '--root',
+          workDir,
+          ...sourceUnknownBindingArgs(workDir),
+          '--artifact-id',
+          '987654321',
+          '--artifact-digest',
+          `sha256:${'e'.repeat(64)}`,
+          '--image-digest',
+          `sha256:${'f'.repeat(64)}`,
+        ],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Schema provenance/);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  }
+});
+
 test('collect rejects a config hash that does not bind the checked-out files', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-tamper-'));
   try {

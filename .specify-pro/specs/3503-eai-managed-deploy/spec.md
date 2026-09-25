@@ -15,7 +15,7 @@ Canonical amendment: https://github.com/enterpriseaigroup/Issues2025/issues/3503
 
 ## Requirements
 
-- **DTE-018:** hash all governed configuration and runtime provenance inputs, including nested files and the deployment contract; no unbound fixture fallback.
+- **DTE-018:** hash all governed configuration and runtime provenance inputs, including nested files and the deployment contract; accept the canonical base-template, approved-source, or approved-release provenance anchors without an unbound fixture fallback.
 - **DTE-020, DTE-021:** expose a canonical workflow/collector pair, declare all dispatch inputs, and reject malformed operation/path values before URL construction.
 - **DTE-022:** explicitly upload the hidden build artifact and prove it is nonempty with size and digest evidence.
 - **DTE-023:** pin actions and base images to immutable commits or digests.
@@ -28,7 +28,8 @@ Canonical amendment: https://github.com/enterpriseaigroup/Issues2025/issues/3503
 
 1. Both source modes validate operation, nonce, app, tenant, target tenant, environment, workflow, ref, and commit before composing an evidence URL.
 2. Configuration and provenance hashes change for every governed nested input.
-3. Hidden OCI artifacts upload with a nonzero size and digest; EAI evidence and standard attestation identify the same subject.
-4. Existing `environment` callers and new `env` callers work; conflicting values fail.
-5. All third-party workflow actions and the OCI base image use immutable identities.
-6. Owned validation and evidence-collector tests pass on current `main`.
+3. Runtime provenance preserves and validates any canonical approved source anchor.
+4. Hidden OCI artifacts upload with a nonzero size and digest; EAI evidence and standard attestation identify the same subject.
+5. Existing `environment` callers and new `env` callers work; conflicting values fail.
+6. All third-party workflow actions and the OCI base image use immutable identities.
+7. Owned validation and evidence-collector tests pass on current `main`.

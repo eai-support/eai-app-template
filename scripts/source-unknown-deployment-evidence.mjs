@@ -279,18 +279,48 @@ function readSchemaProvenance(root) {
   if (!provenance || typeof provenance !== 'object') {
     throw new Error('eai.runtime.json schemaProvenance is required.');
   }
+  const canonicalFields = new Set([
+    'templateVersion',
+    'baseTemplateSha',
+    'approvedSourceSha',
+    'approvedReleaseId',
+    'schemaDigest',
+    'validatorDigest',
+  ]);
+  if (Object.keys(provenance).some((key) => !canonicalFields.has(key))) {
+    throw new Error('Schema provenance contains a noncanonical field.');
+  }
   for (const key of ['schemaDigest', 'validatorDigest']) {
     if (!SHA256_DIGEST.test(provenance[key] || '')) {
       throw new Error(`Schema provenance ${key} must be a sha256 digest.`);
     }
   }
-  if (!/^[a-f0-9]{40}$/.test(provenance.baseTemplateSha || '')) {
+  if (
+    typeof provenance.templateVersion !== 'string' ||
+    !provenance.templateVersion.trim() ||
+    provenance.templateVersion.trim() !== provenance.templateVersion
+  ) {
+    throw new Error('Schema provenance templateVersion is required.');
+  }
+  const anchors = [
+    ['baseTemplateSha', provenance.baseTemplateSha, /^[a-f0-9]{40}$/],
+    ['approvedSourceSha', provenance.approvedSourceSha, /^[a-f0-9]{40}$/],
+    ['approvedReleaseId', provenance.approvedReleaseId, /\S/],
+  ];
+  if (!anchors.some(([, value]) => value !== undefined)) {
     throw new Error(
-      'Schema provenance baseTemplateSha must be a 40 character lowercase git SHA.',
+      'Schema provenance requires baseTemplateSha, approvedSourceSha, or approvedReleaseId.',
     );
   }
-  if (!provenance.templateVersion) {
-    throw new Error('Schema provenance templateVersion is required.');
+  for (const [key, value, pattern] of anchors) {
+    if (
+      value !== undefined &&
+      (typeof value !== 'string' ||
+        value.trim() !== value ||
+        !pattern.test(value))
+    ) {
+      throw new Error(`Schema provenance ${key} is invalid.`);
+    }
   }
   return provenance;
 }
@@ -490,7 +520,15 @@ async function collectEvidence(options) {
     image_digest: imageDigest,
     evidence_path: evidencePath,
     template_version: schemaProvenance.templateVersion,
-    base_template_sha: schemaProvenance.baseTemplateSha,
+    ...(schemaProvenance.baseTemplateSha
+      ? { base_template_sha: schemaProvenance.baseTemplateSha }
+      : {}),
+    ...(schemaProvenance.approvedSourceSha
+      ? { approved_source_sha: schemaProvenance.approvedSourceSha }
+      : {}),
+    ...(schemaProvenance.approvedReleaseId
+      ? { approved_release_id: schemaProvenance.approvedReleaseId }
+      : {}),
     schema_digest: schemaProvenance.schemaDigest,
     validator_digest: schemaProvenance.validatorDigest,
   });
