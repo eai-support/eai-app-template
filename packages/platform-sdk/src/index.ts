@@ -28,6 +28,15 @@ export type {
   ObjectTypeSlug,
   ResourceRouting,
 } from './resource-routing';
+export {
+  InMemoryReplayStore,
+  signWorkloadCallback,
+  verifyWorkloadCallback,
+} from './workload';
+export type {
+  WorkloadCallbackEnvelope,
+  WorkloadReplayStore,
+} from './workload';
 
 // Types
 export type {

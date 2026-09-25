@@ -16,6 +16,7 @@ concurrency:
 
 env:
   NODE_VERSION: '24'
+  APPLICATION_PACKAGE_PRODUCER_SHA: caaf4fb0de88f63d2294a37cfd57772b8237d559
 
 jobs:
   validate:
@@ -36,11 +37,77 @@ jobs:
           echo "@enterpriseaigroup:registry=https://npm.pkg.github.com" >> .npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
 
-      - name: Install dependencies
+      - name: Test application-package bootstrap boundary
+        run: npm run test:application-package-bootstrap
+
+      - name: Resolve application-package source
+        id: application-package-source
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: node scripts/ci-application-package-bootstrap.mjs resolve
+
+      - name: Create exact producer checkout token
+        id: producer-token
+        if: steps.application-package-source.outputs.bootstrap == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ vars.EAI_TESTING_APP_ID }}
+          private-key: ${{ secrets.EAI_TESTING_APP_PRIVATE_KEY }}
+          owner: enterpriseaigroup
+          repositories: enterpriseai-packages
+          permission-contents: read
+
+      - name: Check out exact application-package producer
+        if: steps.application-package-source.outputs.bootstrap == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: enterpriseaigroup/enterpriseai-packages
+          ref: ${{ env.APPLICATION_PACKAGE_PRODUCER_SHA }}
+          path: .ci/application-package-producer
+          token: ${{ steps.producer-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Build and verify exact application-package producer
+        id: producer-package
+        if: steps.application-package-source.outputs.bootstrap == 'true'
+        working-directory: .ci/application-package-producer
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$GITHUB_WORKSPACE/scripts/ci-application-package-bootstrap.mjs" verify-producer "$PWD"
+          npm ci --workspace=@enterpriseaigroup/application-package --include-workspace-root=false
+          npm run build --workspace=@enterpriseaigroup/application-package
+          package_dir="$RUNNER_TEMP/application-package"
+          mkdir -p "$package_dir"
+          pack_json="$(npm pack ./packages/application-package --pack-destination "$package_dir" --json)"
+          tarball="$(node -e 'const value=JSON.parse(process.argv[1]); if(value.length!==1) process.exit(1); process.stdout.write(require("node:path").resolve(process.argv[2], value[0].filename));' "$pack_json" "$package_dir")"
+          node "$GITHUB_WORKSPACE/scripts/ci-application-package-bootstrap.mjs" verify-tarball "$tarball"
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies from published package
+        if: steps.application-package-source.outputs.bootstrap != 'true'
         # npm ci can miss optional native bindings used by Tailwind/Next on Ubuntu.
         run: npm install
 
+      - name: Install dependencies with PR-only producer package
+        if: steps.application-package-source.outputs.bootstrap == 'true'
+        # SECURITY: Keep the lock active so every dependency except the exact
+        # producer tarball still resolves from its reviewed immutable URL. Add
+        # Linux bindings in the same transaction so npm never re-resolves the
+        # intentionally unpublished lock entry in a later install.
+        run: >-
+          npm install --no-save
+          "${{ steps.producer-package.outputs.tarball }}"
+          lightningcss-linux-x64-gnu@1.30.2
+          @tailwindcss/oxide-linux-x64-gnu@4.1.18
+
+      - name: Verify installed application-package contract
+        run: |
+          node scripts/ci-application-package-bootstrap.mjs verify-installed
+          git diff --exit-code -- package.json package-lock.json eai.application.schema-lock.json
+
       - name: Install Linux native CSS bindings
+        if: steps.application-package-source.outputs.bootstrap != 'true'
         run: npm install --no-save lightningcss-linux-x64-gnu@1.30.2 @tailwindcss/oxide-linux-x64-gnu@4.1.18
 
       - name: Build object types

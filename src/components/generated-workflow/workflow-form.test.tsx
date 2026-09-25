@@ -26,6 +26,7 @@ const binding: GeneratedAppRuntimeBinding = {
 
 describe('GeneratedWorkflowForm', () => {
   const originalFetch = global.fetch;
+  const originalAppBasePath = process.env.NEXT_PUBLIC_APP_BASE_PATH;
   const originalTimeout = AbortSignal.timeout;
 
   beforeAll(() => {
@@ -37,6 +38,7 @@ describe('GeneratedWorkflowForm', () => {
   });
 
   beforeEach(() => {
+    delete process.env.NEXT_PUBLIC_APP_BASE_PATH;
     window.history.replaceState(null, '', '/');
     global.fetch = jest
       .fn()
@@ -54,6 +56,11 @@ describe('GeneratedWorkflowForm', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    if (originalAppBasePath === undefined) {
+      delete process.env.NEXT_PUBLIC_APP_BASE_PATH;
+    } else {
+      process.env.NEXT_PUBLIC_APP_BASE_PATH = originalAppBasePath;
+    }
   });
 
   it.each([false, true])(
