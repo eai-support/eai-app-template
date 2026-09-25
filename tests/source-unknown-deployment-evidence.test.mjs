@@ -172,6 +172,8 @@ test('collect normalizes upload-artifact bare hex and writes canonical handoff d
       'source-op-1',
       '--nonce',
       'single-use-nonce',
+      '--environment',
+      'demo',
       '--expected-config-hash',
       configHash(fixtureRoot),
       '--artifact-id',
@@ -191,6 +193,7 @@ test('collect normalizes upload-artifact bare hex and writes canonical handoff d
     const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
     const summary = JSON.parse(stdout);
     assert.equal(evidence.nonce, 'single-use-nonce');
+    assert.equal(evidence.environment, 'demo');
     assert.equal(Object.hasOwn(summary, 'nonce'), false);
     assert.equal(stdout.includes('single-use-nonce'), false);
     assert.equal(summary.operationId, evidence.operationId);
@@ -658,12 +661,17 @@ test('CLI dispatch rejects an incomplete or malformed signed grant before the bu
       commit,
     ];
     runEvidenceScript(args);
+    const demoArgs = [...args];
+    demoArgs[demoArgs.indexOf('--environment') + 1] = 'demo';
+    runEvidenceScript(demoArgs);
     for (const [flag, invalidValue, message] of [
       ['--operation-id', '../other', /safe operationId path segment/],
       ['--nonce', 'short', /exact signed nonce/],
       ['--expected-config-hash', 'not-a-hash', /approved sha256 config hash/],
       ['--environment', 'production', /approved deployment environment/],
-      ['--app-key', 'other/app', /safe appKey path segment/],
+      ['--app-key', 'other/app', /canonical app key/],
+      ['--app-key', '1other', /canonical app key/],
+      ['--app-key', 'Other', /canonical app key/],
     ]) {
       const altered = [...args];
       altered[altered.indexOf(flag) + 1] = invalidValue;
@@ -686,6 +694,14 @@ test('workflow runs independent validations concurrently and waits for both', ()
   assert.match(workflow, /wait "\$typecheck_pid" \|\| validation_status=1/);
   assert.match(workflow, /wait "\$tests_pid" \|\| validation_status=1/);
   assert.match(workflow, /exit "\$validation_status"/);
+  assert.match(
+    workflow,
+    /\[\[ "\$APP_KEY" =~ \^\[a-z\]\[a-z0-9-\]\{1,62\}\$ \]\]/,
+  );
+  assert.match(
+    workflow,
+    /source-unknown-deployment-evidence\.mjs read-image-digest/,
+  );
 });
 
 test('image context pins the runtime minimum Node image by immutable digest', () => {
@@ -703,6 +719,64 @@ test('image context pins the runtime minimum Node image by immutable digest', ()
       ),
       /^FROM node:24-alpine@sha256:[a-f0-9]{64}$/m,
     );
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('image context rejects an application-controlled linked build-output root', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-linked-build-root-'));
+  try {
+    const root = join(workDir, 'app');
+    const outside = join(workDir, 'outside');
+    writeFixtureApp(root);
+    mkdirSync(outside);
+    rmSync(join(root, '.eai-build'), { recursive: true });
+    symlinkSync(outside, join(root, '.eai-build'), 'dir');
+
+    const result = spawnSync(
+      process.execPath,
+      [evidenceScript, 'prepare-image-context', '--root', root],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /must not contain links|no-follow directory/);
+    assert.equal(existsSync(join(outside, 'image-context/Dockerfile')), false);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('image metadata digest is read through a bounded no-follow path', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-image-metadata-'));
+  try {
+    const root = join(workDir, 'app');
+    const outside = join(workDir, 'outside');
+    writeFixtureApp(root);
+    runEvidenceScript(['prepare-image-context', '--root', root]);
+    writeFileSync(
+      join(root, '.eai-build/image-metadata.json'),
+      JSON.stringify({ 'containerimage.digest': `sha256:${'a'.repeat(64)}` }),
+    );
+    assert.equal(
+      runEvidenceScript(['read-image-digest', '--root', root]).trim(),
+      `sha256:${'a'.repeat(64)}`,
+    );
+
+    mkdirSync(outside);
+    writeFileSync(
+      join(outside, 'image-metadata.json'),
+      JSON.stringify({ 'containerimage.digest': `sha256:${'b'.repeat(64)}` }),
+    );
+    rmSync(join(root, '.eai-build'), { recursive: true });
+    symlinkSync(outside, join(root, '.eai-build'), 'dir');
+    const linked = spawnSync(
+      process.execPath,
+      [evidenceScript, 'read-image-digest', '--root', root],
+      { encoding: 'utf8' },
+    );
+    assert.equal(linked.status, 1);
+    assert.match(linked.stderr, /no-follow directory tree/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
@@ -1282,6 +1356,31 @@ test('collect rejects a linked OCI archive before hashing evidence', () => {
     );
     assert.equal(result.status, 1);
     assert.match(result.stderr, /nonempty regular file/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('collect rejects a linked OCI archive ancestor before hashing evidence', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-linked-image-parent-'));
+  try {
+    const root = join(workDir, 'app');
+    const outside = join(workDir, 'outside');
+    writeFixtureApp(root);
+    mkdirSync(outside);
+    writeFileSync(
+      join(outside, 'eai-generated-app-image.tar'),
+      'outside archive\n',
+    );
+    rmSync(join(root, '.eai-build'), { recursive: true });
+    symlinkSync(outside, join(root, '.eai-build'), 'dir');
+    const result = spawnSync(
+      process.execPath,
+      [evidenceScript, ...sourceUnknownCollectArgs(root)],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /no-follow directory tree/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }

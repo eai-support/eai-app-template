@@ -15,3 +15,7 @@ Do not predict the automatic post-merge release. Consumers may record this exact
 ## Governed path authority
 
 Treat every directory component beneath the application root as part of the configuration trust boundary. Reject a linked or non-directory ancestor before enumeration and recheck ancestors immediately before each no-follow file read so `src -> outside` cannot move configuration authority outside the checked-out source.
+
+## Build output authority
+
+Application lifecycle code may create or replace `.eai-build` before image-context preparation. Re-establish every output directory beneath the checked-out root through no-follow directory checks after the build and before any recursive removal, copy, write, archive digest, or evidence write. Use the generated-runtime app-key grammar consistently and preserve the template deployment contract's `demo` environment.
