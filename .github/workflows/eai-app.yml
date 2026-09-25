@@ -1,4 +1,5 @@
 name: EAI App Deployment Handoff
+run-name: EAI deploy ${{ inputs.app_key }} (${{ inputs.operation_id }})
 
 on:
   workflow_dispatch:

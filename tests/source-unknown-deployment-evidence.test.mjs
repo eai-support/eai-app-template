@@ -398,6 +398,7 @@ test('CLI evidence binds each merged commit and remains repository-owner agnosti
 
 test('workflow sends OIDC evidence directly to the canonical PublicAPI route', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
+  assert.match(workflow, /^run-name: EAI deploy \$\{\{ inputs\.app_key \}\} \(\$\{\{ inputs\.operation_id \}\}\)$/m);
   assert.match(workflow, /^on:\n  workflow_dispatch:/m);
   assert.match(workflow, /^  workflow_call:/m);
   assert.doesNotMatch(workflow, /^  (push|pull_request|schedule):/m);
