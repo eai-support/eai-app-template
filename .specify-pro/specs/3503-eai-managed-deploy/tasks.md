@@ -12,6 +12,7 @@
 - [x] Preserve explicitly empty optional dispatch aliases as values rather than boolean flags (DTE-020, DTE-021).
 - [x] Reject multiline provenance and GitHub output values (DTE-025).
 - [x] Confine evidence creation to a no-link path and refuse existing destinations (DTE-022).
+- [x] Revalidate the immutable evidence nonce at the trusted handoff boundary before OIDC (DTE-025).
 - [x] Update owned tests and traceability.
 - [x] Run prescribed checks and record exact results.
 

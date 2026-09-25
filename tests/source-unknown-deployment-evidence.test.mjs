@@ -466,6 +466,8 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(workflow, /--operation-id "\$OPERATION_ID"/);
   assert.match(workflow, /--nonce "\$NONCE"/);
   assert.match(workflow, /--expected-config-hash "\$CONFIG_HASH"/);
+  assert.match(handoffJob, /NONCE: \$\{\{ inputs\.nonce \}\}/);
+  assert.match(handoffJob, /nonce: process\.env\.NONCE/);
   assert.doesNotMatch(workflow, /secrets\.EAI_ACCESS_TOKEN|\$EAI_ACCESS_TOKEN/);
   assert.doesNotMatch(workflow, /GITHUB_TOKEN|NODE_AUTH_TOKEN|_authToken/);
   assert.match(workflow, /npm ci --ignore-scripts/);

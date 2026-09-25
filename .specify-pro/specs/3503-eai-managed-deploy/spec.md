@@ -20,7 +20,7 @@ Canonical amendment: https://github.com/enterpriseaigroup/Issues2025/issues/3503
 - **DTE-022:** explicitly upload the hidden build artifact, prove it is a nonempty no-follow regular file with size and digest evidence, and create the evidence output through a confined no-link path without replacing an existing file.
 - **DTE-023:** pin actions and base images to immutable commits or digests.
 - **DTE-024:** emit a standard artifact provenance attestation where the repository/action capability supports it.
-- **DTE-025:** run application-controlled install/build/test work in a job without OIDC authority, verify post-build source integrity, and perform attestation and handoff in a separate job that receives only immutable artifacts and exact dispatch inputs. Never select the endpoint from a mutable secret, persist credentials into app-visible files, or allow provenance values to inject additional GitHub outputs.
+- **DTE-025:** run application-controlled install/build/test work in a job without OIDC authority, verify post-build source integrity, and perform attestation and handoff in a separate job that receives only immutable artifacts and exact dispatch inputs. Revalidate the downloaded evidence against the exact one-time nonce before requesting OIDC. Never select the endpoint from a mutable secret, persist credentials into app-visible files, or allow provenance values to inject additional GitHub outputs.
 - **DTE-026:** preserve existing workflow inputs additively and test conflict/precedence behavior.
 - **DTE-086 through DTE-088:** integrate current `main`, rerun owned checks, and defer the release tag/commit until the producer is actually released.
 
@@ -32,5 +32,5 @@ Canonical amendment: https://github.com/enterpriseaigroup/Issues2025/issues/3503
 4. Hidden OCI artifacts upload with a nonzero size and digest; EAI evidence and standard attestation identify the same subject. Evidence creation rejects linked output directories, linked or existing output files, and paths outside the application root.
 5. Existing `environment` callers and new `env` callers work; conflicting values fail.
 6. All third-party workflow actions and the OCI base image use immutable identities.
-7. Application lifecycle code cannot request the handoff OIDC token or change the validated endpoint; a post-build integrity check rejects source mutation before evidence collection, and every value appended to `$GITHUB_OUTPUT` is a single safe line.
+7. Application lifecycle code cannot request the handoff OIDC token or change the validated endpoint; a post-build integrity check rejects source mutation before evidence collection, the handoff rejects evidence with a different nonce before requesting OIDC, and every value appended to `$GITHUB_OUTPUT` is a single safe line.
 8. Owned validation and evidence-collector tests pass on current `main`.
