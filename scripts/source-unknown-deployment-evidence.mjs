@@ -226,10 +226,29 @@ function digestFiles(root, paths) {
   for (const relativePath of paths.sort()) {
     hash.update(relativePath);
     hash.update('\0');
-    hash.update(readFileSync(join(root, relativePath)));
+    hash.update(
+      readRegularFileNoFollow(join(root, relativePath), relativePath),
+    );
     hash.update('\0');
   }
   return `sha256:${hash.digest('hex')}`;
+}
+
+function readRegularFileNoFollow(path, label = path) {
+  const descriptor = openSync(
+    path,
+    constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
+  );
+  try {
+    if (!fstatSync(descriptor).isFile()) {
+      throw new Error(
+        `Governed configuration must be a regular file: ${label}`,
+      );
+    }
+    return readFileSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
 }
 
 function optionalLstat(path) {
@@ -300,7 +319,9 @@ function listGovernedConfigFiles(root) {
 function readSchemaProvenance(root) {
   const runtimePath = join(root, 'eai.runtime.json');
   assertExists(runtimePath, 'eai.runtime.json');
-  const runtime = JSON.parse(readFileSync(runtimePath, 'utf8'));
+  const runtime = JSON.parse(
+    readRegularFileNoFollow(runtimePath, 'eai.runtime.json').toString('utf8'),
+  );
   const provenance = runtime.schemaProvenance;
   if (!provenance || typeof provenance !== 'object') {
     throw new Error('eai.runtime.json schemaProvenance is required.');
