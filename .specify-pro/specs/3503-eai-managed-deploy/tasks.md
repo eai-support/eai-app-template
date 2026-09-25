@@ -16,6 +16,8 @@
 - [x] Reject every nonregular entry in the governed configuration tree (DTE-018).
 - [x] Reject a link or non-directory in every governed configuration ancestor and recheck ancestors before file reads (DTE-018).
 - [x] Reject an application-controlled link or non-directory in `.eai-build`, image-context, archive, metadata, and evidence ancestors before copying, writing, or hashing (DTE-022, DTE-025).
+- [x] Include `.test.*` and `.spec.*` files in the governed configuration digest while excluding only the two generated Object Type outputs (DTE-018).
+- [x] Copy standalone, static, and public source trees entry by entry without following nested links or accepting nonregular files (DTE-022).
 - [x] Apply the canonical generated-runtime app-key grammar in collector and handoff validation and retain the template's supported `demo` environment (DTE-020, DTE-021, DTE-026).
 - [x] Update owned tests and traceability.
 - [x] Rerun prescribed checks and record exact-head results after output-tree hardening.
@@ -25,7 +27,7 @@
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (28 passed)
+- `npm run test:source-unknown-evidence` (29 passed)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (322 passed)

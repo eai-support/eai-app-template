@@ -16,6 +16,10 @@ Do not predict the automatic post-merge release. Consumers may record this exact
 
 Treat every directory component beneath the application root as part of the configuration trust boundary. Reject a linked or non-directory ancestor before enumeration and recheck ancestors immediately before each no-follow file read so `src -> outside` cannot move configuration authority outside the checked-out source.
 
+The governed digest includes every regular file beneath `src/eai.config`, including test and specification files. Only `object-types.json` and `object-types.provisioning.json` are deterministic generated outputs and may be excluded.
+
 ## Build output authority
 
 Application lifecycle code may create or replace `.eai-build` before image-context preparation. Re-establish every output directory beneath the checked-out root through no-follow directory checks after the build and before any recursive removal, copy, write, archive digest, or evidence write. Use the generated-runtime app-key grammar consistently and preserve the template deployment contract's `demo` environment.
+
+Treat every entry in `.next/standalone`, `.next/static`, and `public` as untrusted build output. Copy regular files and directories entry by entry with no-follow opens and stable inode checks; reject nested links and other nonregular entries.

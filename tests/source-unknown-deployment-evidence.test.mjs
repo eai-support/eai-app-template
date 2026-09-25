@@ -724,6 +724,53 @@ test('image context pins the runtime minimum Node image by immutable digest', ()
   }
 });
 
+test(
+  'image context rejects nested links in standalone, static, and public trees',
+  { skip: process.platform === 'win32' },
+  () => {
+    const cases = [
+      [
+        '.next/standalone/nested/linked.js',
+        '.eai-build/image-context/nested/linked.js',
+      ],
+      [
+        '.next/static/nested/linked.js',
+        '.eai-build/image-context/.next/static/nested/linked.js',
+      ],
+      [
+        'public/nested/linked.txt',
+        '.eai-build/image-context/public/nested/linked.txt',
+      ],
+    ];
+    for (const [sourceRelative, destinationRelative] of cases) {
+      const workDir = mkdtempSync(join(tmpdir(), 'eai-linked-image-source-'));
+      try {
+        const root = join(workDir, 'app');
+        const outside = join(workDir, 'outside.txt');
+        writeFixtureApp(root);
+        writeFileSync(outside, 'outside must not be copied\n');
+        mkdirSync(dirname(join(root, sourceRelative)), { recursive: true });
+        symlinkSync(outside, join(root, sourceRelative));
+
+        const result = spawnSync(
+          process.execPath,
+          [evidenceScript, 'prepare-image-context', '--root', root],
+          { encoding: 'utf8' },
+        );
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /cannot contain a symlink/);
+        assert.equal(existsSync(join(root, destinationRelative)), false);
+        assert.equal(
+          readFileSync(outside, 'utf8'),
+          'outside must not be copied\n',
+        );
+      } finally {
+        rmSync(workDir, { recursive: true, force: true });
+      }
+    }
+  },
+);
+
 test('image context rejects an application-controlled linked build-output root', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-linked-build-root-'));
   try {
@@ -1122,9 +1169,23 @@ test('configuration digest binds nested tenants, deployment contract, and reject
     );
     assert.equal(first, configHash(workDir));
 
+    const specPath = join(workDir, 'src/eai.config/policy.spec.ts');
+    writeFileSync(specPath, 'export const policy = "one";\n');
+    const specAdded = configHash(workDir);
+    assert.notEqual(first, specAdded);
+
+    const testPath = join(workDir, 'src/eai.config/policy.test.json');
+    writeFileSync(testPath, '{"policy":"one"}\n');
+    const testAdded = configHash(workDir);
+    assert.notEqual(specAdded, testAdded);
+
+    writeFileSync(specPath, 'export const policy = "two";\n');
+    const specChanged = configHash(workDir);
+    assert.notEqual(testAdded, specChanged);
+
     writeFileSync(tenantPath, '{"tenant":"two"}\n');
     const nestedChanged = configHash(workDir);
-    assert.notEqual(first, nestedChanged);
+    assert.notEqual(specChanged, nestedChanged);
 
     writeFileSync(
       join(workDir, 'src/eai.config/deployment-contract.ts'),
