@@ -26,7 +26,7 @@ Canonical amendment: https://github.com/enterpriseaigroup/Issues2025/issues/3503
 
 ## Acceptance
 
-1. Both source modes validate operation, nonce, app, tenant, target tenant, environment, workflow, ref, and commit before composing an evidence URL.
+1. Both source modes validate operation, nonce, app, tenant, environment, workflow, ref, and commit before composing an evidence URL. `eai-cli-generated` requires and validates the exact target tenant; the legacy `source-unknown` contract validates it when supplied without making the compatibility input mandatory.
 2. Configuration and provenance hashes change for every governed source input, remain stable across deterministic generated Object Type outputs, and reject dangling or live symlinks.
 3. Runtime provenance preserves and validates any canonical approved source anchor.
 4. Hidden OCI artifacts upload with a nonzero size and digest; EAI evidence and standard attestation identify the same subject.

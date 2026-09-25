@@ -329,7 +329,9 @@ jobs:
           [[ "$EAI_BOUND_PUBLIC_API_URL" =~ ^https://(dev-api\.au|(test-api|api)\.(au|ca|eu))\.myenterprise\.ai/public/?$ ]]
           [[ "$APP_KEY" =~ ^[a-z0-9][a-z0-9-]{1,62}$ ]]
           [[ "$TENANT_ID" =~ ^[A-Za-z0-9]([A-Za-z0-9._:-]{0,254}[A-Za-z0-9])?$ ]]
-          [[ "$TARGET_TENANT_ID" =~ ^[A-Za-z0-9]([A-Za-z0-9._:-]{0,254}[A-Za-z0-9])?$ ]]
+          if [[ "$SOURCE_MODE" == "eai-cli-generated" || -n "$TARGET_TENANT_ID" ]]; then
+            [[ "$TARGET_TENANT_ID" =~ ^[A-Za-z0-9]([A-Za-z0-9._:-]{0,254}[A-Za-z0-9])?$ ]]
+          fi
           [[ "$OPERATION_ID" =~ ^[A-Za-z0-9]([A-Za-z0-9._~:-]{0,254}[A-Za-z0-9])?$ ]]
           node - <<'NODE'
           const { createHash } = require('node:crypto');

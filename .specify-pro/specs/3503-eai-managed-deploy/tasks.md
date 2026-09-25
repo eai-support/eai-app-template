@@ -8,6 +8,7 @@
 - [x] Isolate application lifecycle work from OIDC and recheck source/endpoint integrity in the trusted handoff (DTE-025).
 - [x] Pin actions and the base image immutably (DTE-023).
 - [x] Preserve `environment`/`env` caller compatibility (DTE-026).
+- [x] Preserve optional `target_tenant_id` compatibility for legacy `source-unknown` callers while requiring it for `eai-cli-generated`.
 - [x] Update owned tests and traceability.
 - [x] Run prescribed checks and record exact results.
 

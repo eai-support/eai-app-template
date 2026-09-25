@@ -473,6 +473,10 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
       workflow.indexOf('Request GitHub OIDC token'),
   );
   assert.match(handoffJob, /\[\[ "\$EAI_BOUND_PUBLIC_API_URL" =~ \^https:\/\//);
+  assert.match(
+    handoffJob,
+    /if \[\[ "\$SOURCE_MODE" == "eai-cli-generated" \|\| -n "\$TARGET_TENANT_ID" \]\]; then/,
+  );
   assert.match(workflow, /--max-redirs 0/);
   for (const action of workflow.matchAll(/^\s+uses:\s+([^\s#]+)/gm)) {
     assert.match(action[1], /@[a-f0-9]{40}$/);
