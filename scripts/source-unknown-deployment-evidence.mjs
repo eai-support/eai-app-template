@@ -9,6 +9,7 @@ import {
   lstatSync,
   mkdirSync,
   openSync,
+  realpathSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -301,23 +302,43 @@ function digestFiles(root, paths) {
     }
     hash.update(relativePath);
     hash.update('\0');
-    hash.update(
-      readRegularFileNoFollow(join(root, relativePath), relativePath),
-    );
+    hash.update(readRegularFileNoFollow(root, relativePath));
     hash.update('\0');
   }
   return `sha256:${hash.digest('hex')}`;
 }
 
-function readRegularFileNoFollow(path, label = path) {
+function readRegularFileNoFollow(root, relativePath) {
+  if (!assertGovernedAncestors(root, relativePath)) {
+    throw new Error(
+      `Governed configuration ancestor does not exist: ${relativePath}`,
+    );
+  }
+  const path = join(root, relativePath);
+  const before = lstatSync(path);
+  if (before.isSymbolicLink() || !before.isFile()) {
+    throw new Error(
+      `Governed configuration must be a regular file: ${relativePath}`,
+    );
+  }
+  containedRelativePath(
+    realpathSync(root),
+    realpathSync(path),
+    'Governed configuration file',
+  );
   const descriptor = openSync(
     path,
     constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
   );
   try {
-    if (!fstatSync(descriptor).isFile()) {
+    const opened = fstatSync(descriptor);
+    if (
+      !opened.isFile() ||
+      opened.dev !== before.dev ||
+      opened.ino !== before.ino
+    ) {
       throw new Error(
-        `Governed configuration must be a regular file: ${label}`,
+        `Governed configuration changed before its no-follow read: ${relativePath}`,
       );
     }
     return readFileSync(descriptor);
@@ -421,7 +442,7 @@ function readSchemaProvenance(root) {
   const runtimePath = join(root, 'eai.runtime.json');
   assertExists(runtimePath, 'eai.runtime.json');
   const runtime = JSON.parse(
-    readRegularFileNoFollow(runtimePath, 'eai.runtime.json').toString('utf8'),
+    readRegularFileNoFollow(root, 'eai.runtime.json').toString('utf8'),
   );
   const provenance = runtime.schemaProvenance;
   if (!provenance || typeof provenance !== 'object') {
