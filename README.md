@@ -171,13 +171,13 @@ Use `eai update --check` or `eai doctor --check-updates` when a command is missi
 
 Use the app-owned test scripts before inventing commands:
 
-| Script | Purpose |
-| ------ | ------- |
-| `npm run verify` | Local template health: object types, route exports, config, typecheck, and unit tests. |
-| `npm run test:smoke` | Fast local smoke checks for template and AI workspace guidance. |
-| `npm run test:business-scenarios` | Gofer-created browser journeys for business outcomes. |
-| `npm run test:e2e` | Browser end-to-end tests for app journeys. |
-| `npm run test:playwright` | Full Playwright runner for explicit browser test work. |
+| Script                            | Purpose                                                                                |
+| --------------------------------- | -------------------------------------------------------------------------------------- |
+| `npm run verify`                  | Local template health: object types, route exports, config, typecheck, and unit tests. |
+| `npm run test:smoke`              | Fast local smoke checks for template and AI workspace guidance.                        |
+| `npm run test:business-scenarios` | Gofer-created browser journeys for business outcomes.                                  |
+| `npm run test:e2e`                | Browser end-to-end tests for app journeys.                                             |
+| `npm run test:playwright`         | Full Playwright runner for explicit browser test work.                                 |
 
 Gofer should prefer `test:business-scenarios` for user journeys, then
 `test:e2e`, then `test:playwright`. A screenshot is only visual evidence. It
@@ -197,7 +197,7 @@ and use tenant-scoped platform routes such as
 `/v4/platform/tenants/<tenant-id>/users/by-email?email=<email>`,
 `/v4/platform/tenants/<tenant-id>/users/<oid>/memberships`,
 `/v4/platform/tenants/<tenant-id>/members`, and
-`/v4/platform/tenants/<tenant-id>/role-definitions`. Do not start by changing
+`/v4/platform/tenants/<tenant-id>/role-definitions`. Do not change
 tenant members, Entra configuration, role definitions, databases, or cloud
 portals.
 

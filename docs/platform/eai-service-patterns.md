@@ -18,42 +18,43 @@ choosing how to use Enterprise AI platform services from the EAI App Template.
 - App code should prefer the template SDK and hooks before hand-written fetches.
 - CLI automation may call platform services through the authenticated `eai`
   command.
-- Direct `eai publicapi ...` calls are an escape hatch for authorized PublicAPI
-  V4 routes that do not yet have named CLI commands.
+- Direct `eai publicapi <method> /v4/...` calls are an escape hatch for
+  authorized routes that do not yet have named CLI commands.
 - Access tokens, database credentials, blob credentials, and search credentials
   stay server-side.
-- Prefer PublicAPI V4 routes. V3 route-family mapping is compatibility glue, not
-  the pattern for new work.
+- Use PublicAPI V4 routes for every platform call.
 - For support/platform automation outside the tenant app runtime, platform user
   lookup, membership prerequisite, tenant member, and role-definition work must
   use tenant-scoped V4 platform routes:
   `/v4/platform/tenants/<tenant-id>/users/by-email?email=<email>`,
   `/v4/platform/tenants/<tenant-id>/users/<oid>/memberships`,
   `/v4/platform/tenants/<tenant-id>/members`, and
-  `/v4/platform/tenants/<tenant-id>/role-definitions`. If root
-  `/v4/platform/users/...` calls return `MISSING_TENANT`, run
-  `eai errors explain app_token_tenant_context_required --format json` and fix
-  the route/context before changing tenant members, Entra, role definitions,
-  databases, or cloud portals.
+  `/v4/platform/tenants/<tenant-id>/role-definitions`. If tenant context is
+  missing, inspect the error before changing tenant members, Entra, role
+  definitions, databases, or cloud portals:
+
+  ```bash
+  eai errors explain app_token_tenant_context_required --format json
+  ```
 
 ## Service Selection Matrix
 
-| Need                         | App Pattern                                                                              | CLI Pattern                                                                                 | Notes                                                                          |
-| ---------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Compose frontend UI          | `src/eai.config/default.ts` layout slots plus `src/eai.blocks.tsx` registry              | `eai gofer refresh` installs public-safe guidance                                           | Keep config data-only; put callbacks in overrides.                             |
-| Define data model            | `src/eai.config/object-types.ts`                                                         | `eai types validate`, `eai types seed`, `eai types diff`                                    | Object Types are the contract for ResourceAPI-backed data.                     |
-| CRUD tenant resources        | `useResources(type)` or `client.resources`                                               | `eai resources list/get/create/update/delete/query`                                         | Use ResourceAPI for tenant-scoped business data.                               |
-| Batch or aggregate resources | `client.resources.batch*`, `client.resources.aggregate`                                  | `eai resources batch-*`, `eai resources aggregate`                                          | Prefer batch APIs for bulk work.                                               |
-| Execute resource action      | `client.resources.executeAction(type, id, action)`                                       | named resources command if available, otherwise `eai publicapi post /v4/data/resources/...` | Actions enforce configured object-type rules.                                  |
-| Search resources             | add a local helper around `/v4/data/resources/{tenant}/search` until the SDK exposes one | `eai resources search "query" --mode hybrid`                                                | Search is a derived projection over canonical data.                            |
-| Upload resource file         | add a local helper around resource file routes                                           | `eai resources file upload <type> <id> <property> <path>`                                   | Use for file properties on resources.                                          |
-| Upload documents             | `useDocuments().upload(file, { verticalKey, workflowKey })`                              | `eai docs upload <file>`                                                                    | Uses the Curate document lifecycle.                                            |
-| Classify documents           | `useDocuments().classify(files, { verticalKey, workflowKey })` or `classifyByUrl(url)`   | `eai docs classify <file>`                                                                  | Stored-file classification uses the Curate upload lifecycle.                   |
-| Index documents for RAG      | `useDocuments().ragIndex(documentId)`                                                    | `eai docs index <documentId>`                                                               | RAG indexing is document-service indexing, not an Object Type storage backend. |
-| Non-streaming chat           | `useChat(workflowId, stage).send(...)`                                                   | `eai chat send "message"`                                                                   | Requires tenant, workflow, stage, message, conversation ID, and params.        |
-| Streaming chat               | `useChat(workflowId, stage).stream(...)`                                                 | `eai chat stream "message"`                                                                 | Uses the stream BFF path `/api/eai/stream/...`.                                |
-| Identity/session             | server route, middleware, auth helpers, or tenant-scoped `client.platform` user helpers   | `eai whoami`, `eai tenant select`, `eai publicapi get /v4/identity/me`                      | Keep access tokens server-side in apps. For platform user/member prerequisites, use `/v4/platform/tenants/{tenantId}/...`. |
-| Advanced V4 route            | BFF route or approved server helper                                                      | `eai publicapi <method> /v4/...`                                                            | Use named SDK/CLI commands when available.                                     |
+| Need                         | App Pattern                                                                              | CLI Pattern                                                                                 | Notes                                                                                                                      |
+| ---------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Compose frontend UI          | `src/eai.config/default.ts` layout slots plus `src/eai.blocks.tsx` registry              | `eai gofer refresh` installs public-safe guidance                                           | Keep config data-only; put callbacks in overrides.                                                                         |
+| Define data model            | `src/eai.config/object-types.ts`                                                         | `eai types validate`, `eai types seed`, `eai types diff`                                    | Object Types are the contract for ResourceAPI-backed data.                                                                 |
+| CRUD tenant resources        | `useResources(type)` or `client.resources`                                               | `eai resources list/get/create/update/delete/query`                                         | Use ResourceAPI for tenant-scoped business data.                                                                           |
+| Batch or aggregate resources | `client.resources.batch*`, `client.resources.aggregate`                                  | `eai resources batch-*`, `eai resources aggregate`                                          | Prefer batch APIs for bulk work.                                                                                           |
+| Execute resource action      | `client.resources.executeAction(type, id, action)`                                       | named resources command if available, otherwise `eai publicapi post /v4/data/resources/...` | Actions enforce configured object-type rules.                                                                              |
+| Search resources             | add a local helper around `/v4/data/resources/{tenant}/search` until the SDK exposes one | `eai resources search "query" --mode hybrid`                                                | Search is a derived projection over canonical data.                                                                        |
+| Upload resource file         | add a local helper around resource file routes                                           | `eai resources file upload <type> <id> <property> <path>`                                   | Use for file properties on resources.                                                                                      |
+| Upload documents             | `useDocuments().upload(file, { verticalKey, workflowKey })`                              | `eai docs upload <file>`                                                                    | Uses the Curate document lifecycle.                                                                                        |
+| Classify documents           | `useDocuments().classify(files, { verticalKey, workflowKey })` or `classifyByUrl(url)`   | `eai docs classify <file>`                                                                  | Stored-file classification uses the Curate upload lifecycle.                                                               |
+| Index documents for RAG      | `useDocuments().ragIndex(documentId)`                                                    | `eai docs index <documentId>`                                                               | RAG indexing is document-service indexing, not an Object Type storage backend.                                             |
+| Non-streaming chat           | `useChat(workflowId, stage).send(...)`                                                   | `eai chat send "message"`                                                                   | Requires tenant, workflow, stage, message, conversation ID, and params.                                                    |
+| Streaming chat               | `useChat(workflowId, stage).stream(...)`                                                 | `eai chat stream "message"`                                                                 | Uses the stream BFF path `/api/eai/stream/...`.                                                                            |
+| Identity/session             | server route, middleware, auth helpers, or tenant-scoped `client.platform` user helpers  | `eai whoami`, `eai tenant select`, `eai publicapi get /v4/identity/me`                      | Keep access tokens server-side in apps. For platform user/member prerequisites, use `/v4/platform/tenants/{tenantId}/...`. |
+| Advanced V4 route            | BFF route or approved server helper                                                      | `eai publicapi <method> /v4/...`                                                            | Use named SDK/CLI commands when available.                                                                                 |
 
 ## Storage Backend Patterns
 
@@ -147,7 +148,10 @@ processing:
 
 ```ts
 const { upload, classify, ragIndex } = useDocuments(tenantId);
-const workflow = { verticalKey: 'my-document-app', workflowKey: 'document-intake' };
+const workflow = {
+  verticalKey: 'my-document-app',
+  workflowKey: 'document-intake',
+};
 
 const uploaded = await upload(file, {
   ...workflow,

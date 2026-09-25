@@ -19,7 +19,9 @@
             "src/lib/platform/readiness.test.ts",
             "src/app/api/eai/readiness/route.test.ts"
           ],
-          "required_ci_checks": ["validate"],
+          "required_ci_checks": [
+            "validate"
+          ],
           "required_cross_service_surfaces": [
             "backend",
             "eai-cli",
@@ -41,6 +43,26 @@
           ]
         },
         {
+          "id": "publicapi-v4-only-guidance",
+          "description": "Repository documentation, examples, tests, and app proxy guidance use PublicAPI V4 interfaces only.",
+          "owned_paths": [
+            "README.md",
+            "docs/**",
+            "src/lib/platform/publicapi-route-family.ts",
+            "src/app/api/eai/[[...rest]]/**",
+            "packages/platform-sdk/**"
+          ],
+          "required_repo_tests": [
+            "tests/publicapi-v4-guidance.test.ts",
+            "src/lib/platform/publicapi-route-family.test.ts",
+            "src/app/api/eai/[[...rest]]/route.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": []
+        },
+        {
           "id": "tenant-bound-document-lifecycle",
           "description": "The document SDK uses the Curate-backed V4 upload lifecycle for stored-file processing, requires paired app and workflow classifier selection, and sends the deployed V4 documentUrl and tenantId contract for direct URL classification.",
           "owned_paths": [
@@ -55,7 +77,9 @@
             "src/hooks/useDocuments.test.tsx",
             "src/lib/platform/publicapi-route-family.test.ts"
           ],
-          "required_ci_checks": ["validate"],
+          "required_ci_checks": [
+            "validate"
+          ],
           "required_cross_service_surfaces": []
         },
         {
@@ -78,8 +102,12 @@
             "tests/generate-object-types-json.test.mjs",
             "src/lib/platform/verify-platform.test.ts"
           ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["backend"]
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "backend"
+          ]
         },
         {
           "id": "generated-app-object-type-seeding",
@@ -88,9 +116,15 @@
             "src/eai.config/object-types.ts",
             "src/lib/platform/seed-object-types.ts"
           ],
-          "required_repo_tests": ["src/lib/platform/seed-object-types.test.ts"],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["admin-portal"]
+          "required_repo_tests": [
+            "src/lib/platform/seed-object-types.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "admin-portal"
+          ]
         },
         {
           "id": "generated-app-platform-sdk-resource-count-policy",
@@ -102,8 +136,12 @@
           "required_repo_tests": [
             "packages/platform-sdk/__tests__/resources.test.ts"
           ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["backend"],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "backend"
+          ],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",
@@ -152,8 +190,13 @@
             "src/lib/generated-workflow/field-validation.test.ts",
             "src/app/page.test.tsx"
           ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["admin-portal", "ncb-sugar-hit"],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "admin-portal",
+            "ncb-sugar-hit"
+          ],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",
@@ -175,7 +218,9 @@
             "package-lock.json"
           ],
           "required_repo_tests": [],
-          "required_ci_checks": ["validate"],
+          "required_ci_checks": [
+            "validate"
+          ],
           "required_cross_service_surfaces": [],
           "required_deployed_contracts": []
         }

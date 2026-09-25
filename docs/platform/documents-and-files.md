@@ -5,11 +5,11 @@ workflows on the PublicAPI v4 surface.
 
 ## Choose The Right Model
 
-| User goal | Use this model | App API | CLI |
-| --- | --- | --- | --- |
-| Upload a document so the platform can process, classify, or index it for AI | Document workflow | `useDocuments().upload`, `classify`, `ragIndex` | `eai docs upload`, `eai docs classify`, `eai docs index` |
-| Attach a file to an existing business record | Resource file property | `useResources(type).uploadFile` | `eai resources file upload` |
-| Store an arbitrary blob without a document or resource owner | Do not use as a public v4 app pattern | No public app-template helper | No named command |
+| User goal                                                                   | Use this model                        | App API                                         | CLI                                                      |
+| --------------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------- | -------------------------------------------------------- |
+| Upload a document so the platform can process, classify, or index it for AI | Document workflow                     | `useDocuments().upload`, `classify`, `ragIndex` | `eai docs upload`, `eai docs classify`, `eai docs index` |
+| Attach a file to an existing business record                                | Resource file property                | `useResources(type).uploadFile`                 | `eai resources file upload`                              |
+| Store an arbitrary blob without a document or resource owner                | Do not use as a public v4 app pattern | No public app-template helper                   | No named command                                         |
 
 V4 does not treat file upload as a free-form blob write. A file belongs to one
 of two public app concepts:
@@ -41,13 +41,13 @@ App code:
 const { upload, classify, ragIndex, getJobStatus } = useDocuments(tenantId);
 
 const workflow = {
-  verticalKey: "my-document-app",
-  workflowKey: "document-intake",
+  verticalKey: 'my-document-app',
+  workflowKey: 'document-intake',
 };
 
 const uploadResponse = await upload(file, {
   ...workflow,
-  category: "supporting-document",
+  category: 'supporting-document',
   application_id: applicationId,
 });
 const uploadPayload = await uploadResponse.json();
@@ -60,7 +60,7 @@ await classify([file], workflow);
 await ragIndex({
   documentId,
   businessRequestId: applicationId,
-  documentScope: "br",
+  documentScope: 'br',
 });
 
 if (uploadPayload.jobId) {
@@ -83,9 +83,9 @@ POST /v4/data/documents/upload
 ```
 
 The SDK always sends `storage_target=resourceapi`. It sends `processing_mode=full`
-for `upload` and `processing_mode=classification` for `classify`; neither helper
-calls the retired `POST /v4/data/documents/classify` route. The app and workflow
-keys are required so PublicAPI can resolve the tenant's published classifier.
+for `upload` and `processing_mode=classification` for `classify`. The app and
+workflow keys are required so PublicAPI can resolve the tenant's published
+classifier.
 
 Use `eai publicapi get /v4/data/documents/jobs/<job-id>` for job status until a
 named CLI job command exists.
@@ -109,20 +109,20 @@ Step goals:
 App code:
 
 ```tsx
-const resources = useResources("ApplicationDocument", tenantId);
+const resources = useResources('ApplicationDocument', tenantId);
 
 const document = await resources.create({
   title: file.name,
   applicationId,
-  status: "uploaded",
+  status: 'uploaded',
 });
 
-await resources.uploadFile(document.id, "file", file, {
+await resources.uploadFile(document.id, 'file', file, {
   filename: file.name,
-  contentType: file.type || "application/octet-stream",
+  contentType: file.type || 'application/octet-stream',
 });
 
-const fileStatus = await resources.getFileIndexStatus(document.id, "file");
+const fileStatus = await resources.getFileIndexStatus(document.id, 'file');
 ```
 
 CLI equivalent:
@@ -159,9 +159,10 @@ Example:
 
 ```tsx
 await client.chat.send({
-  workflowId: "application-advisor",
-  stage: "review",
-  message: "Summarise the uploaded supporting documents and list missing evidence.",
+  workflowId: 'application-advisor',
+  stage: 'review',
+  message:
+    'Summarise the uploaded supporting documents and list missing evidence.',
   conversationId,
   params: {
     applicationId,
