@@ -398,18 +398,37 @@ test('CLI evidence binds each merged commit and remains repository-owner agnosti
 
 test('workflow sends OIDC evidence directly to the canonical PublicAPI route', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
-  assert.match(workflow, /^run-name: EAI deploy \$\{\{ inputs\.app_key \}\} \(\$\{\{ inputs\.operation_id \}\}\)$/m);
+  const buildJob = workflow.slice(
+    workflow.indexOf('  build:'),
+    workflow.indexOf('  handoff:'),
+  );
+  const handoffJob = workflow.slice(workflow.indexOf('  handoff:'));
+  assert.match(
+    workflow,
+    /^run-name: EAI deploy \$\{\{ inputs\.app_key \}\} \(\$\{\{ inputs\.operation_id \}\}\)$/m,
+  );
   assert.match(workflow, /^on:\n  workflow_dispatch:/m);
   assert.match(workflow, /^  workflow_call:/m);
   assert.doesNotMatch(workflow, /^  (push|pull_request|schedule):/m);
-  assert.match(workflow, /^  attestations: write$/m);
-  assert.doesNotMatch(workflow, /^  packages:/m);
+  assert.match(workflow, /^  packages: read$/m);
+  assert.doesNotMatch(buildJob, /id-token: write|ACTIONS_ID_TOKEN/);
+  assert.match(handoffJob, /^      attestations: write$/m);
+  assert.match(handoffJob, /^      id-token: write$/m);
+  assert.ok(
+    buildJob.indexOf('Run dependency install scripts') <
+      workflow.indexOf('  handoff:'),
+  );
   assert.match(workflow, /name: eai-generated-app-image/);
   assert.match(workflow, /--platform linux\/amd64/);
   assert.match(workflow, /inputs\.public_api_url/);
   assert.match(workflow, /inputs\.publicapi_base_url/);
   assert.match(workflow, /inputs\.env \|\| inputs\.environment \|\| 'preview'/);
   assert.doesNotMatch(workflow, /vars\.EAI_PUBLIC_API_URL/);
+  assert.doesNotMatch(workflow, /secrets\.EAI_PUBLIC_API_URL/);
+  assert.match(
+    workflow,
+    /EAI_BOUND_PUBLIC_API_URL: \$\{\{ inputs\.public_api_url \|\| inputs\.publicapi_base_url \}\}/,
+  );
   assert.match(
     workflow,
     /ref: \$\{\{ inputs\.commit_sha \|\| github\.sha \}\}/,
@@ -437,6 +456,23 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.doesNotMatch(workflow, /> \.npmrc|>> \.npmrc/);
   assert.match(workflow, /include-hidden-files: true/);
   assert.match(workflow, /actions\/attest-build-provenance@[a-f0-9]{40}/);
+  assert.match(workflow, /actions\/download-artifact@[a-f0-9]{40}/);
+  assert.match(workflow, /name: Verify post-build source integrity/);
+  assert.match(workflow, /git diff --exit-code/);
+  assert.match(workflow, /git status --porcelain=v1 --untracked-files=all/);
+  assert.ok(
+    workflow.indexOf('Verify post-build source integrity') <
+      workflow.indexOf('Collect immutable build evidence'),
+  );
+  assert.ok(
+    workflow.indexOf('Upload immutable build evidence') <
+      workflow.indexOf('  handoff:'),
+  );
+  assert.ok(
+    workflow.indexOf('  handoff:') <
+      workflow.indexOf('Request GitHub OIDC token'),
+  );
+  assert.match(handoffJob, /\[\[ "\$EAI_BOUND_PUBLIC_API_URL" =~ \^https:\/\//);
   assert.match(workflow, /--max-redirs 0/);
   for (const action of workflow.matchAll(/^\s+uses:\s+([^\s#]+)/gm)) {
     assert.match(action[1], /@[a-f0-9]{40}$/);
@@ -690,9 +726,7 @@ test('schema provenance accepts every approved source anchor and preserves it in
     ['approvedReleaseId', 'approved-release-2026-09-25', 'approved_release_id'],
   ];
   for (const [key, value, outputKey] of anchors) {
-    const workDir = mkdtempSync(
-      join(tmpdir(), `eai-source-unknown-${key}-`),
-    );
+    const workDir = mkdtempSync(join(tmpdir(), `eai-source-unknown-${key}-`));
     try {
       const fixtureRoot = join(workDir, 'app');
       const outputFile = join(workDir, 'github-output.txt');
@@ -923,6 +957,16 @@ test('configuration digest binds nested tenants, deployment contract, and reject
     writeFileSync(tenantPath, '{"tenant":"one"}\n');
     const first = configHash(workDir);
 
+    writeFileSync(
+      join(workDir, 'src/eai.config/object-types.json'),
+      '{"generated":"changed"}\n',
+    );
+    writeFileSync(
+      join(workDir, 'src/eai.config/object-types.provisioning.json'),
+      '{"generated":"new"}\n',
+    );
+    assert.equal(first, configHash(workDir));
+
     writeFileSync(tenantPath, '{"tenant":"two"}\n');
     const nestedChanged = configHash(workDir);
     assert.notEqual(first, nestedChanged);
@@ -946,6 +990,30 @@ test('configuration digest binds nested tenants, deployment contract, and reject
     assert.match(result.stderr, /cannot be a symlink/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('configuration digest rejects dangling governed root links', () => {
+  const cases = [
+    ['eai.config.ts', 'missing-config.ts'],
+    ['src/eai.config', 'missing-config-directory'],
+  ];
+  for (const [governedPath, target] of cases) {
+    const workDir = mkdtempSync(join(tmpdir(), 'eai-config-dangling-'));
+    try {
+      writeFixtureApp(workDir);
+      rmSync(join(workDir, governedPath), { recursive: true, force: true });
+      symlinkSync(target, join(workDir, governedPath));
+      const result = spawnSync(
+        process.execPath,
+        [evidenceScript, 'config-hash', '--root', workDir],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /regular (?:file|directory)/);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
   }
 });
 
@@ -1013,6 +1081,37 @@ test('collect rejects an empty OCI archive before producing evidence', () => {
   try {
     writeFixtureApp(workDir);
     writeFileSync(join(workDir, '.eai-build/eai-generated-app-image.tar'), '');
+    const result = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        'collect',
+        '--root',
+        workDir,
+        ...sourceUnknownBindingArgs(workDir),
+        '--artifact-id',
+        '987654321',
+        '--artifact-digest',
+        `sha256:${'d'.repeat(64)}`,
+        '--image-digest',
+        `sha256:${'c'.repeat(64)}`,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /nonempty regular file/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('collect rejects a linked OCI archive before hashing evidence', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-linked-image-'));
+  try {
+    writeFixtureApp(workDir);
+    const archivePath = join(workDir, '.eai-build/eai-generated-app-image.tar');
+    rmSync(archivePath);
+    symlinkSync(join(workDir, 'eai.runtime.json'), archivePath);
     const result = spawnSync(
       process.execPath,
       [

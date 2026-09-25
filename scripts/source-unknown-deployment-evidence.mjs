@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import {
+  closeSync,
+  constants,
   createReadStream,
   existsSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
@@ -26,6 +29,10 @@ const MANAGED_ENVIRONMENTS = new Set(['preview', 'dev', 'test', 'prod']);
 const GOVERNED_ROOT_FILES = ['eai.config.ts', 'eai.runtime.json'];
 const GOVERNED_CONFIG_ROOTS = ['src/eai.config'];
 const NON_RUNTIME_CONFIG_FILE = /(?:^|\.)(?:test|spec)\.[^.]+$/;
+const GENERATED_CONFIG_FILES = new Set([
+  'src/eai.config/object-types.json',
+  'src/eai.config/object-types.provisioning.json',
+]);
 
 function sourceMode(options) {
   const mode = option(options, 'sourceMode', 'source-unknown');
@@ -194,20 +201,29 @@ function assertExists(path, label) {
 
 async function digestFile(path) {
   const hash = createHash('sha256');
-  await new Promise((resolvePromise, reject) => {
-    createReadStream(path)
-      .on('data', (chunk) => hash.update(chunk))
-      .on('error', reject)
-      .on('end', resolvePromise);
-  });
+  const descriptor = openSync(
+    path,
+    constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
+  );
+  try {
+    if (!fstatSync(descriptor).isFile()) {
+      throw new Error(`Artifact must be a regular file: ${path}`);
+    }
+    await new Promise((resolvePromise, reject) => {
+      createReadStream(path, { fd: descriptor, autoClose: false })
+        .on('data', (chunk) => hash.update(chunk))
+        .on('error', reject)
+        .on('end', resolvePromise);
+    });
+  } finally {
+    closeSync(descriptor);
+  }
   return `sha256:${hash.digest('hex')}`;
 }
 
 function digestFiles(root, paths) {
   const hash = createHash('sha256');
-  for (const relativePath of paths
-    .filter((path) => existsSync(join(root, path)))
-    .sort()) {
+  for (const relativePath of paths.sort()) {
     hash.update(relativePath);
     hash.update('\0');
     hash.update(readFileSync(join(root, relativePath)));
@@ -216,12 +232,21 @@ function digestFiles(root, paths) {
   return `sha256:${hash.digest('hex')}`;
 }
 
+function optionalLstat(path) {
+  try {
+    return lstatSync(path);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
 function listGovernedConfigFiles(root) {
   const paths = [];
   for (const relativePath of GOVERNED_ROOT_FILES) {
     const absolutePath = join(root, relativePath);
-    if (!existsSync(absolutePath)) continue;
-    const metadata = lstatSync(absolutePath);
+    const metadata = optionalLstat(absolutePath);
+    if (!metadata) continue;
     if (metadata.isSymbolicLink() || !metadata.isFile()) {
       throw new Error(
         `Governed configuration must be a regular file: ${relativePath}`,
@@ -232,8 +257,8 @@ function listGovernedConfigFiles(root) {
 
   const visit = (relativeDirectory) => {
     const absoluteDirectory = join(root, relativeDirectory);
-    if (!existsSync(absoluteDirectory)) return;
-    const directoryMetadata = lstatSync(absoluteDirectory);
+    const directoryMetadata = optionalLstat(absoluteDirectory);
+    if (!directoryMetadata) return;
     if (
       directoryMetadata.isSymbolicLink() ||
       !directoryMetadata.isDirectory()
@@ -260,7 +285,8 @@ function listGovernedConfigFiles(root) {
         visit(relativePath);
       } else if (
         metadata.isFile() &&
-        !NON_RUNTIME_CONFIG_FILE.test(entry.name)
+        !NON_RUNTIME_CONFIG_FILE.test(entry.name) &&
+        !GENERATED_CONFIG_FILES.has(relativePath)
       ) {
         paths.push(relativePath);
       }
@@ -403,9 +429,13 @@ async function collectEvidence(options) {
     process.env.GITHUB_OUTPUT || '',
   );
 
-  assertExists(imageArchivePath, 'OCI image archive');
-  const archiveMetadata = statSync(imageArchivePath);
-  if (!archiveMetadata.isFile() || archiveMetadata.size <= 0) {
+  const archiveMetadata = optionalLstat(imageArchivePath);
+  if (
+    !archiveMetadata ||
+    archiveMetadata.isSymbolicLink() ||
+    !archiveMetadata.isFile() ||
+    archiveMetadata.size <= 0
+  ) {
     throw new Error('OCI image archive must be a nonempty regular file.');
   }
   const uploadedArtifactDigest = option(options, 'artifactDigest');

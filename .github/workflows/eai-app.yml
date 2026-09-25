@@ -101,13 +101,12 @@ on:
         description: Deprecated and intentionally unused.
         required: false
       EAI_PUBLIC_API_URL:
-        description: Compatibility source for the non-secret PublicAPI endpoint.
+        description: Deprecated and intentionally unused; bind the endpoint with a workflow input.
         required: false
 
 permissions:
-  attestations: write
   contents: read
-  id-token: write
+  packages: read
 
 concurrency:
   group: eai-app-${{ inputs.source_mode }}-${{ inputs.app_key }}-${{ inputs.env || inputs.environment || 'preview' }}-${{ github.ref }}
@@ -118,26 +117,8 @@ env:
   EAI_WORKFLOW_PATH: .github/workflows/eai-app.yml
 
 jobs:
-  build-and-handoff:
+  build:
     runs-on: ubuntu-latest
-    env:
-      APP_KEY: ${{ inputs.app_key }}
-      EAI_APP_KEY: ${{ inputs.app_key }}
-      TENANT_ID: ${{ inputs.tenant_id }}
-      EAI_TENANT_ID: ${{ inputs.tenant_id }}
-      TARGET_TENANT_ID: ${{ inputs.target_tenant_id }}
-      OPERATION_ID: ${{ inputs.operation_id }}
-      NONCE: ${{ inputs.nonce }}
-      CONFIG_HASH: ${{ inputs.config_hash }}
-      DEPLOY_ENVIRONMENT: ${{ inputs.env || inputs.environment || 'preview' }}
-      LEGACY_DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
-      PREFERRED_DEPLOY_ENVIRONMENT: ${{ inputs.env }}
-      EAI_PUBLIC_API_URL: ${{ inputs.public_api_url || inputs.publicapi_base_url || secrets.EAI_PUBLIC_API_URL }}
-      LEGACY_PUBLIC_API_URL: ${{ inputs.publicapi_base_url }}
-      PREFERRED_PUBLIC_API_URL: ${{ inputs.public_api_url }}
-      SOURCE_COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
-      SOURCE_MODE: ${{ inputs.source_mode || 'source-unknown' }}
-
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -152,6 +133,21 @@ jobs:
           cache: npm
 
       - name: Validate immutable dispatch and trusted endpoint
+        env:
+          APP_KEY: ${{ inputs.app_key }}
+          TENANT_ID: ${{ inputs.tenant_id }}
+          TARGET_TENANT_ID: ${{ inputs.target_tenant_id }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+          NONCE: ${{ inputs.nonce }}
+          CONFIG_HASH: ${{ inputs.config_hash }}
+          DEPLOY_ENVIRONMENT: ${{ inputs.env || inputs.environment || 'preview' }}
+          LEGACY_DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+          PREFERRED_DEPLOY_ENVIRONMENT: ${{ inputs.env }}
+          EAI_BOUND_PUBLIC_API_URL: ${{ inputs.public_api_url || inputs.publicapi_base_url }}
+          LEGACY_PUBLIC_API_URL: ${{ inputs.publicapi_base_url }}
+          PREFERRED_PUBLIC_API_URL: ${{ inputs.public_api_url }}
+          SOURCE_COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
+          SOURCE_MODE: ${{ inputs.source_mode || 'source-unknown' }}
         run: |
           node scripts/source-unknown-deployment-evidence.mjs validate-dispatch \
             --source-mode "$SOURCE_MODE" \
@@ -164,7 +160,7 @@ jobs:
             --environment "$DEPLOY_ENVIRONMENT" \
             --preferred-environment "$PREFERRED_DEPLOY_ENVIRONMENT" \
             --legacy-environment "$LEGACY_DEPLOY_ENVIRONMENT" \
-            --public-api-url "$EAI_PUBLIC_API_URL" \
+            --public-api-url "$EAI_BOUND_PUBLIC_API_URL" \
             --preferred-public-api-url "$PREFERRED_PUBLIC_API_URL" \
             --legacy-public-api-url "$LEGACY_PUBLIC_API_URL" \
             --commit "$SOURCE_COMMIT_SHA" \
@@ -177,12 +173,18 @@ jobs:
         run: npm rebuild
 
       - name: Install Linux native CSS bindings
-        run: npm install --no-save lightningcss-linux-x64-gnu@1.30.2 @tailwindcss/oxide-linux-x64-gnu@4.1.18
+        run: npm install --no-save --package-lock=false lightningcss-linux-x64-gnu@1.30.2 @tailwindcss/oxide-linux-x64-gnu@4.1.18
 
-      - name: Build object types
+      - name: Build deterministic Object Type outputs
+        env:
+          EAI_APP_KEY: ${{ inputs.app_key }}
+          EAI_TENANT_ID: ${{ inputs.tenant_id }}
         run: npm run build:object-types
 
       - name: Validate application
+        env:
+          EAI_APP_KEY: ${{ inputs.app_key }}
+          EAI_TENANT_ID: ${{ inputs.tenant_id }}
         shell: bash
         run: |
           set -uo pipefail
@@ -196,6 +198,9 @@ jobs:
           exit "$validation_status"
 
       - name: Build generated app
+        env:
+          EAI_APP_KEY: ${{ inputs.app_key }}
+          EAI_TENANT_ID: ${{ inputs.tenant_id }}
         run: npm run build
 
       - name: Prepare image context
@@ -206,6 +211,7 @@ jobs:
 
       - name: Build OCI image archive
         run: |
+          rm -f .eai-build/eai-generated-app-image.tar
           mkdir -p .eai-build
           docker buildx build \
             --platform linux/amd64 \
@@ -213,6 +219,21 @@ jobs:
             --metadata-file .eai-build/image-metadata.json \
             --output type=oci,dest=.eai-build/eai-generated-app-image.tar \
             .eai-build/image-context
+
+      - name: Verify post-build source integrity
+        env:
+          SOURCE_COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT_SHA"
+          git diff --exit-code -- . \
+            ':(exclude)src/eai.config/object-types.json' \
+            ':(exclude)src/eai.config/object-types.provisioning.json'
+          untracked="$(git status --porcelain=v1 --untracked-files=all -- . \
+            ':(exclude).eai-build/**' \
+            ':(exclude)src/eai.config/object-types.json' \
+            ':(exclude)src/eai.config/object-types.provisioning.json')"
+          test -z "$untracked" || { printf '%s\n' "$untracked"; exit 1; }
 
       - name: Upload immutable image artifact
         id: image-artifact
@@ -224,13 +245,20 @@ jobs:
           retention-days: 14
           path: .eai-build/eai-generated-app-image.tar
 
-      - name: Attest immutable image archive provenance
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-path: .eai-build/eai-generated-app-image.tar
-
       - name: Collect immutable build evidence
         id: evidence
+        env:
+          APP_KEY: ${{ inputs.app_key }}
+          TENANT_ID: ${{ inputs.tenant_id }}
+          TARGET_TENANT_ID: ${{ inputs.target_tenant_id }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+          NONCE: ${{ inputs.nonce }}
+          CONFIG_HASH: ${{ inputs.config_hash }}
+          DEPLOY_ENVIRONMENT: ${{ inputs.env || inputs.environment || 'preview' }}
+          LEGACY_DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+          PREFERRED_DEPLOY_ENVIRONMENT: ${{ inputs.env }}
+          SOURCE_COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
+          SOURCE_MODE: ${{ inputs.source_mode || 'source-unknown' }}
         run: |
           image_digest="$(node -e "const v=require('./.eai-build/image-metadata.json')['containerimage.digest']; if(!v) process.exit(1); process.stdout.write(v)")"
           node scripts/source-unknown-deployment-evidence.mjs collect \
@@ -255,8 +283,84 @@ jobs:
             --artifact-digest "${{ steps.image-artifact.outputs.artifact-digest }}" \
             --image-digest "$image_digest"
 
+      - name: Upload immutable build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: eai-generated-app-evidence
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14
+          path: .eai-build/evidence/source-unknown-deployment-evidence.json
+
+  handoff:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: read
+    steps:
+      - name: Download immutable image artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: eai-generated-app-image
+          path: .eai-build
+
+      - name: Download immutable build evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: eai-generated-app-evidence
+          path: .eai-build/evidence
+
+      - name: Validate exact handoff binding
+        env:
+          APP_KEY: ${{ inputs.app_key }}
+          TENANT_ID: ${{ inputs.tenant_id }}
+          TARGET_TENANT_ID: ${{ inputs.target_tenant_id }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+          CONFIG_HASH: ${{ inputs.config_hash }}
+          DEPLOY_ENVIRONMENT: ${{ inputs.env || inputs.environment || 'preview' }}
+          EAI_BOUND_PUBLIC_API_URL: ${{ inputs.public_api_url || inputs.publicapi_base_url }}
+          SOURCE_COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
+          SOURCE_MODE: ${{ inputs.source_mode || 'source-unknown' }}
+        shell: bash
+        run: |
+          [[ "$EAI_BOUND_PUBLIC_API_URL" =~ ^https://(dev-api\.au|(test-api|api)\.(au|ca|eu))\.myenterprise\.ai/public/?$ ]]
+          [[ "$APP_KEY" =~ ^[a-z0-9][a-z0-9-]{1,62}$ ]]
+          [[ "$TENANT_ID" =~ ^[A-Za-z0-9]([A-Za-z0-9._:-]{0,254}[A-Za-z0-9])?$ ]]
+          [[ "$TARGET_TENANT_ID" =~ ^[A-Za-z0-9]([A-Za-z0-9._:-]{0,254}[A-Za-z0-9])?$ ]]
+          [[ "$OPERATION_ID" =~ ^[A-Za-z0-9]([A-Za-z0-9._~:-]{0,254}[A-Za-z0-9])?$ ]]
+          node - <<'NODE'
+          const { createHash } = require('node:crypto');
+          const fs = require('node:fs');
+          const evidence = JSON.parse(fs.readFileSync('.eai-build/evidence/source-unknown-deployment-evidence.json', 'utf8'));
+          const expected = {
+            operationId: process.env.OPERATION_ID,
+            environment: process.env.DEPLOY_ENVIRONMENT,
+            commitSha: process.env.SOURCE_COMMIT_SHA,
+            configHash: process.env.CONFIG_HASH,
+          };
+          for (const [key, value] of Object.entries(expected)) {
+            if (evidence[key] !== value) throw new Error(`Build evidence ${key} does not match the exact dispatch.`);
+          }
+          if ((evidence.sourceMode || 'source-unknown') !== process.env.SOURCE_MODE) throw new Error('Build evidence source mode does not match.');
+          if (process.env.SOURCE_MODE === 'eai-cli-generated' && evidence.targetTenantId !== process.env.TARGET_TENANT_ID) throw new Error('Build evidence target tenant does not match.');
+          if (evidence.validationSummary?.status !== 'passed') throw new Error('Build evidence validation did not pass.');
+          const archive = fs.readFileSync('.eai-build/eai-generated-app-image.tar');
+          const archiveDigest = `sha256:${createHash('sha256').update(archive).digest('hex')}`;
+          if (evidence.imageArtifact?.archiveDigest !== archiveDigest) throw new Error('Downloaded image archive does not match build evidence.');
+          NODE
+
+      - name: Attest immutable image archive provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: .eai-build/eai-generated-app-image.tar
+
       - name: Request GitHub OIDC token
         id: github-oidc
+        env:
+          SOURCE_MODE: ${{ inputs.source_mode || 'source-unknown' }}
         run: |
           case "$SOURCE_MODE" in
             source-unknown) audience=api://enterprise-ai-publicapi/source-unknown ;;
@@ -268,9 +372,21 @@ jobs:
           echo "::add-mask::$token"
           echo "token=$token" >> "$GITHUB_OUTPUT"
 
-      - name: Submit workflow evidence
+      - name: Revalidate exact binding and submit workflow evidence
+        env:
+          APP_KEY: ${{ inputs.app_key }}
+          TENANT_ID: ${{ inputs.tenant_id }}
+          TARGET_TENANT_ID: ${{ inputs.target_tenant_id }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+          CONFIG_HASH: ${{ inputs.config_hash }}
+          DEPLOY_ENVIRONMENT: ${{ inputs.env || inputs.environment || 'preview' }}
+          EAI_BOUND_PUBLIC_API_URL: ${{ inputs.public_api_url || inputs.publicapi_base_url }}
+          OIDC_TOKEN: ${{ steps.github-oidc.outputs.token }}
+          SOURCE_COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
+          SOURCE_MODE: ${{ inputs.source_mode || 'source-unknown' }}
+        shell: bash
         run: |
-          test -n "$EAI_PUBLIC_API_URL"
+          [[ "$EAI_BOUND_PUBLIC_API_URL" =~ ^https://(dev-api\.au|(test-api|api)\.(au|ca|eu))\.myenterprise\.ai/public/?$ ]]
           case "$SOURCE_MODE" in
             source-unknown) evidence_path="source-unknown/workflow-evidence" ;;
             eai-cli-generated) evidence_path="cli-managed-source/operations/${OPERATION_ID}/workflow-evidence" ;;
@@ -278,16 +394,22 @@ jobs:
           esac
           curl --fail-with-body --silent --show-error \
             --proto '=https' --tlsv1.2 --max-redirs 0 \
-            -H "Authorization: Bearer ${{ steps.github-oidc.outputs.token }}" \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
             --data-binary @.eai-build/evidence/source-unknown-deployment-evidence.json \
-            "${EAI_PUBLIC_API_URL%/}/v4/platform/tenants/${TENANT_ID}/apps/${APP_KEY}/${evidence_path}" \
+            "${EAI_BOUND_PUBLIC_API_URL%/}/v4/platform/tenants/${TENANT_ID}/apps/${APP_KEY}/${evidence_path}" \
             | tee .eai-build/evidence/workflow-evidence-response.json
 
       - name: Assert evidence accepted
         run: |
-          node scripts/source-unknown-deployment-evidence.mjs assert-evidence-accepted \
-            --response .eai-build/evidence/workflow-evidence-response.json
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const body = JSON.parse(fs.readFileSync('.eai-build/evidence/workflow-evidence-response.json', 'utf8'));
+          const response = body && typeof body.response === 'object' ? body.response : body;
+          const accepted = response.status === 'accepted';
+          const deferred = response.status === 'handoff_pending' && response.requiresTenantInfra === true && typeof response.deploymentRequestId === 'string' && response.deploymentRequestId.trim();
+          if (!accepted && !deferred) throw new Error(`Expected accepted evidence or persisted handoff, got ${response.status || '<missing>'}.`);
+          NODE
 
       - name: Upload handoff responses
         if: always()
@@ -297,5 +419,4 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
           retention-days: 14
-          path: |
-            .eai-build/evidence/workflow-evidence-response.json
+          path: .eai-build/evidence/workflow-evidence-response.json
