@@ -294,6 +294,11 @@ async function digestFile(path) {
 function digestFiles(root, paths) {
   const hash = createHash('sha256');
   for (const relativePath of paths.sort()) {
+    if (!assertGovernedAncestors(root, relativePath)) {
+      throw new Error(
+        `Governed configuration ancestor does not exist: ${relativePath}`,
+      );
+    }
     hash.update(relativePath);
     hash.update('\0');
     hash.update(
@@ -330,9 +335,31 @@ function optionalLstat(path) {
   }
 }
 
+function assertGovernedAncestors(root, relativePath) {
+  const resolvedRoot = resolve(root);
+  const rootMetadata = lstatSync(resolvedRoot);
+  if (rootMetadata.isSymbolicLink() || !rootMetadata.isDirectory()) {
+    throw new Error('Application root must be a no-follow directory.');
+  }
+  const components = relativePath.split(/[\\/]/).filter(Boolean);
+  let current = resolvedRoot;
+  for (const component of components.slice(0, -1)) {
+    current = join(current, component);
+    const metadata = optionalLstat(current);
+    if (!metadata) return false;
+    if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
+      throw new Error(
+        `Governed configuration ancestor must be a regular directory: ${relative(root, current).replaceAll('\\', '/')}`,
+      );
+    }
+  }
+  return true;
+}
+
 function listGovernedConfigFiles(root) {
   const paths = [];
   for (const relativePath of GOVERNED_ROOT_FILES) {
+    assertGovernedAncestors(root, relativePath);
     const absolutePath = join(root, relativePath);
     const metadata = optionalLstat(absolutePath);
     if (!metadata) continue;
@@ -345,6 +372,7 @@ function listGovernedConfigFiles(root) {
   }
 
   const visit = (relativeDirectory) => {
+    if (!assertGovernedAncestors(root, relativeDirectory)) return;
     const absoluteDirectory = join(root, relativeDirectory);
     const directoryMetadata = optionalLstat(absoluteDirectory);
     if (!directoryMetadata) return;

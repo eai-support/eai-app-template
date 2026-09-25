@@ -15,7 +15,7 @@ Canonical amendment: https://github.com/enterpriseaigroup/Issues2025/issues/3503
 
 ## Requirements
 
-- **DTE-018:** hash all governed configuration source and runtime provenance inputs, including nested files and the deployment contract; exclude only deterministic generated Object Type outputs, reject live and dangling links plus every nonregular filesystem entry, and accept the canonical base-template, approved-source, or approved-release provenance anchors without an unbound fixture fallback.
+- **DTE-018:** hash all governed configuration source and runtime provenance inputs, including nested files and the deployment contract; exclude only deterministic generated Object Type outputs, reject live and dangling links in every governed path component plus every nonregular filesystem entry, recheck ancestors before reading, and accept the canonical base-template, approved-source, or approved-release provenance anchors without an unbound fixture fallback.
 - **DTE-020, DTE-021:** expose a canonical workflow/collector pair, declare all dispatch inputs, preserve explicitly empty optional aliases, and reject malformed operation/path values before URL construction.
 - **DTE-022:** explicitly upload the hidden build artifact, prove it is a nonempty no-follow regular file with size and digest evidence, and create the evidence output through a confined no-link path without replacing an existing file.
 - **DTE-023:** pin actions and base images to immutable commits or digests.
@@ -27,7 +27,7 @@ Canonical amendment: https://github.com/enterpriseaigroup/Issues2025/issues/3503
 ## Acceptance
 
 1. Both source modes validate operation, nonce, app, tenant, environment, workflow, ref, and commit before composing an evidence URL. `eai-cli-generated` requires and validates the exact target tenant; the legacy `source-unknown` contract validates it when supplied without making the compatibility input mandatory. Explicitly empty optional aliases remain empty and do not become boolean flags.
-2. Configuration and provenance hashes change for every governed source input, remain stable across deterministic generated Object Type outputs, and reject dangling or live symlinks, FIFOs, sockets, devices, and other nonregular entries.
+2. Configuration and provenance hashes change for every governed source input, remain stable across deterministic generated Object Type outputs, and reject dangling or live symlinks in a governed entry or any ancestor plus FIFOs, sockets, devices, and other nonregular entries.
 3. Runtime provenance preserves and validates any canonical approved source anchor.
 4. Hidden OCI artifacts upload with a nonzero size and digest; EAI evidence and standard attestation identify the same subject. Evidence creation rejects linked output directories, linked or existing output files, and paths outside the application root.
 5. Existing `environment` callers and new `env` callers work; conflicting values fail.

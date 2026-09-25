@@ -1099,6 +1099,41 @@ test('configuration digest rejects dangling governed root links', () => {
 });
 
 test(
+  'configuration digest rejects linked or non-directory governed ancestors',
+  { skip: process.platform === 'win32' },
+  () => {
+    for (const scenario of ['link', 'file']) {
+      const workDir = mkdtempSync(
+        join(tmpdir(), `eai-config-ancestor-${scenario}-`),
+      );
+      try {
+        const root = join(workDir, 'app');
+        const outside = join(workDir, 'outside');
+        writeFixtureApp(root);
+        mkdirSync(join(outside, 'eai.config'), { recursive: true });
+        writeFileSync(
+          join(outside, 'eai.config/runtime.ts'),
+          'export const escaped = true;\n',
+        );
+        rmSync(join(root, 'src'), { recursive: true, force: true });
+        if (scenario === 'link') symlinkSync(outside, join(root, 'src'), 'dir');
+        else writeFileSync(join(root, 'src'), 'not a directory\n');
+
+        const result = spawnSync(
+          process.execPath,
+          [evidenceScript, 'config-hash', '--root', root],
+          { encoding: 'utf8' },
+        );
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /ancestor must be a regular directory/);
+      } finally {
+        rmSync(workDir, { recursive: true, force: true });
+      }
+    }
+  },
+);
+
+test(
   'configuration digest rejects nonregular governed entries',
   { skip: process.platform === 'win32' },
   () => {

@@ -11,3 +11,7 @@ Retain the historical `environment` input and add `env` as an alias. Resolve one
 ## Release identity
 
 Do not predict the automatic post-merge release. Consumers may record this exact candidate commit and byte digests, but the immutable release tag/commit remains a deferred gate until publication.
+
+## Governed path authority
+
+Treat every directory component beneath the application root as part of the configuration trust boundary. Reject a linked or non-directory ancestor before enumeration and recheck ancestors immediately before each no-follow file read so `src -> outside` cannot move configuration authority outside the checked-out source.
