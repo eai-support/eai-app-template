@@ -19,15 +19,16 @@
 - [x] Include `.test.*` and `.spec.*` files in the governed configuration digest while excluding only the two generated Object Type outputs (DTE-018).
 - [x] Copy standalone, static, and public source trees entry by entry without following nested links or accepting nonregular files (DTE-022).
 - [x] Apply the canonical generated-runtime app-key grammar in collector and handoff validation and retain the template's supported `demo` environment (DTE-020, DTE-021, DTE-026).
+- [x] Write collector values to `$GITHUB_OUTPUT` only through a verified no-follow regular-file descriptor (DTE-025).
 - [x] Update owned tests and traceability.
-- [x] Rerun prescribed checks and record exact-head results after output-tree hardening.
+- [x] Rerun prescribed checks and record exact-head results after GitHub command-file hardening.
 
 ## Exact-head evidence
 
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (29 passed)
+- `npm run test:source-unknown-evidence` (30 passed)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (322 passed)

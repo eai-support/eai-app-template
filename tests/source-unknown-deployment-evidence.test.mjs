@@ -1047,6 +1047,35 @@ test('collect rejects multiline provenance before writing evidence or GitHub out
   }
 });
 
+test('collect never follows a replaced GitHub output command file', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-linked-github-output-'));
+  try {
+    const root = join(workDir, 'app');
+    const protectedPath = join(workDir, 'protected.txt');
+    const githubOutput = join(workDir, 'github-output.txt');
+    writeFixtureApp(root);
+    writeFileSync(protectedPath, 'protected\n');
+    symlinkSync(protectedPath, githubOutput);
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        ...sourceUnknownCollectArgs(root),
+        '--github-output',
+        githubOutput,
+      ],
+      { encoding: 'utf8' },
+    );
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /ELOOP|symbolic link/i);
+    assert.equal(readFileSync(protectedPath, 'utf8'), 'protected\n');
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test('collect rejects a config hash that does not bind the checked-out files', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-tamper-'));
   try {
