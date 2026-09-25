@@ -9,6 +9,9 @@
 - [x] Pin actions and the base image immutably (DTE-023).
 - [x] Preserve `environment`/`env` caller compatibility (DTE-026).
 - [x] Preserve optional `target_tenant_id` compatibility for legacy `source-unknown` callers while requiring it for `eai-cli-generated`.
+- [x] Preserve explicitly empty optional dispatch aliases as values rather than boolean flags (DTE-020, DTE-021).
+- [x] Reject multiline provenance and GitHub output values (DTE-025).
+- [x] Confine evidence creation to a no-link path and refuse existing destinations (DTE-022).
 - [x] Update owned tests and traceability.
 - [x] Run prescribed checks and record exact results.
 
@@ -17,7 +20,7 @@
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (20 passed)
+- `npm run test:source-unknown-evidence` (23 passed)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (322 passed)

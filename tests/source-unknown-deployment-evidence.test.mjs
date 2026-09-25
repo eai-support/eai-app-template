@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -103,6 +104,21 @@ function sourceUnknownBindingArgs(root) {
     '1',
     '--expected-config-hash',
     configHash(root),
+  ];
+}
+
+function sourceUnknownCollectArgs(root) {
+  return [
+    'collect',
+    '--root',
+    root,
+    ...sourceUnknownBindingArgs(root),
+    '--artifact-id',
+    '987654321',
+    '--artifact-digest',
+    `sha256:${'d'.repeat(64)}`,
+    '--image-digest',
+    `sha256:${'c'.repeat(64)}`,
   ];
 }
 
@@ -309,10 +325,6 @@ test('CLI evidence binds each merged commit and remains repository-owner agnosti
   try {
     const root = join(workDir, 'app');
     writeFixtureApp(root);
-    const evidencePath = join(
-      root,
-      '.eai-build/evidence/source-unknown-deployment-evidence.json',
-    );
     const states = [
       {
         repo: 'eai-generated-apps/demo',
@@ -335,6 +347,8 @@ test('CLI evidence binds each merged commit and remains repository-owner agnosti
     ];
     const configHashes = new Set();
     for (const [index, state] of states.entries()) {
+      const evidenceFile = `source-unknown-deployment-evidence-${index}.json`;
+      const evidencePath = join(root, '.eai-build/evidence', evidenceFile);
       const runtimePath = join(root, 'eai.runtime.json');
       const runtime = JSON.parse(readFileSync(runtimePath, 'utf8'));
       runtime.release = index;
@@ -377,6 +391,8 @@ test('CLI evidence binds each merged commit and remains repository-owner agnosti
         String(100 + index),
         '--workflow-run-attempt',
         '1',
+        '--evidence-file',
+        evidenceFile,
       ]);
       const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
       assert.equal(evidence.sourceMode, 'eai-cli-generated');
@@ -795,8 +811,20 @@ test('schema provenance rejects missing and malformed approved source anchors', 
       validatorDigest: `sha256:${'d'.repeat(64)}`,
     },
     {
+      templateVersion: '0.1.0\ninjected=value',
+      baseTemplateSha: 'a'.repeat(40),
+      schemaDigest: `sha256:${'c'.repeat(64)}`,
+      validatorDigest: `sha256:${'d'.repeat(64)}`,
+    },
+    {
       templateVersion: '0.1.0',
       approvedReleaseId: '',
+      schemaDigest: `sha256:${'c'.repeat(64)}`,
+      validatorDigest: `sha256:${'d'.repeat(64)}`,
+    },
+    {
+      templateVersion: '0.1.0',
+      approvedReleaseId: 'release-1\ninjected=value',
       schemaDigest: `sha256:${'c'.repeat(64)}`,
       validatorDigest: `sha256:${'d'.repeat(64)}`,
     },
@@ -846,6 +874,53 @@ test('schema provenance rejects missing and malformed approved source anchors', 
     } finally {
       rmSync(workDir, { recursive: true, force: true });
     }
+  }
+});
+
+test('collect rejects multiline provenance before writing evidence or GitHub outputs', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-output-injection-'));
+  try {
+    writeFixtureApp(workDir);
+    const runtimePath = join(workDir, 'eai.runtime.json');
+    const runtime = JSON.parse(readFileSync(runtimePath, 'utf8'));
+    runtime.schemaProvenance.templateVersion = '0.1.0\ninjected=value';
+    writeFileSync(runtimePath, JSON.stringify(runtime));
+    const githubOutput = join(workDir, 'github-output.txt');
+    writeFileSync(githubOutput, 'trusted=value\n');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        'collect',
+        '--root',
+        workDir,
+        ...sourceUnknownBindingArgs(workDir),
+        '--artifact-id',
+        '987654321',
+        '--artifact-digest',
+        `sha256:${'e'.repeat(64)}`,
+        '--image-digest',
+        `sha256:${'f'.repeat(64)}`,
+        '--github-output',
+        githubOutput,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /templateVersion is required/);
+    assert.equal(readFileSync(githubOutput, 'utf8'), 'trusted=value\n');
+    assert.equal(
+      existsSync(
+        join(
+          workDir,
+          '.eai-build/evidence/source-unknown-deployment-evidence.json',
+        ),
+      ),
+      false,
+    );
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
   }
 });
 
@@ -1056,6 +1131,19 @@ test('dispatch rejects auto config grants, unsafe source-unknown paths, and conf
       '--public-api-url',
       'https://api.au.myenterprise.ai/public',
     ];
+    runEvidenceScript([
+      ...valid,
+      '--target-tenant-id',
+      '',
+      '--preferred-environment',
+      '',
+      '--legacy-environment',
+      '',
+      '--preferred-public-api-url',
+      '',
+      '--legacy-public-api-url',
+      '',
+    ]);
     for (const extra of [
       ['--expected-config-hash', 'auto'],
       ['--app-key', '../other'],
@@ -1137,6 +1225,80 @@ test('collect rejects a linked OCI archive before hashing evidence', () => {
     assert.match(result.stderr, /nonempty regular file/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('collect confines evidence to a no-link directory inside the application root', () => {
+  const cases = ['outside-root', 'escaped-file', 'linked-directory'];
+  for (const scenario of cases) {
+    const workDir = mkdtempSync(join(tmpdir(), `eai-evidence-${scenario}-`));
+    try {
+      const root = join(workDir, 'app');
+      const outside = join(workDir, 'outside');
+      writeFixtureApp(root);
+      mkdirSync(outside);
+      const args = sourceUnknownCollectArgs(root);
+      if (scenario === 'outside-root') {
+        args.push('--output-dir', outside);
+      } else if (scenario === 'escaped-file') {
+        args.push('--evidence-file', '../escaped.json');
+      } else {
+        symlinkSync(outside, join(root, '.eai-build/evidence'), 'dir');
+      }
+
+      const result = spawnSync(process.execPath, [evidenceScript, ...args], {
+        encoding: 'utf8',
+      });
+      assert.equal(result.status, 1);
+      assert.match(
+        result.stderr,
+        /must remain within its approved directory|must not contain links/,
+      );
+      assert.equal(
+        existsSync(join(outside, 'source-unknown-deployment-evidence.json')),
+        false,
+      );
+      assert.equal(existsSync(join(root, '.eai-build/escaped.json')), false);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('collect never replaces an existing or linked evidence file', () => {
+  for (const scenario of ['regular', 'link']) {
+    const workDir = mkdtempSync(join(tmpdir(), `eai-evidence-${scenario}-`));
+    try {
+      const root = join(workDir, 'app');
+      writeFixtureApp(root);
+      const evidenceDir = join(root, '.eai-build/evidence');
+      const evidencePath = join(
+        evidenceDir,
+        'source-unknown-deployment-evidence.json',
+      );
+      const protectedPath = join(workDir, 'protected.txt');
+      mkdirSync(evidenceDir);
+      writeFileSync(protectedPath, 'protected\n');
+      if (scenario === 'regular') {
+        writeFileSync(evidencePath, 'existing evidence\n');
+      } else {
+        symlinkSync(protectedPath, evidencePath);
+      }
+
+      const result = spawnSync(
+        process.execPath,
+        [evidenceScript, ...sourceUnknownCollectArgs(root)],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /EEXIST/);
+      assert.equal(readFileSync(protectedPath, 'utf8'), 'protected\n');
+      if (scenario === 'regular') {
+        assert.equal(readFileSync(evidencePath, 'utf8'), 'existing evidence\n');
+      }
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
   }
 });
 
