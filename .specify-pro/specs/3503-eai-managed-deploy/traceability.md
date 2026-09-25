@@ -1,11 +1,13 @@
 # Traceability
 
-| Requirement | Planned implementation | Owned evidence |
-| --- | --- | --- |
-| DTE-018 | evidence collector configuration/provenance inventory | `tests/source-unknown-deployment-evidence.test.mjs` |
-| DTE-020, DTE-021 | `.github/workflows/eai-app.yml`, collector input validators | workflow static assertions and collector tests |
-| DTE-022, DTE-024 | hidden artifact upload, digest/attestation steps | workflow static assertions and evidence tests |
-| DTE-023 | immutable workflow action/base-image references | workflow static assertions |
-| DTE-025 | post-build OIDC acquisition and secret-free build | workflow ordering assertions |
-| DTE-026 | additive `environment` and `env` inputs | compatibility tests |
-| DTE-086–DTE-088 | current-main merge and producer release gate | `npm run verify`, release-version checks |
+Requirements are defined by the [Issue #3503 hardening amendment](https://github.com/enterpriseaigroup/Issues2025/issues/3503#issuecomment-5826177803).
+
+| Requirement      | Implementation                                                                                                                          | Owned evidence                                            |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| DTE-018          | recursive, no-symlink configuration manifest and required runtime provenance in `scripts/source-unknown-deployment-evidence.mjs`        | nested/deployment-contract/provenance evidence tests      |
+| DTE-020, DTE-021 | `.github/workflows/eai-app.yml` plus shared source-mode, path, and signed-grant validators                                              | workflow assertions and both source modes' negative tests |
+| DTE-022, DTE-024 | hidden artifact upload, nonempty archive check, and pinned GitHub provenance attestation                                                | workflow assertions and empty-archive test                |
+| DTE-023          | immutable workflow action SHAs and Node OCI digest                                                                                      | workflow and image-context assertions                     |
+| DTE-025          | public immutable dependency download with scripts disabled, credential-free lifecycle/build, then OIDC                                   | workflow ordering and credential-isolation assertions     |
+| DTE-026          | additive `environment`/`env`, `publicapi_base_url`/`public_api_url`, and reusable-workflow compatibility inputs with conflict rejection | compatibility and conflict tests                          |
+| DTE-086–DTE-088  | current-main merge; producer candidate remains unversioned until its automatic release                                                  | exact-head validation above and release-version tests     |

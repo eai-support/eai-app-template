@@ -9,6 +9,7 @@
           "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact, submit nonce-bound GitHub OIDC evidence for exact source-unknown or reviewed CLI-generated authority, and verify scoped runtime readiness without requiring an unconfigured NCB workflow.",
           "owned_paths": [
             ".eai/test-coverage.json",
+            ".specify-pro/specs/3503-eai-managed-deploy/**",
             ".github/workflows/eai-app.yml",
             "scripts/source-unknown-deployment-evidence.mjs",
             "src/lib/platform/readiness.ts",

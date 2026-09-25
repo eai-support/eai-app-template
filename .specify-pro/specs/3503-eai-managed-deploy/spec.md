@@ -4,6 +4,8 @@
 
 The owner approved this hardening scope on 2026-09-25. It covers reviewed provenance, identity, compatibility, credential-safety, and workflow fixes while preserving both successful source-mode journeys. It does not authorize merge, release, deployment, activation, billing, or destructive live tests.
 
+Canonical amendment: https://github.com/enterpriseaigroup/Issues2025/issues/3503#issuecomment-5826177803
+
 ## Preserved user contract
 
 - The workflow supports both `source-unknown` and `eai-cli-generated` sources.

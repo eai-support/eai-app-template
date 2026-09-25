@@ -34,19 +34,82 @@ on:
         required: true
       public_api_url:
         description: Trusted EAI regional PublicAPI URL for this operation.
-        required: true
+        required: false
+      publicapi_base_url:
+        description: Deprecated alias for public_api_url; retained for compatibility.
+        required: false
       env:
-        description: Deployment environment to bind.
+        description: Deployment environment to bind; preferred input name.
+        required: false
+      environment:
+        description: Deployment environment to bind; compatibility alias for env.
+        required: false
+      release_channel:
+        description: Deprecated compatibility input; deployment environment is authoritative.
+        required: false
+  workflow_call:
+    inputs:
+      source_mode:
+        description: Approved source authority for this deployment.
+        required: false
+        type: string
+        default: source-unknown
+      app_key:
         required: true
-        default: preview
+        type: string
+      tenant_id:
+        required: true
+        type: string
+      target_tenant_id:
+        required: false
+        type: string
+      operation_id:
+        required: true
+        type: string
+      nonce:
+        required: true
+        type: string
+      config_hash:
+        description: Exact configuration hash approved by workflow setup.
+        required: true
+        type: string
+      commit_sha:
+        description: Exact source commit; defaults to the reusable workflow caller SHA.
+        required: false
+        type: string
+      public_api_url:
+        required: false
+        type: string
+      publicapi_base_url:
+        description: Deprecated alias for public_api_url.
+        required: false
+        type: string
+      env:
+        required: false
+        type: string
+      environment:
+        description: Compatibility alias for env.
+        required: false
+        type: string
+      release_channel:
+        description: Deprecated compatibility input; accepted but not authoritative.
+        required: false
+        type: string
+    secrets:
+      EAI_ACCESS_TOKEN:
+        description: Deprecated and intentionally unused.
+        required: false
+      EAI_PUBLIC_API_URL:
+        description: Compatibility source for the non-secret PublicAPI endpoint.
+        required: false
 
 permissions:
+  attestations: write
   contents: read
   id-token: write
-  packages: read
 
 concurrency:
-  group: eai-app-${{ inputs.source_mode }}-${{ inputs.app_key }}-${{ inputs.env }}-${{ github.ref }}
+  group: eai-app-${{ inputs.source_mode }}-${{ inputs.app_key }}-${{ inputs.env || inputs.environment || 'preview' }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -58,25 +121,31 @@ jobs:
     runs-on: ubuntu-latest
     env:
       APP_KEY: ${{ inputs.app_key }}
+      EAI_APP_KEY: ${{ inputs.app_key }}
       TENANT_ID: ${{ inputs.tenant_id }}
+      EAI_TENANT_ID: ${{ inputs.tenant_id }}
       TARGET_TENANT_ID: ${{ inputs.target_tenant_id }}
       OPERATION_ID: ${{ inputs.operation_id }}
       NONCE: ${{ inputs.nonce }}
       CONFIG_HASH: ${{ inputs.config_hash }}
-      DEPLOY_ENVIRONMENT: ${{ inputs.env }}
-      EAI_PUBLIC_API_URL: ${{ inputs.public_api_url }}
-      SOURCE_COMMIT_SHA: ${{ inputs.commit_sha }}
+      DEPLOY_ENVIRONMENT: ${{ inputs.env || inputs.environment || 'preview' }}
+      LEGACY_DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+      PREFERRED_DEPLOY_ENVIRONMENT: ${{ inputs.env }}
+      EAI_PUBLIC_API_URL: ${{ inputs.public_api_url || inputs.publicapi_base_url || secrets.EAI_PUBLIC_API_URL }}
+      LEGACY_PUBLIC_API_URL: ${{ inputs.publicapi_base_url }}
+      PREFERRED_PUBLIC_API_URL: ${{ inputs.public_api_url }}
+      SOURCE_COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
       SOURCE_MODE: ${{ inputs.source_mode || 'source-unknown' }}
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ inputs.commit_sha }}
+          ref: ${{ inputs.commit_sha || github.sha }}
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -92,17 +161,19 @@ jobs:
             --nonce "$NONCE" \
             --expected-config-hash "$CONFIG_HASH" \
             --environment "$DEPLOY_ENVIRONMENT" \
+            --preferred-environment "$PREFERRED_DEPLOY_ENVIRONMENT" \
+            --legacy-environment "$LEGACY_DEPLOY_ENVIRONMENT" \
             --public-api-url "$EAI_PUBLIC_API_URL" \
+            --preferred-public-api-url "$PREFERRED_PUBLIC_API_URL" \
+            --legacy-public-api-url "$LEGACY_PUBLIC_API_URL" \
             --commit "$SOURCE_COMMIT_SHA" \
             --workflow-sha "$GITHUB_SHA"
 
-      - name: Configure npm for GitHub Packages
-        run: |
-          echo "@enterpriseaigroup:registry=https://npm.pkg.github.com" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
+      - name: Install dependencies without running application-controlled scripts
+        run: npm ci --ignore-scripts
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Run dependency install scripts without package credentials
+        run: npm rebuild
 
       - name: Install Linux native CSS bindings
         run: npm install --no-save lightningcss-linux-x64-gnu@1.30.2 @tailwindcss/oxide-linux-x64-gnu@4.1.18
@@ -130,7 +201,7 @@ jobs:
         run: node scripts/source-unknown-deployment-evidence.mjs prepare-image-context
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build OCI image archive
         run: |
@@ -144,12 +215,18 @@ jobs:
 
       - name: Upload immutable image artifact
         id: image-artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: eai-generated-app-image
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
           path: .eai-build/eai-generated-app-image.tar
+
+      - name: Attest immutable image archive provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: .eai-build/eai-generated-app-image.tar
 
       - name: Collect immutable build evidence
         id: evidence
@@ -170,6 +247,8 @@ jobs:
             --workflow-run-id "$GITHUB_RUN_ID" \
             --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
             --environment "$DEPLOY_ENVIRONMENT" \
+            --preferred-environment "$PREFERRED_DEPLOY_ENVIRONMENT" \
+            --legacy-environment "$LEGACY_DEPLOY_ENVIRONMENT" \
             --expected-config-hash "$CONFIG_HASH" \
             --artifact-id "${{ steps.image-artifact.outputs.artifact-id }}" \
             --artifact-digest "${{ steps.image-artifact.outputs.artifact-digest }}" \
@@ -183,7 +262,7 @@ jobs:
             eai-cli-generated) audience=api://enterprise-ai-publicapi/eai-cli-generated ;;
             *) exit 1 ;;
           esac
-          response="$(curl -fsSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${audience}")"
+          response="$(curl --fail --silent --show-error --proto '=https' --tlsv1.2 --max-redirs 0 -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${audience}")"
           token="$(node -e "let s=''; process.stdin.on('data', d => s += d); process.stdin.on('end', () => process.stdout.write(JSON.parse(s).value));" <<< "$response")"
           echo "::add-mask::$token"
           echo "token=$token" >> "$GITHUB_OUTPUT"
@@ -197,6 +276,7 @@ jobs:
             *) exit 1 ;;
           esac
           curl --fail-with-body --silent --show-error \
+            --proto '=https' --tlsv1.2 --max-redirs 0 \
             -H "Authorization: Bearer ${{ steps.github-oidc.outputs.token }}" \
             -H "Content-Type: application/json" \
             --data-binary @.eai-build/evidence/source-unknown-deployment-evidence.json \
@@ -210,10 +290,11 @@ jobs:
 
       - name: Upload handoff responses
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: eai-source-unknown-handoff-${{ github.run_id }}
           if-no-files-found: ignore
+          include-hidden-files: true
           retention-days: 14
           path: |
             .eai-build/evidence/workflow-evidence-response.json

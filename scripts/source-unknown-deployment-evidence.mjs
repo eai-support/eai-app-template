@@ -3,9 +3,12 @@ import { createHash } from 'node:crypto';
 import {
   createReadStream,
   existsSync,
+  lstatSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
@@ -15,6 +18,14 @@ import { execFileSync } from 'node:child_process';
 const SHA256_DIGEST = /^sha256:[a-f0-9]{64}$/;
 const SOURCE_MODES = new Set(['source-unknown', 'eai-cli-generated']);
 const SAFE_PATH_SEGMENT = /^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,254}[A-Za-z0-9])?$/;
+const SAFE_OPAQUE_VALUE =
+  /^[A-Za-z0-9](?:[A-Za-z0-9._~:-]{0,254}[A-Za-z0-9])?$/;
+const SAFE_REPOSITORY =
+  /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9](?:[A-Za-z0-9._-]{0,98}[A-Za-z0-9])?$/;
+const MANAGED_ENVIRONMENTS = new Set(['preview', 'dev', 'test', 'prod']);
+const GOVERNED_ROOT_FILES = ['eai.config.ts', 'eai.runtime.json'];
+const GOVERNED_CONFIG_ROOTS = ['src/eai.config'];
+const NON_RUNTIME_CONFIG_FILE = /(?:^|\.)(?:test|spec)\.[^.]+$/;
 
 function sourceMode(options) {
   const mode = option(options, 'sourceMode', 'source-unknown');
@@ -24,54 +35,91 @@ function sourceMode(options) {
   return mode;
 }
 
+function requiredSafePathSegment(options, key, label = key) {
+  const value = option(options, key);
+  if (!SAFE_PATH_SEGMENT.test(value)) {
+    throw new Error(
+      `Managed deployment requires a safe ${label} path segment.`,
+    );
+  }
+  return value;
+}
+
 function targetTenantId(options, mode) {
   const targetTenant = option(options, 'targetTenantId');
-  if (
-    mode === 'eai-cli-generated' &&
-    (!targetTenant || targetTenant.length > 128)
-  ) {
+  if (mode === 'eai-cli-generated' && !targetTenant) {
     throw new Error(
       'CLI generated source requires its exact signed target tenant ID.',
+    );
+  }
+  if (targetTenant && !SAFE_PATH_SEGMENT.test(targetTenant)) {
+    throw new Error(
+      'Managed deployment requires a safe targetTenantId path segment.',
     );
   }
   return targetTenant;
 }
 
-function validateCliGrant(options, mode) {
+function validateDeploymentBinding(options, mode) {
   const targetTenant = targetTenantId(options, mode);
-  if (mode !== 'eai-cli-generated') return targetTenant;
   for (const key of ['appKey', 'tenantId', 'operationId']) {
-    if (!SAFE_PATH_SEGMENT.test(option(options, key))) {
-      throw new Error(
-        `CLI generated source requires a safe ${key} path segment.`,
-      );
-    }
+    requiredSafePathSegment(options, key);
   }
-  if (!/^[a-f0-9]{64}$/.test(option(options, 'nonce'))) {
+  const nonce = option(options, 'nonce');
+  if (mode === 'eai-cli-generated' && !/^[a-f0-9]{64}$/.test(nonce)) {
     throw new Error('CLI generated source requires its exact signed nonce.');
   }
+  if (mode === 'source-unknown' && !SAFE_OPAQUE_VALUE.test(nonce)) {
+    throw new Error('Source-unknown deployment requires a safe signed nonce.');
+  }
   const expectedConfigHash = option(options, 'expectedConfigHash');
-  if (
-    expectedConfigHash !== 'auto' &&
-    !SHA256_DIGEST.test(expectedConfigHash)
-  ) {
+  if (!SHA256_DIGEST.test(expectedConfigHash)) {
     throw new Error(
-      'CLI generated source requires an approved config hash or auto grant.',
+      'Managed deployment requires its exact approved sha256 config hash.',
     );
   }
+  const environment = option(options, 'environment', 'preview');
+  const preferredEnvironment = option(options, 'preferredEnvironment');
+  const legacyEnvironment = option(options, 'legacyEnvironment');
   if (
-    !['preview', 'dev', 'test', 'prod'].includes(option(options, 'environment'))
+    preferredEnvironment &&
+    legacyEnvironment &&
+    preferredEnvironment !== legacyEnvironment
   ) {
+    throw new Error('env and environment inputs must not conflict.');
+  }
+  const requestedEnvironment =
+    preferredEnvironment || legacyEnvironment || environment || 'preview';
+  if (environment !== requestedEnvironment) {
     throw new Error(
-      'CLI generated source requires an approved deployment environment.',
+      'Resolved deployment environment does not match its inputs.',
+    );
+  }
+  if (!MANAGED_ENVIRONMENTS.has(environment)) {
+    throw new Error(
+      'Managed deployment requires an approved deployment environment.',
     );
   }
   return targetTenant;
 }
 
 function validateDispatch(options) {
-  validateCliGrant(options, sourceMode(options));
+  validateDeploymentBinding(options, sourceMode(options));
   const endpoint = option(options, 'publicApiUrl');
+  const preferredEndpoint = option(options, 'preferredPublicApiUrl');
+  const legacyEndpoint = option(options, 'legacyPublicApiUrl');
+  if (
+    preferredEndpoint &&
+    legacyEndpoint &&
+    preferredEndpoint !== legacyEndpoint
+  ) {
+    throw new Error(
+      'public_api_url and publicapi_base_url inputs must not conflict.',
+    );
+  }
+  if (endpoint !== (preferredEndpoint || legacyEndpoint || endpoint)) {
+    throw new Error('Resolved PublicAPI URL does not match its inputs.');
+  }
   if (
     !/^https:\/\/(?:dev-api\.au|(?:test-api|api)\.(?:au|ca|eu))\.myenterprise\.ai\/public\/?$/.test(
       endpoint,
@@ -84,6 +132,12 @@ function validateDispatch(options) {
   const commit = option(options, 'commit');
   const workflowSha = option(options, 'workflowSha');
   const root = resolve(option(options, 'root', process.cwd()));
+  const configHash = buildConfigHash(root);
+  if (option(options, 'expectedConfigHash') !== configHash) {
+    throw new Error(
+      'Dispatched config hash does not match the exact checked-out runtime configuration.',
+    );
+  }
   const actual = execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: root,
     encoding: 'utf8',
@@ -162,15 +216,68 @@ function digestFiles(root, paths) {
   return `sha256:${hash.digest('hex')}`;
 }
 
+function listGovernedConfigFiles(root) {
+  const paths = [];
+  for (const relativePath of GOVERNED_ROOT_FILES) {
+    const absolutePath = join(root, relativePath);
+    if (!existsSync(absolutePath)) continue;
+    const metadata = lstatSync(absolutePath);
+    if (metadata.isSymbolicLink() || !metadata.isFile()) {
+      throw new Error(
+        `Governed configuration must be a regular file: ${relativePath}`,
+      );
+    }
+    paths.push(relativePath);
+  }
+
+  const visit = (relativeDirectory) => {
+    const absoluteDirectory = join(root, relativeDirectory);
+    if (!existsSync(absoluteDirectory)) return;
+    const directoryMetadata = lstatSync(absoluteDirectory);
+    if (
+      directoryMetadata.isSymbolicLink() ||
+      !directoryMetadata.isDirectory()
+    ) {
+      throw new Error(
+        `Governed configuration root must be a regular directory: ${relativeDirectory}`,
+      );
+    }
+    for (const entry of readdirSync(absoluteDirectory, {
+      withFileTypes: true,
+    })) {
+      const relativePath = join(relativeDirectory, entry.name).replaceAll(
+        '\\',
+        '/',
+      );
+      const absolutePath = join(root, relativePath);
+      const metadata = lstatSync(absolutePath);
+      if (metadata.isSymbolicLink()) {
+        throw new Error(
+          `Governed configuration cannot be a symlink: ${relativePath}`,
+        );
+      }
+      if (metadata.isDirectory()) {
+        visit(relativePath);
+      } else if (
+        metadata.isFile() &&
+        !NON_RUNTIME_CONFIG_FILE.test(entry.name)
+      ) {
+        paths.push(relativePath);
+      }
+    }
+  };
+  for (const relativeDirectory of GOVERNED_CONFIG_ROOTS)
+    visit(relativeDirectory);
+  return [...new Set(paths)].sort();
+}
+
 function readSchemaProvenance(root) {
   const runtimePath = join(root, 'eai.runtime.json');
   assertExists(runtimePath, 'eai.runtime.json');
   const runtime = JSON.parse(readFileSync(runtimePath, 'utf8'));
-  let provenance = runtime.schemaProvenance;
-  if (!provenance) {
-    const fixture = join(root, 'tests/fixtures/schema-provenance/valid.json');
-    assertExists(fixture, 'Runtime schema provenance or compatibility fixture');
-    provenance = JSON.parse(readFileSync(fixture, 'utf8'));
+  const provenance = runtime.schemaProvenance;
+  if (!provenance || typeof provenance !== 'object') {
+    throw new Error('eai.runtime.json schemaProvenance is required.');
   }
   for (const key of ['schemaDigest', 'validatorDigest']) {
     if (!SHA256_DIGEST.test(provenance[key] || '')) {
@@ -190,15 +297,7 @@ function readSchemaProvenance(root) {
 
 function buildConfigHash(root) {
   assertExists(join(root, 'eai.runtime.json'), 'eai.runtime.json');
-  return digestFiles(root, [
-    'eai.runtime.json',
-    'src/eai.config/default.ts',
-    'src/eai.config/index.ts',
-    'src/eai.config/object-types.json',
-    'src/eai.config/object-types.provisioning.json',
-    'src/eai.config/object-types.ts',
-    'src/eai.config/register.ts',
-  ]);
+  return digestFiles(root, listGovernedConfigFiles(root));
 }
 
 function prepareImageContext(options) {
@@ -230,7 +329,7 @@ function prepareImageContext(options) {
   writeFileSync(
     join(contextDir, 'Dockerfile'),
     [
-      'FROM node:24-alpine',
+      'FROM node:24-alpine@sha256:83f1c388c31fb2e51f7cbd4dea949b96260798c98f206e8e4696bc93bd964e3a',
       'WORKDIR /app',
       'ENV NODE_ENV=production',
       'ENV PORT=3000',
@@ -254,7 +353,7 @@ async function appendOutputs(path, outputs) {
 
 async function collectEvidence(options) {
   const mode = sourceMode(options);
-  const targetTenant = validateCliGrant(options, mode);
+  const targetTenant = validateDeploymentBinding(options, mode);
   const root = resolve(option(options, 'root', process.cwd()));
   const outputDir = resolve(
     root,
@@ -275,6 +374,10 @@ async function collectEvidence(options) {
   );
 
   assertExists(imageArchivePath, 'OCI image archive');
+  const archiveMetadata = statSync(imageArchivePath);
+  if (!archiveMetadata.isFile() || archiveMetadata.size <= 0) {
+    throw new Error('OCI image archive must be a nonempty regular file.');
+  }
   const uploadedArtifactDigest = option(options, 'artifactDigest');
   // INVARIANT: upload-artifact returns bare hex; handoff digests are algorithm-qualified.
   const artifactDigest = /^[a-f0-9]{64}$/.test(uploadedArtifactDigest)
@@ -300,11 +403,7 @@ async function collectEvidence(options) {
   if (new Set([artifactDigest, archiveDigest, imageDigest]).size !== 3) {
     throw new Error('Artifact, archive, and image digests must be distinct.');
   }
-  if (
-    !expectedConfigHash ||
-    (expectedConfigHash !== configHash &&
-      !(mode === 'eai-cli-generated' && expectedConfigHash === 'auto'))
-  ) {
+  if (expectedConfigHash !== configHash) {
     throw new Error(
       'Dispatched config hash does not match the exact checked-out runtime configuration.',
     );
@@ -331,7 +430,7 @@ async function collectEvidence(options) {
   if (!['preview', 'dev', 'test', 'prod'].includes(environment)) {
     throw new Error('Unsupported managed deployment environment.');
   }
-  if (!/^[^/\s]+\/[^/\s]+$/.test(repo))
+  if (!SAFE_REPOSITORY.test(repo))
     throw new Error('Repository must be owner/name.');
   if (!/^\.github\/workflows\/[^/]+\.ya?ml$/.test(workflowPath)) {
     throw new Error('Workflow path must be a file under .github/workflows.');
@@ -340,6 +439,22 @@ async function collectEvidence(options) {
     throw new Error('Workflow ref and branch do not match.');
   if (!/^[a-f0-9]{40}$/.test(commitSha))
     throw new Error('Commit must be an exact 40 character git SHA.');
+  const workflowRunId = option(
+    options,
+    'workflowRunId',
+    process.env.GITHUB_RUN_ID || '',
+  );
+  const workflowRunAttempt = option(
+    options,
+    'workflowRunAttempt',
+    process.env.GITHUB_RUN_ATTEMPT || '',
+  );
+  if (!/^[1-9][0-9]*$/.test(workflowRunId)) {
+    throw new Error('Workflow run id must be a positive integer.');
+  }
+  if (!/^[1-9][0-9]*$/.test(workflowRunAttempt)) {
+    throw new Error('Workflow run attempt must be a positive integer.');
+  }
 
   const evidence = {
     ...(mode === 'eai-cli-generated' ? { sourceMode: mode } : {}),
@@ -349,12 +464,8 @@ async function collectEvidence(options) {
     ref,
     commitSha,
     workflowRun: {
-      id: option(options, 'workflowRunId', process.env.GITHUB_RUN_ID || ''),
-      attempt: option(
-        options,
-        'workflowRunAttempt',
-        process.env.GITHUB_RUN_ATTEMPT || '',
-      ),
+      id: workflowRunId,
+      attempt: workflowRunAttempt,
     },
     configHash,
     artifactDigest,

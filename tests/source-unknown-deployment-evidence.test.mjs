@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -70,6 +71,58 @@ function runEvidenceScript(args, options = {}) {
   });
 }
 
+function configHash(root) {
+  return runEvidenceScript(['config-hash', '--root', root]).trim();
+}
+
+function sourceUnknownBindingArgs(root) {
+  return [
+    '--app-key',
+    'rates-review',
+    '--tenant-id',
+    'tenant-parent',
+    '--operation-id',
+    'source-op-1',
+    '--nonce',
+    'single-use-nonce',
+    '--environment',
+    'preview',
+    '--repo',
+    'enterpriseaigroup/rates-review',
+    '--workflow',
+    '.github/workflows/eai-app.yml',
+    '--ref',
+    'refs/heads/main',
+    '--branch',
+    'main',
+    '--commit',
+    'abcdef1234567890abcdef1234567890abcdef12',
+    '--workflow-run-id',
+    '123456789',
+    '--workflow-run-attempt',
+    '1',
+    '--expected-config-hash',
+    configHash(root),
+  ];
+}
+
+function dispatchBindingArgs(root) {
+  return [
+    '--app-key',
+    'rates-review',
+    '--tenant-id',
+    'tenant-parent',
+    '--operation-id',
+    'source-op-1',
+    '--nonce',
+    'single-use-nonce',
+    '--environment',
+    'preview',
+    '--expected-config-hash',
+    configHash(root),
+  ];
+}
+
 test('collect normalizes upload-artifact bare hex and writes canonical handoff digests', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-evidence-'));
   try {
@@ -104,7 +157,7 @@ test('collect normalizes upload-artifact bare hex and writes canonical handoff d
       '--nonce',
       'single-use-nonce',
       '--expected-config-hash',
-      runEvidenceScript(['config-hash', '--root', fixtureRoot]).trim(),
+      configHash(fixtureRoot),
       '--artifact-id',
       '987654321',
       '--artifact-digest',
@@ -196,9 +249,13 @@ test('CLI managed source computes checked-out config hash and labels its evidenc
       '--nonce',
       'a'.repeat(64),
       '--expected-config-hash',
-      'auto',
+      configHash(root),
       '--target-tenant-id',
       'hosting-tenant-1',
+      '--workflow-run-id',
+      '123',
+      '--workflow-run-attempt',
+      '1',
     ];
     runEvidenceScript([...args, '--source-mode', 'eai-cli-generated']);
     const evidence = JSON.parse(
@@ -217,7 +274,7 @@ test('CLI managed source computes checked-out config hash and labels its evidenc
       runEvidenceScript(['config-hash', '--root', root]).trim(),
     );
 
-    for (const sourceMode of ['source-unknown', 'unreviewed-source']) {
+    for (const sourceMode of ['unreviewed-source']) {
       const failure = spawnSync(
         process.execPath,
         [evidenceScript, ...args, '--source-mode', sourceMode],
@@ -225,11 +282,16 @@ test('CLI managed source computes checked-out config hash and labels its evidenc
       );
       assert.equal(failure.status, 1);
     }
+    const missingTargetArgs = [...args];
+    missingTargetArgs.splice(
+      missingTargetArgs.indexOf('--target-tenant-id'),
+      2,
+    );
     const missingTarget = spawnSync(
       process.execPath,
       [
         evidenceScript,
-        ...args.slice(0, -2),
+        ...missingTargetArgs,
         '--source-mode',
         'eai-cli-generated',
       ],
@@ -304,13 +366,17 @@ test('CLI evidence binds each merged commit and remains repository-owner agnosti
         '--nonce',
         state.nonce,
         '--expected-config-hash',
-        'auto',
+        configHash(root),
         '--artifact-id',
         '123',
         '--artifact-digest',
         'd'.repeat(64),
         '--image-digest',
         `sha256:${'c'.repeat(64)}`,
+        '--workflow-run-id',
+        String(100 + index),
+        '--workflow-run-attempt',
+        '1',
       ]);
       const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
       assert.equal(evidence.sourceMode, 'eai-cli-generated');
@@ -333,16 +399,20 @@ test('CLI evidence binds each merged commit and remains repository-owner agnosti
 test('workflow sends OIDC evidence directly to the canonical PublicAPI route', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   assert.match(workflow, /^on:\n  workflow_dispatch:/m);
-  assert.doesNotMatch(
-    workflow,
-    /^  (push|pull_request|workflow_call|schedule):/m,
-  );
-  assert.match(workflow, /^  packages: read$/m);
+  assert.match(workflow, /^  workflow_call:/m);
+  assert.doesNotMatch(workflow, /^  (push|pull_request|schedule):/m);
+  assert.match(workflow, /^  attestations: write$/m);
+  assert.doesNotMatch(workflow, /^  packages:/m);
   assert.match(workflow, /name: eai-generated-app-image/);
   assert.match(workflow, /--platform linux\/amd64/);
   assert.match(workflow, /inputs\.public_api_url/);
+  assert.match(workflow, /inputs\.publicapi_base_url/);
+  assert.match(workflow, /inputs\.env \|\| inputs\.environment \|\| 'preview'/);
   assert.doesNotMatch(workflow, /vars\.EAI_PUBLIC_API_URL/);
-  assert.match(workflow, /ref: \$\{\{ inputs\.commit_sha \}\}/);
+  assert.match(
+    workflow,
+    /ref: \$\{\{ inputs\.commit_sha \|\| github\.sha \}\}/,
+  );
   assert.match(workflow, /--commit "\$SOURCE_COMMIT_SHA"/);
   assert.match(workflow, /--workflow-sha "\$GITHUB_SHA"/);
   assert.ok(
@@ -360,13 +430,22 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(workflow, /--operation-id "\$OPERATION_ID"/);
   assert.match(workflow, /--nonce "\$NONCE"/);
   assert.match(workflow, /--expected-config-hash "\$CONFIG_HASH"/);
-  assert.doesNotMatch(workflow, /EAI_ACCESS_TOKEN/);
-  assert.doesNotMatch(workflow, /publicapi_base_url/);
+  assert.doesNotMatch(workflow, /secrets\.EAI_ACCESS_TOKEN|\$EAI_ACCESS_TOKEN/);
+  assert.doesNotMatch(workflow, /GITHUB_TOKEN|NODE_AUTH_TOKEN|_authToken/);
+  assert.match(workflow, /npm ci --ignore-scripts/);
+  assert.doesNotMatch(workflow, /> \.npmrc|>> \.npmrc/);
+  assert.match(workflow, /include-hidden-files: true/);
+  assert.match(workflow, /actions\/attest-build-provenance@[a-f0-9]{40}/);
+  assert.match(workflow, /--max-redirs 0/);
+  for (const action of workflow.matchAll(/^\s+uses:\s+([^\s#]+)/gm)) {
+    assert.match(action[1], /@[a-f0-9]{40}$/);
+  }
 });
 
 test('dispatch accepts only trusted endpoints and the exact source and workflow identity', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-dispatch-validation-'));
   try {
+    writeFixtureApp(workDir);
     execFileSync('git', ['init', '-q'], { cwd: workDir });
     execFileSync(
       'git',
@@ -386,6 +465,7 @@ test('dispatch accepts only trusted endpoints and the exact source and workflow 
       cwd: workDir,
       encoding: 'utf8',
     }).trim();
+    const binding = dispatchBindingArgs(workDir);
     for (const host of [
       'api.au',
       'api.ca',
@@ -399,6 +479,7 @@ test('dispatch accepts only trusted endpoints and the exact source and workflow 
         'validate-dispatch',
         '--root',
         workDir,
+        ...binding,
         '--commit',
         commit,
         '--workflow-sha',
@@ -424,6 +505,7 @@ test('dispatch accepts only trusted endpoints and the exact source and workflow 
           'validate-dispatch',
           '--root',
           workDir,
+          ...binding,
           '--commit',
           commit,
           '--workflow-sha',
@@ -448,6 +530,7 @@ test('dispatch accepts only trusted endpoints and the exact source and workflow 
           'validate-dispatch',
           '--root',
           workDir,
+          ...binding,
           '--commit',
           sourceCommit,
           '--workflow-sha',
@@ -468,6 +551,7 @@ test('dispatch accepts only trusted endpoints and the exact source and workflow 
 test('CLI dispatch rejects an incomplete or malformed signed grant before the build', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-cli-dispatch-validation-'));
   try {
+    writeFixtureApp(workDir);
     execFileSync('git', ['init', '-q'], { cwd: workDir });
     execFileSync(
       'git',
@@ -504,7 +588,7 @@ test('CLI dispatch rejects an incomplete or malformed signed grant before the bu
       '--nonce',
       'b'.repeat(64),
       '--expected-config-hash',
-      'auto',
+      configHash(workDir),
       '--environment',
       'preview',
       '--public-api-url',
@@ -518,7 +602,7 @@ test('CLI dispatch rejects an incomplete or malformed signed grant before the bu
     for (const [flag, invalidValue, message] of [
       ['--operation-id', '../other', /safe operationId path segment/],
       ['--nonce', 'short', /exact signed nonce/],
-      ['--expected-config-hash', 'not-a-hash', /approved config hash/],
+      ['--expected-config-hash', 'not-a-hash', /approved sha256 config hash/],
       ['--environment', 'production', /approved deployment environment/],
       ['--app-key', 'other/app', /safe appKey path segment/],
     ]) {
@@ -545,7 +629,7 @@ test('workflow runs independent validations concurrently and waits for both', ()
   assert.match(workflow, /exit "\$validation_status"/);
 });
 
-test('image context uses the runtime minimum Node major', () => {
+test('image context pins the runtime minimum Node image by immutable digest', () => {
   const workDir = mkdtempSync(
     join(tmpdir(), 'eai-source-unknown-image-context-'),
   );
@@ -558,64 +642,41 @@ test('image context uses the runtime minimum Node major', () => {
         join(fixtureRoot, '.eai-build/image-context/Dockerfile'),
         'utf8',
       ),
-      /^FROM node:24-alpine$/m,
+      /^FROM node:24-alpine@sha256:[a-f0-9]{64}$/m,
     );
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
 });
 
-test('schema provenance falls back to the compatibility fixture only when runtime provenance is absent', () => {
+test('schema provenance must be present in the governed runtime manifest', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-provenance-'));
   try {
     const fixtureRoot = join(workDir, 'app');
-    const outputFile = join(workDir, 'github-output.txt');
     writeFixtureApp(fixtureRoot);
     writeFileSync(
       join(fixtureRoot, 'eai.runtime.json'),
       '{"runtime":"legacy"}\n',
     );
-    runEvidenceScript([
-      'collect',
-      '--root',
-      fixtureRoot,
-      '--repo',
-      'enterpriseaigroup/rates-review',
-      '--ref',
-      'refs/heads/main',
-      '--branch',
-      'main',
-      '--commit',
-      'abcdef1234567890abcdef1234567890abcdef12',
-      '--artifact-id',
-      '987654321',
-      '--artifact-digest',
-      `sha256:${'d'.repeat(64)}`,
-      '--image-digest',
-      `sha256:${'c'.repeat(64)}`,
-      '--expected-config-hash',
-      runEvidenceScript(['config-hash', '--root', fixtureRoot]).trim(),
-      '--github-output',
-      outputFile,
-    ]);
-    const evidence = JSON.parse(
-      readFileSync(
-        join(
-          fixtureRoot,
-          '.eai-build/evidence/source-unknown-deployment-evidence.json',
-        ),
-        'utf8',
-      ),
+    const result = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        'collect',
+        '--root',
+        fixtureRoot,
+        ...sourceUnknownBindingArgs(fixtureRoot),
+        '--artifact-id',
+        '987654321',
+        '--artifact-digest',
+        `sha256:${'d'.repeat(64)}`,
+        '--image-digest',
+        `sha256:${'c'.repeat(64)}`,
+      ],
+      { encoding: 'utf8' },
     );
-    assert.deepEqual(
-      evidence.schemaProvenance,
-      JSON.parse(
-        readFileSync(
-          join(fixtureRoot, 'tests/fixtures/schema-provenance/valid.json'),
-          'utf8',
-        ),
-      ),
-    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /schemaProvenance is required/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
@@ -633,14 +694,7 @@ test('collect rejects a config hash that does not bind the checked-out files', (
         'collect',
         '--root',
         fixtureRoot,
-        '--repo',
-        'enterpriseaigroup/rates-review',
-        '--ref',
-        'refs/heads/main',
-        '--branch',
-        'main',
-        '--commit',
-        'abcdef1234567890abcdef1234567890abcdef12',
+        ...sourceUnknownBindingArgs(fixtureRoot),
         '--artifact-id',
         '987654321',
         '--artifact-digest',
@@ -681,6 +735,7 @@ test('collect rejects malformed upload-artifact digests without weakening image 
           'collect',
           '--root',
           workDir,
+          ...sourceUnknownBindingArgs(workDir),
           '--artifact-id',
           '987654321',
           '--artifact-digest',
@@ -702,6 +757,7 @@ test('collect rejects malformed upload-artifact digests without weakening image 
         'collect',
         '--root',
         workDir,
+        ...sourceUnknownBindingArgs(workDir),
         '--artifact-id',
         '987654321',
         '--artifact-digest',
@@ -715,6 +771,138 @@ test('collect rejects malformed upload-artifact digests without weakening image 
     );
     assert.equal(result.status, 1);
     assert.match(result.stderr, /imageDigest must be a sha256 digest/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('configuration digest binds nested tenants, deployment contract, and rejects symlinks', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-config-manifest-'));
+  try {
+    writeFixtureApp(workDir);
+    mkdirSync(join(workDir, 'src/eai.config/tenants/acme'), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(workDir, 'src/eai.config/deployment-contract.ts'),
+      'export const deployment = { region: "au" };\n',
+    );
+    const tenantPath = join(
+      workDir,
+      'src/eai.config/tenants/acme/runtime.json',
+    );
+    writeFileSync(tenantPath, '{"tenant":"one"}\n');
+    const first = configHash(workDir);
+
+    writeFileSync(tenantPath, '{"tenant":"two"}\n');
+    const nestedChanged = configHash(workDir);
+    assert.notEqual(first, nestedChanged);
+
+    writeFileSync(
+      join(workDir, 'src/eai.config/deployment-contract.ts'),
+      'export const deployment = { region: "ca" };\n',
+    );
+    assert.notEqual(nestedChanged, configHash(workDir));
+
+    symlinkSync(
+      join(workDir, 'eai.runtime.json'),
+      join(workDir, 'src/eai.config/tenants/runtime-link.json'),
+    );
+    const result = spawnSync(
+      process.execPath,
+      [evidenceScript, 'config-hash', '--root', workDir],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /cannot be a symlink/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('dispatch rejects auto config grants, unsafe source-unknown paths, and conflicting aliases', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-dispatch-aliases-'));
+  try {
+    writeFixtureApp(workDir);
+    execFileSync('git', ['init', '-q'], { cwd: workDir });
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=Fixture',
+        '-c',
+        'user.email=fixture@example.com',
+        'commit',
+        '--allow-empty',
+        '-m',
+        'fixture',
+      ],
+      { cwd: workDir },
+    );
+    const commit = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: workDir,
+      encoding: 'utf8',
+    }).trim();
+    const valid = [
+      'validate-dispatch',
+      '--root',
+      workDir,
+      ...dispatchBindingArgs(workDir),
+      '--commit',
+      commit,
+      '--workflow-sha',
+      commit,
+      '--public-api-url',
+      'https://api.au.myenterprise.ai/public',
+    ];
+    for (const extra of [
+      ['--expected-config-hash', 'auto'],
+      ['--app-key', '../other'],
+      ['--nonce', '../other'],
+      ['--preferred-environment', 'test', '--legacy-environment', 'prod'],
+      [
+        '--preferred-public-api-url',
+        'https://api.au.myenterprise.ai/public',
+        '--legacy-public-api-url',
+        'https://api.ca.myenterprise.ai/public',
+      ],
+    ]) {
+      const result = spawnSync(
+        process.execPath,
+        [evidenceScript, ...valid, ...extra],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1);
+    }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('collect rejects an empty OCI archive before producing evidence', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-empty-image-'));
+  try {
+    writeFixtureApp(workDir);
+    writeFileSync(join(workDir, '.eai-build/eai-generated-app-image.tar'), '');
+    const result = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        'collect',
+        '--root',
+        workDir,
+        ...sourceUnknownBindingArgs(workDir),
+        '--artifact-id',
+        '987654321',
+        '--artifact-digest',
+        `sha256:${'d'.repeat(64)}`,
+        '--image-digest',
+        `sha256:${'c'.repeat(64)}`,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /nonempty regular file/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
