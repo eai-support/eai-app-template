@@ -765,6 +765,7 @@ test('image context pins the runtime minimum Node image by immutable digest', ()
   try {
     const fixtureRoot = join(workDir, 'app');
     writeFixtureApp(fixtureRoot);
+    rmSync(join(fixtureRoot, '.eai-build/eai-generated-app-image.tar'));
     runEvidenceScript(['prepare-image-context', '--root', fixtureRoot]);
     assert.match(
       readFileSync(
@@ -848,12 +849,59 @@ test('image context rejects an application-controlled linked build-output root',
   }
 });
 
+test('image preparation rejects preexisting isolated outputs without deleting them', () => {
+  for (const relativePath of [
+    '.eai-build/image-context',
+    '.eai-build/eai-generated-app-image.tar',
+    '.eai-build/image-metadata.json',
+  ]) {
+    const workDir = mkdtempSync(join(tmpdir(), 'eai-preexisting-output-'));
+    try {
+      const root = join(workDir, 'app');
+      writeFixtureApp(root);
+      const output = join(root, relativePath);
+      if (relativePath.endsWith('image-context')) {
+        mkdirSync(output, { recursive: true });
+        writeFileSync(join(output, 'sentinel'), 'unchanged');
+      } else {
+        mkdirSync(dirname(output), { recursive: true });
+        writeFileSync(output, 'unchanged');
+      }
+      const result = spawnSync(
+        process.execPath,
+        [evidenceScript, 'prepare-image-context', '--root', root],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /must not exist before isolated image preparation/);
+      if (relativePath.endsWith('image-context')) {
+        assert.equal(readFileSync(join(output, 'sentinel'), 'utf8'), 'unchanged');
+      } else {
+        assert.equal(readFileSync(output, 'utf8'), 'unchanged');
+      }
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('collector error paths do not unlink a copy destination after parent validation fails', () => {
+  const implementation = readFileSync(evidenceScript, 'utf8');
+  const copyStart = implementation.indexOf('function copyRegularTreeNoFollow(');
+  const copyEnd = implementation.indexOf('\nfunction writeRegularFileNoFollow(', copyStart);
+  assert.ok(copyStart >= 0 && copyEnd > copyStart);
+  const copy = implementation.slice(copyStart, copyEnd);
+  assert.doesNotMatch(copy, /rmSync\(destinationPath/);
+  assert.doesNotMatch(implementation, /rmSync\(path(?:,|\))/);
+});
+
 test('image metadata digest is read through a bounded no-follow path', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-image-metadata-'));
   try {
     const root = join(workDir, 'app');
     const outside = join(workDir, 'outside');
     writeFixtureApp(root);
+    rmSync(join(root, '.eai-build/eai-generated-app-image.tar'));
     runEvidenceScript(['prepare-image-context', '--root', root]);
     writeFileSync(
       join(root, '.eai-build/image-metadata.json'),
@@ -897,6 +945,24 @@ test('bounded collector reads bind parent and leaf identity through the read', (
   assert.match(reader, /rebound\.dev !== opened\.dev/);
   assert.match(reader, /after\.mtimeMs !== opened\.mtimeMs/);
   assert.match(reader, /finalPath\.ino !== opened\.ino/);
+  assert.match(reader, /bytes\.length !== opened\.size/);
+});
+
+test('configuration hashing repeats inventory and binds each post-read path', () => {
+  const implementation = readFileSync(evidenceScript, 'utf8');
+  const hashStart = implementation.indexOf('function buildConfigHash(');
+  const hashEnd = implementation.indexOf('\nfunction prepareImageContext(', hashStart);
+  const readerStart = implementation.indexOf('function readRegularFileNoFollow(');
+  const readerEnd = implementation.indexOf('\nfunction optionalLstat(', readerStart);
+  assert.ok(hashStart >= 0 && hashEnd > hashStart && readerStart >= 0 && readerEnd > readerStart);
+  const hash = implementation.slice(hashStart, hashEnd);
+  const reader = implementation.slice(readerStart, readerEnd);
+  assert.equal((hash.match(/listGovernedConfigFiles\(root\)/g) || []).length, 2);
+  assert.match(hash, /paths\.some\(\(path, index\) => path !== finalPaths\[index\]\)/);
+  assert.match(reader, /assertRelativeDirectorySnapshot\(ancestors, relativePath\)/);
+  assert.match(reader, /finalPath\.ino !== opened\.ino/);
+  assert.match(reader, /after\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(reader, /after\.ctimeMs !== opened\.ctimeMs/);
   assert.match(reader, /bytes\.length !== opened\.size/);
 });
 
