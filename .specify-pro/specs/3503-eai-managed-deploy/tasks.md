@@ -25,6 +25,9 @@
 - [x] Reject linked or replaced `$GITHUB_OUTPUT` ancestors as well as the leaf (DTE-025).
 - [x] Update owned tests and traceability.
 - [x] Rerun prescribed checks and record exact-head results after trusted-producer and complete-handoff hardening.
+- [x] Recompute the complete governed configuration from the exact source commit before OIDC (DTE-018, DTE-025).
+- [x] Bind image-context and evidence output ancestors through opened-descriptor writes (DTE-022, DTE-025).
+- [x] Update owned regressions and rerun exact-head checks for the final live review findings.
 
 ## Exact-head evidence
 
@@ -37,3 +40,5 @@
 - `npm run test:unit:ci` (322 passed)
 - `npm run typecheck`
 - `npm run build`
+- `actionlint .github/workflows/eai-app.yml`
+- Exact source evidence tests cover Git tree/blob configuration recomputation and bound output parents; workflow digest `sha256:91d26a67a761728c0a056651bd3bb4bd18a2f366ef884455f2b0fe9ec34cc027`, collector digest `sha256:ec17171b1208adeb630fe0f2b47e1241707a07d5fea1e94546ee9641303ae5bb`.

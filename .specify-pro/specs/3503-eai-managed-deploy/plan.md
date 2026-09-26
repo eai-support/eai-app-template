@@ -7,3 +7,4 @@
 5. Preserve existing workflow input compatibility with explicit conflict validation.
 6. Keep app-key and environment validation aligned with the generated-runtime and deployment contracts.
 7. Expand owned tests, run the repository validation suite, and publish no release.
+8. Recompute the complete governed configuration from exact commit GitHub reads at handoff and bind every generated output write to stable parent and leaf identities.

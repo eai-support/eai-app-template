@@ -503,6 +503,13 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /nonce: process\.env\.NONCE/);
   assert.match(handoffJob, /workflowBlobSha/);
   assert.match(handoffJob, /collectorDigest/);
+  assert.match(handoffJob, /async function sourceConfigHash\(\)/);
+  assert.match(handoffJob, /\/git\/commits\/\$\{encodeURIComponent\(process\.env\.SOURCE_COMMIT_SHA\)\}/);
+  assert.match(handoffJob, /\/git\/trees\/\$\{commit\.tree\.sha\}\?recursive=1/);
+  assert.match(handoffJob, /\/git\/blobs\/\$\{entry\.sha\}/);
+  assert.match(handoffJob, /src\/eai\.config\/object-types\.provisioning\.json/);
+  assert.match(handoffJob, /canonicalConfigHash !== process\.env\.CONFIG_HASH/);
+  assert.match(handoffJob, /canonicalConfigHash !== evidence\.configHash/);
   assert.match(handoffJob, /runtime\.schemaProvenance/);
   assert.match(
     handoffJob,
@@ -531,6 +538,10 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   );
   assert.ok(
     workflow.indexOf('  handoff:') <
+      workflow.indexOf('Request GitHub OIDC token'),
+  );
+  assert.ok(
+    workflow.indexOf('async function sourceConfigHash()') <
       workflow.indexOf('Request GitHub OIDC token'),
   );
   assert.match(handoffJob, /\[\[ "\$EAI_BOUND_PUBLIC_API_URL" =~ \^https:\/\//);
