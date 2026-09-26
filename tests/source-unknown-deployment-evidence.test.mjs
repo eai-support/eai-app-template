@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -756,6 +756,128 @@ test('workflow runs independent validations concurrently and waits for both', ()
     workflow,
     /source-unknown-deployment-evidence\.mjs read-image-digest/,
   );
+});
+
+test('workflow uploads only the staged image archive and binds its digest', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const stageOffset = workflow.indexOf('- name: Stage verified image artifact');
+  const uploadOffset = workflow.indexOf(
+    '- name: Upload immutable image artifact',
+  );
+  const collectOffset = workflow.indexOf(
+    '- name: Collect immutable build evidence',
+  );
+
+  assert.ok(stageOffset >= 0);
+  assert.ok(uploadOffset > stageOffset);
+  assert.ok(collectOffset > uploadOffset);
+  assert.match(
+    workflow,
+    /stage-image-artifact[\s\S]*--staging-root "\$RUNNER_TEMP"/,
+  );
+  assert.match(
+    workflow,
+    /path: \$\{\{ steps\.staged-image\.outputs\.image_archive_path \}\}/,
+  );
+  assert.match(
+    workflow,
+    /--image-archive "\$STAGED_IMAGE_ARCHIVE"[\s\S]*--image-staging-root "\$IMAGE_STAGING_ROOT"[\s\S]*--expected-archive-digest "\$STAGED_ARCHIVE_DIGEST"/,
+  );
+});
+
+test('artifact staging creates a private bound copy used by evidence', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-image-staging-'));
+  try {
+    const fixtureRoot = join(workDir, 'app');
+    const stagingRoot = join(workDir, 'runner-temp');
+    const outputFile = join(workDir, 'github-output.txt');
+    writeFixtureApp(fixtureRoot);
+    mkdirSync(stagingRoot);
+
+    const sourcePath = join(
+      fixtureRoot,
+      '.eai-build/eai-generated-app-image.tar',
+    );
+    const sourceBytes = readFileSync(sourcePath);
+    const expectedDigest = `sha256:${createHash('sha256')
+      .update(sourceBytes)
+      .digest('hex')}`;
+    const staged = JSON.parse(
+      runEvidenceScript([
+        'stage-image-artifact',
+        '--root',
+        fixtureRoot,
+        '--staging-root',
+        stagingRoot,
+        '--github-output',
+        outputFile,
+      ]),
+    );
+
+    const stagedRelativePath = relative(stagingRoot, staged.imageArchivePath);
+    assert.notEqual(staged.imageArchivePath, sourcePath);
+    assert.equal(isAbsolute(stagedRelativePath), false);
+    assert.notEqual(stagedRelativePath, '');
+    assert.equal(stagedRelativePath.startsWith('..'), false);
+    assert.deepEqual(readFileSync(staged.imageArchivePath), sourceBytes);
+    assert.equal(staged.archiveDigest, expectedDigest);
+    assert.equal(staged.size, sourceBytes.length);
+
+    const outputs = readFileSync(outputFile, 'utf8');
+    assert.match(
+      outputs,
+      new RegExp(`^image_archive_path=${staged.imageArchivePath}$`, 'm'),
+    );
+    assert.match(
+      outputs,
+      new RegExp(`^archive_digest=${expectedDigest}$`, 'm'),
+    );
+    assert.match(
+      outputs,
+      new RegExp(`^archive_size=${sourceBytes.length}$`, 'm'),
+    );
+
+    writeFileSync(staged.imageArchivePath, 'substituted archive\n');
+    const substituted = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        ...sourceUnknownCollectArgs(fixtureRoot),
+        '--image-archive',
+        staged.imageArchivePath,
+        '--image-staging-root',
+        stagingRoot,
+        '--expected-archive-digest',
+        staged.archiveDigest,
+      ],
+      { encoding: 'utf8' },
+    );
+    assert.equal(substituted.status, 1);
+    assert.match(substituted.stderr, /does not match its bound copy/);
+    writeFileSync(staged.imageArchivePath, sourceBytes);
+
+    runEvidenceScript([
+      ...sourceUnknownCollectArgs(fixtureRoot),
+      '--image-archive',
+      staged.imageArchivePath,
+      '--image-staging-root',
+      stagingRoot,
+      '--expected-archive-digest',
+      staged.archiveDigest,
+    ]);
+    const evidence = JSON.parse(
+      readFileSync(
+        join(
+          fixtureRoot,
+          '.eai-build/evidence/source-unknown-deployment-evidence.json',
+        ),
+        'utf8',
+      ),
+    );
+    assert.equal(evidence.imageArtifact.archiveDigest, expectedDigest);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
 });
 
 test('image context pins the runtime minimum Node image by immutable digest', () => {

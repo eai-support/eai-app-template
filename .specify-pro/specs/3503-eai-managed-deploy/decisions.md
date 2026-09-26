@@ -45,3 +45,5 @@ The workflow uses a disposable checkout and creates isolated image outputs once.
 The configuration digest is calculated only from a stable governed inventory. The collector repeats the sorted inventory after hashing and revalidates each opened descriptor, complete ancestor chain, final contained path, size, modification time, and change time after reading.
 
 Image-tree copying treats each source file's complete ancestor chain and contained final path as part of the read authority. Snapshot before the no-follow open, bind the opened inode to the path, and repeat the ancestor, path, inode, size, modification-time, and change-time checks after the copy.
+
+The upload action never reads the application-controlled build path directly. A trusted collector command creates a random directory beneath `RUNNER_TEMP`, copies the archive once through bounded no-follow source and exclusive destination descriptors, records its raw digest, and exposes only that staged path to upload and later evidence collection.
