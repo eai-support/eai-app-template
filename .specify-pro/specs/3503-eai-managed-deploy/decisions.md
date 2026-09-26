@@ -25,3 +25,9 @@ Application lifecycle code may create or replace `.eai-build` before image-conte
 Treat every entry in `.next/standalone`, `.next/static`, and `public` as untrusted build output. Copy regular files and directories entry by entry with no-follow opens and stable inode checks; reject nested links and other nonregular entries.
 
 Treat the runner-provided `$GITHUB_OUTPUT` leaf as mutable after application lifecycle code runs. Open it with no-follow, nonblocking append flags, prove the opened descriptor is a regular file, and write only through that descriptor.
+
+## Trusted workflow and collector bytes
+
+Use platform verification rather than an EAI-owned reusable workflow. Evidence reports observed `workflowBlobSha` and `collectorDigest` values from the exact checked-out source commit, but those caller values grant no authority. The platform derives, verifies, and seals the canonical values through the linked GitHub installation and verifies OIDC workflow, run, repository, and source claims before accepting handoff.
+
+The isolated handoff independently retrieves source provenance and artifact metadata and recomputes the downloaded archive and OCI image digests. It compares every evidence field before requesting OIDC, so build-job output alone cannot authorize swapped evidence.

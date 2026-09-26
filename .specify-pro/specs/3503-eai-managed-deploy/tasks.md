@@ -20,15 +20,18 @@
 - [x] Copy standalone, static, and public source trees entry by entry without following nested links or accepting nonregular files (DTE-022).
 - [x] Apply the canonical generated-runtime app-key grammar in collector and handoff validation and retain the template's supported `demo` environment (DTE-020, DTE-021, DTE-026).
 - [x] Write collector values to `$GITHUB_OUTPUT` only through a verified no-follow regular-file descriptor (DTE-025).
+- [x] Bind observed evidence to the exact source commit's canonical `workflowBlobSha` and `collectorDigest` for authoritative platform-side installation reads (DTE-019–DTE-021, DTE-025).
+- [x] Recompute or independently retrieve every submitted workflow/run/provenance/artifact/image field in the isolated handoff before OIDC (DTE-025).
+- [x] Reject linked or replaced `$GITHUB_OUTPUT` ancestors as well as the leaf (DTE-025).
 - [x] Update owned tests and traceability.
-- [x] Rerun prescribed checks and record exact-head results after GitHub command-file hardening.
+- [x] Rerun prescribed checks and record exact-head results after trusted-producer and complete-handoff hardening.
 
 ## Exact-head evidence
 
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (30 passed)
+- `npm run test:source-unknown-evidence` (31 passed)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (322 passed)

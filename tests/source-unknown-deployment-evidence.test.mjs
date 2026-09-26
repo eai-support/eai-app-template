@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -31,6 +33,8 @@ function writeFixtureApp(root) {
     recursive: true,
   });
   mkdirSync(join(root, '.eai-build'), { recursive: true });
+  mkdirSync(join(root, '.github/workflows'), { recursive: true });
+  mkdirSync(join(root, 'scripts'), { recursive: true });
 
   writeFileSync(
     join(root, '.next/standalone/server.js'),
@@ -63,6 +67,8 @@ function writeFixtureApp(root) {
     join(repoRoot, 'tests/fixtures/schema-provenance/valid.json'),
     join(root, 'tests/fixtures/schema-provenance/valid.json'),
   );
+  cpSync(workflowPath, join(root, '.github/workflows/eai-app.yml'));
+  cpSync(evidenceScript, join(root, 'scripts/source-unknown-deployment-evidence.mjs'));
 }
 
 function runEvidenceScript(args, options = {}) {
@@ -143,7 +149,7 @@ test('collect normalizes upload-artifact bare hex and writes canonical handoff d
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-evidence-'));
   try {
     const fixtureRoot = join(workDir, 'app');
-    const outputFile = join(workDir, 'github-output.txt');
+    const outputFile = join(realpathSync(workDir), 'github-output.txt');
     writeFixtureApp(fixtureRoot);
 
     const stdout = runEvidenceScript([
@@ -208,6 +214,28 @@ test('collect normalizes upload-artifact bare hex and writes canonical handoff d
     assert.equal(evidence.artifactDigest, `sha256:${'d'.repeat(64)}`);
     assert.match(evidence.imageArtifact.archiveDigest, digestPattern);
     assert.match(evidence.imageDigest, digestPattern);
+    assert.match(evidence.workflowBlobSha, /^[a-f0-9]{40}$/);
+    assert.match(evidence.collectorDigest, digestPattern);
+    const workflowBytes = readFileSync(
+      join(fixtureRoot, '.github/workflows/eai-app.yml'),
+    );
+    assert.equal(
+      evidence.workflowBlobSha,
+      createHash('sha1')
+        .update(`blob ${workflowBytes.length}\0`)
+        .update(workflowBytes)
+        .digest('hex'),
+    );
+    assert.equal(
+      evidence.collectorDigest,
+      `sha256:${createHash('sha256')
+        .update(
+          readFileSync(
+            join(fixtureRoot, 'scripts/source-unknown-deployment-evidence.mjs'),
+          ),
+        )
+        .digest('hex')}`,
+    );
     assert.equal(
       new Set([
         evidence.artifactDigest,
@@ -222,6 +250,8 @@ test('collect normalizes upload-artifact bare hex and writes canonical handoff d
       'config_hash',
       'artifact_digest',
       'image_digest',
+      'workflow_blob_sha',
+      'collector_digest',
       'template_version',
       'base_template_sha',
       'schema_digest',
@@ -471,8 +501,18 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(workflow, /--expected-config-hash "\$CONFIG_HASH"/);
   assert.match(handoffJob, /NONCE: \$\{\{ inputs\.nonce \}\}/);
   assert.match(handoffJob, /nonce: process\.env\.NONCE/);
+  assert.match(handoffJob, /workflowBlobSha/);
+  assert.match(handoffJob, /collectorDigest/);
+  assert.match(handoffJob, /runtime\.schemaProvenance/);
+  assert.match(
+    handoffJob,
+    /actions\/artifacts\/\$\{evidence\.imageArtifact\.id\}/,
+  );
+  assert.match(handoffJob, /'tar', \['-xOf'/);
   assert.doesNotMatch(workflow, /secrets\.EAI_ACCESS_TOKEN|\$EAI_ACCESS_TOKEN/);
-  assert.doesNotMatch(workflow, /GITHUB_TOKEN|NODE_AUTH_TOKEN|_authToken/);
+  assert.doesNotMatch(buildJob, /GITHUB_TOKEN|NODE_AUTH_TOKEN|_authToken/);
+  assert.match(handoffJob, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(handoffJob, /^      actions: read$/m);
   assert.match(workflow, /npm ci --ignore-scripts/);
   assert.doesNotMatch(workflow, /> \.npmrc|>> \.npmrc/);
   assert.match(workflow, /include-hidden-files: true/);
@@ -872,7 +912,7 @@ test('schema provenance accepts every approved source anchor and preserves it in
     const workDir = mkdtempSync(join(tmpdir(), `eai-source-unknown-${key}-`));
     try {
       const fixtureRoot = join(workDir, 'app');
-      const outputFile = join(workDir, 'github-output.txt');
+      const outputFile = join(realpathSync(workDir), 'github-output.txt');
       writeFixtureApp(fixtureRoot);
       writeFileSync(
         join(fixtureRoot, 'eai.runtime.json'),
@@ -1008,7 +1048,7 @@ test('collect rejects multiline provenance before writing evidence or GitHub out
     const runtime = JSON.parse(readFileSync(runtimePath, 'utf8'));
     runtime.schemaProvenance.templateVersion = '0.1.0\ninjected=value';
     writeFileSync(runtimePath, JSON.stringify(runtime));
-    const githubOutput = join(workDir, 'github-output.txt');
+    const githubOutput = join(realpathSync(workDir), 'github-output.txt');
     writeFileSync(githubOutput, 'trusted=value\n');
 
     const result = spawnSync(
@@ -1052,7 +1092,7 @@ test('collect never follows a replaced GitHub output command file', () => {
   try {
     const root = join(workDir, 'app');
     const protectedPath = join(workDir, 'protected.txt');
-    const githubOutput = join(workDir, 'github-output.txt');
+    const githubOutput = join(realpathSync(workDir), 'github-output.txt');
     writeFixtureApp(root);
     writeFileSync(protectedPath, 'protected\n');
     symlinkSync(protectedPath, githubOutput);
@@ -1071,6 +1111,45 @@ test('collect never follows a replaced GitHub output command file', () => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /ELOOP|symbolic link/i);
     assert.equal(readFileSync(protectedPath, 'utf8'), 'protected\n');
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('collect rejects a linked GitHub output command-file ancestor', () => {
+  const workDir = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-linked-github-output-parent-')),
+  );
+  try {
+    const root = join(workDir, 'app');
+    const protectedDirectory = join(workDir, 'protected');
+    const linkedDirectory = join(workDir, 'linked-output');
+    writeFixtureApp(root);
+    mkdirSync(protectedDirectory);
+    writeFileSync(join(protectedDirectory, 'marker.txt'), 'protected\n');
+    symlinkSync(protectedDirectory, linkedDirectory, 'dir');
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        ...sourceUnknownCollectArgs(root),
+        '--github-output',
+        join(linkedDirectory, 'github-output.txt'),
+      ],
+      { encoding: 'utf8' },
+    );
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /ancestors must be no-follow directories/);
+    assert.equal(
+      existsSync(join(protectedDirectory, 'github-output.txt')),
+      false,
+    );
+    assert.equal(
+      readFileSync(join(protectedDirectory, 'marker.txt'), 'utf8'),
+      'protected\n',
+    );
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
