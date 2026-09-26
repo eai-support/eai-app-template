@@ -76,4 +76,22 @@ describe('runtime readiness contract', () => {
     expect(serialized).not.toContain('test-entra-secret');
     expect(serialized).not.toContain('test-auth-secret');
   });
+
+  it('requires tenant identity but permits no workflow assignment for generic apps', () => {
+    const env = readyEnv();
+    delete env[`WORKFLOW_${TEST_TENANT_ENV_KEY}_ID`];
+
+    expect(evaluateRuntimeReadiness(env).failureCategories).toContain(
+      'tenant_assignment_invalid',
+    );
+    expect(
+      evaluateRuntimeReadiness(env, { requireWorkflowAssignment: false }).ok,
+    ).toBe(true);
+
+    delete env[`TENANT_${TEST_TENANT_ENV_KEY}_ID`];
+    expect(
+      evaluateRuntimeReadiness(env, { requireWorkflowAssignment: false })
+        .failureCategories,
+    ).toContain('tenant_assignment_invalid');
+  });
 });

@@ -5,6 +5,45 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "source-unknown-eai-managed-deployment",
+          "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact, submit nonce-bound GitHub OIDC evidence for exact source-unknown or reviewed CLI-generated authority, and verify scoped runtime readiness without requiring an unconfigured NCB workflow.",
+          "owned_paths": [
+            ".eai/test-coverage.json",
+            ".specify-pro/specs/3503-eai-managed-deploy/**",
+            ".github/workflows/eai-app.yml",
+            "scripts/source-unknown-deployment-evidence.mjs",
+            "src/lib/platform/readiness.ts",
+            "src/app/api/eai/readiness/route.ts"
+          ],
+          "required_repo_tests": [
+            "tests/source-unknown-deployment-evidence.test.mjs",
+            "src/lib/platform/readiness.test.ts",
+            "src/app/api/eai/readiness/route.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "backend",
+            "eai-cli",
+            "eai-managed-deploy"
+          ],
+          "required_deployed_contracts": [
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/platform-lifecycle/publicapi-v4-platform-lifecycle.spec.ts"
+            },
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/eai-cli/eai-managed-deploy.spec.ts"
+            },
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/eai-cli/eai-managed-deploy-mutation.spec.ts"
+            }
+          ]
+        },
+        {
           "id": "publicapi-v4-only-guidance",
           "description": "Repository documentation, examples, tests, and app proxy guidance use PublicAPI V4 interfaces only.",
           "owned_paths": [
@@ -19,7 +58,9 @@
             "src/lib/platform/publicapi-route-family.test.ts",
             "src/app/api/eai/[[...rest]]/route.test.ts"
           ],
-          "required_ci_checks": ["validate"],
+          "required_ci_checks": [
+            "validate"
+          ],
           "required_cross_service_surfaces": []
         },
         {
@@ -37,7 +78,9 @@
             "src/hooks/useDocuments.test.tsx",
             "src/lib/platform/publicapi-route-family.test.ts"
           ],
-          "required_ci_checks": ["validate"],
+          "required_ci_checks": [
+            "validate"
+          ],
           "required_cross_service_surfaces": []
         },
         {
@@ -60,8 +103,12 @@
             "tests/generate-object-types-json.test.mjs",
             "src/lib/platform/verify-platform.test.ts"
           ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["backend"]
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "backend"
+          ]
         },
         {
           "id": "generated-app-object-type-seeding",
@@ -70,9 +117,15 @@
             "src/eai.config/object-types.ts",
             "src/lib/platform/seed-object-types.ts"
           ],
-          "required_repo_tests": ["src/lib/platform/seed-object-types.test.ts"],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["admin-portal"]
+          "required_repo_tests": [
+            "src/lib/platform/seed-object-types.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "admin-portal"
+          ]
         },
         {
           "id": "generated-app-platform-sdk-resource-count-policy",
@@ -84,8 +137,12 @@
           "required_repo_tests": [
             "packages/platform-sdk/__tests__/resources.test.ts"
           ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["backend"],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "backend"
+          ],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",
@@ -134,8 +191,13 @@
             "src/lib/generated-workflow/field-validation.test.ts",
             "src/app/page.test.tsx"
           ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["admin-portal", "ncb-sugar-hit"],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "admin-portal",
+            "ncb-sugar-hit"
+          ],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",
@@ -157,7 +219,9 @@
             "package-lock.json"
           ],
           "required_repo_tests": [],
-          "required_ci_checks": ["validate"],
+          "required_ci_checks": [
+            "validate"
+          ],
           "required_cross_service_surfaces": [],
           "required_deployed_contracts": []
         }

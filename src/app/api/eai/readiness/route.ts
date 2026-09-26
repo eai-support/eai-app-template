@@ -125,8 +125,10 @@ export async function GET(request: Request): Promise<Response> {
     return probeFailureResponse;
   }
 
-  const readiness = evaluateRuntimeReadiness();
   const workflowRuntime = getGeneratedWorkflowRuntime();
+  const readiness = evaluateRuntimeReadiness(process.env, {
+    requireWorkflowAssignment: workflowRuntime.status !== 'unconfigured',
+  });
   const platformCheck = await generatedWorkflowPlatformCheck(workflowRuntime);
   const checks = platformCheck
     ? [...readiness.checks, platformCheck]
