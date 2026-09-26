@@ -33,17 +33,18 @@
 - [x] Reject preexisting isolated outputs instead of path-based cleanup (DTE-022, DTE-025).
 - [x] Leave failed bound-copy output in the disposable workspace without unsafe path cleanup (DTE-022).
 - [x] Repeat the governed configuration inventory and bind every post-read path and file identity (DTE-018).
+- [x] Bind every image-tree source ancestor and final path through the copy (DTE-022).
 
 ## Exact-head evidence
 
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (35 passed)
+- `npm run test:source-unknown-evidence` (36 passed)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (322 passed)
 - `npm run typecheck`
 - `npm run build`
 - `actionlint .github/workflows/eai-app.yml`
-- Exact source evidence tests cover Git tree/blob configuration recomputation and bound output parents; workflow digest `sha256:1494d7efb8f23f2a19722f94d9748cd356e5330fe7f83839113b04f6e8a35f3a`, collector digest `sha256:70113ad3d00db5784c6fe55813121b7ae6edbaf2e928b69d4980793172d14a12`.
+- Exact source evidence tests cover Git tree/blob configuration recomputation plus source/output ancestor binding; workflow digest `sha256:1494d7efb8f23f2a19722f94d9748cd356e5330fe7f83839113b04f6e8a35f3a`, collector digest `sha256:c37000de84b9869519c88d36c972bbdc0379fe2e8419580bd8b3a3b7a5a7fd74`.

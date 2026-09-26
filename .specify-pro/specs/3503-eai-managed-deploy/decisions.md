@@ -43,3 +43,5 @@ Collector reads use the same complete-parent snapshot and opened-leaf binding th
 The workflow uses a disposable checkout and creates isolated image outputs once. Image preparation rejects preexisting context, static, public, archive, or metadata outputs instead of removing them through a mutable path. If a bound copy fails, it leaves the partial output in that disposable workspace and fails the job; it does not resolve the failed destination path again for cleanup.
 
 The configuration digest is calculated only from a stable governed inventory. The collector repeats the sorted inventory after hashing and revalidates each opened descriptor, complete ancestor chain, final contained path, size, modification time, and change time after reading.
+
+Image-tree copying treats each source file's complete ancestor chain and contained final path as part of the read authority. Snapshot before the no-follow open, bind the opened inode to the path, and repeat the ancestor, path, inode, size, modification-time, and change-time checks after the copy.

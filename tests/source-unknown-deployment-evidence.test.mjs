@@ -895,6 +895,24 @@ test('collector error paths do not unlink a copy destination after parent valida
   assert.doesNotMatch(implementation, /rmSync\(path(?:,|\))/);
 });
 
+test('image-tree copies bind each source ancestor and final path through the read', () => {
+  const implementation = readFileSync(evidenceScript, 'utf8');
+  const copyStart = implementation.indexOf('function copyRegularTreeNoFollow(');
+  const copyEnd = implementation.indexOf('\nfunction writeRegularFileNoFollow(', copyStart);
+  assert.ok(copyStart >= 0 && copyEnd > copyStart);
+  const copy = implementation.slice(copyStart, copyEnd);
+  assert.match(copy, /snapshotAbsoluteDirectoryPath\(\s*dirname\(sourcePath\),\s*label/);
+  assert.equal(
+    (copy.match(/assertAbsoluteDirectorySnapshot\(sourceAncestors, label\)/g) || [])
+      .length,
+    2,
+  );
+  assert.match(copy, /sourceRebound\.ino !== opened\.ino/);
+  assert.match(copy, /sourcePathAfter\.ino !== opened\.ino/);
+  assert.match(copy, /after\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(copy, /realpathSync\(sourcePath\)/);
+});
+
 test('image metadata digest is read through a bounded no-follow path', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-image-metadata-'));
   try {
