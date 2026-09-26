@@ -28,17 +28,19 @@
 - [x] Recompute the complete governed configuration from the exact source commit before OIDC (DTE-018, DTE-025).
 - [x] Bind image-context and evidence output ancestors through opened-descriptor writes (DTE-022, DTE-025).
 - [x] Update owned regressions and rerun exact-head checks for the final live review findings.
+- [x] Bind bounded collector reads through parent and leaf revalidation (DTE-022, DTE-025).
+- [x] Bound exact-commit Git blob retrieval while preserving deterministic manifest order (DTE-018, DTE-025).
 
 ## Exact-head evidence
 
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (31 passed)
+- `npm run test:source-unknown-evidence` (32 passed)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (322 passed)
 - `npm run typecheck`
 - `npm run build`
 - `actionlint .github/workflows/eai-app.yml`
-- Exact source evidence tests cover Git tree/blob configuration recomputation and bound output parents; workflow digest `sha256:91d26a67a761728c0a056651bd3bb4bd18a2f366ef884455f2b0fe9ec34cc027`, collector digest `sha256:ec17171b1208adeb630fe0f2b47e1241707a07d5fea1e94546ee9641303ae5bb`.
+- Exact source evidence tests cover Git tree/blob configuration recomputation and bound output parents; workflow digest `sha256:1494d7efb8f23f2a19722f94d9748cd356e5330fe7f83839113b04f6e8a35f3a`, collector digest `sha256:6f1d435e3e9967a85723fa34eebd30e9a4603cb06c6226815bd57dec6bf54816`.

@@ -507,6 +507,9 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /\/git\/commits\/\$\{encodeURIComponent\(process\.env\.SOURCE_COMMIT_SHA\)\}/);
   assert.match(handoffJob, /\/git\/trees\/\$\{commit\.tree\.sha\}\?recursive=1/);
   assert.match(handoffJob, /\/git\/blobs\/\$\{entry\.sha\}/);
+  assert.match(handoffJob, /Math\.min\(8, sortedEntries\.length\)/);
+  assert.match(handoffJob, /blobs\[index\] = \{ path: entry\.path, bytes \}/);
+  assert.doesNotMatch(handoffJob, /Promise\.all\(entries\.sort/);
   assert.match(handoffJob, /src\/eai\.config\/object-types\.provisioning\.json/);
   assert.match(handoffJob, /canonicalConfigHash !== process\.env\.CONFIG_HASH/);
   assert.match(handoffJob, /canonicalConfigHash !== evidence\.configHash/);
@@ -878,6 +881,23 @@ test('image metadata digest is read through a bounded no-follow path', () => {
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
+});
+
+test('bounded collector reads bind parent and leaf identity through the read', () => {
+  const implementation = readFileSync(evidenceScript, 'utf8');
+  const start = implementation.indexOf('function readBoundedRegularFileNoFollow(');
+  const end = implementation.indexOf('\nfunction readImageDigest(', start);
+  assert.ok(start >= 0 && end > start);
+  const reader = implementation.slice(start, end);
+  assert.match(reader, /snapshotAbsoluteDirectoryPath\(dirname\(path\), label\)/);
+  assert.equal(
+    (reader.match(/assertAbsoluteDirectorySnapshot\(ancestors, label\)/g) || []).length,
+    2,
+  );
+  assert.match(reader, /rebound\.dev !== opened\.dev/);
+  assert.match(reader, /after\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(reader, /finalPath\.ino !== opened\.ino/);
+  assert.match(reader, /bytes\.length !== opened\.size/);
 });
 
 test('schema provenance must be present in the governed runtime manifest', () => {
