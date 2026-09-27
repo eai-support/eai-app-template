@@ -71,10 +71,7 @@ function writeFixtureApp(root) {
     join(root, 'tests/fixtures/schema-provenance/valid.json'),
   );
   cpSync(workflowPath, join(root, '.github/workflows/eai-app.yml'));
-  cpSync(
-    evidenceScript,
-    join(root, 'scripts/source-unknown-deployment-evidence.mjs'),
-  );
+  cpSync(evidenceScript, join(root, 'scripts/source-unknown-deployment-evidence.mjs'));
 }
 
 function runEvidenceScript(args, options = {}) {
@@ -510,14 +507,8 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /workflowBlobSha/);
   assert.match(handoffJob, /collectorDigest/);
   assert.match(handoffJob, /async function sourceConfigHash\(\)/);
-  assert.match(
-    handoffJob,
-    /\/git\/commits\/\$\{encodeURIComponent\(process\.env\.SOURCE_COMMIT_SHA\)\}/,
-  );
-  assert.match(
-    handoffJob,
-    /\/git\/trees\/\$\{commit\.tree\.sha\}\?recursive=1/,
-  );
+  assert.match(handoffJob, /\/git\/commits\/\$\{encodeURIComponent\(process\.env\.SOURCE_COMMIT_SHA\)\}/);
+  assert.match(handoffJob, /\/git\/trees\/\$\{commit\.tree\.sha\}\?recursive=1/);
   assert.match(handoffJob, /\/git\/blobs\/\$\{entry\.sha\}/);
   assert.match(handoffJob, /Math\.min\(8, sortedEntries\.length\)/);
   assert.match(handoffJob, /blobs\[index\] = \{ path: entry\.path, bytes \}/);
@@ -535,29 +526,17 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /totalBytes > MAX_GOVERNED_CONFIG_TOTAL_BYTES/);
   assert.doesNotMatch(handoffJob, /entry\.size > 4 \* 1024 \* 1024/);
   assert.doesNotMatch(handoffJob, /Promise\.all\(entries\.sort/);
-  assert.match(
-    handoffJob,
-    /src\/eai\.config\/object-types\.provisioning\.json/,
-  );
+  assert.match(handoffJob, /src\/eai\.config\/object-types\.provisioning\.json/);
   assert.match(handoffJob, /canonicalConfigHash !== process\.env\.CONFIG_HASH/);
   assert.match(handoffJob, /canonicalConfigHash !== evidence\.configHash/);
   assert.match(handoffJob, /function validateSchemaProvenance\(provenance\)/);
   assert.match(handoffJob, /Array\.isArray\(provenance\)/);
-  assert.match(
-    handoffJob,
-    /Object\.keys\(provenance\).*canonicalFields\.has\(key\)/,
-  );
+  assert.match(handoffJob, /Object\.keys\(provenance\).*canonicalFields\.has\(key\)/);
   assert.match(handoffJob, /\^sha256:\[a-f0-9\]\{64\}\$/);
   assert.match(handoffJob, /\^\[a-f0-9\]\{40\}\$/);
-  assert.match(
-    handoffJob,
-    /provenance\.templateVersion\.trim\(\) !== provenance\.templateVersion/,
-  );
+  assert.match(handoffJob, /provenance\.templateVersion\.trim\(\) !== provenance\.templateVersion/);
   assert.match(handoffJob, /\[\\r\\n\]\/\.test\(value\)/);
-  assert.match(
-    handoffJob,
-    /anchors\.some\(\(\[, value\]\) => value !== undefined\)/,
-  );
+  assert.match(handoffJob, /anchors\.some\(\(\[, value\]\) => value !== undefined\)/);
   assert.match(
     handoffJob,
     /const sourceProvenance = validateSchemaProvenance\(runtime\.schemaProvenance\)/,
@@ -612,7 +591,10 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
     /if \[\[ "\$SOURCE_MODE" == "eai-cli-generated" \|\| -n "\$TARGET_TENANT_ID" \]\]; then/,
   );
   assert.match(workflow, /--max-redirs 0/);
-  assert.match(handoffJob, /MAX_BUILD_EVIDENCE_BYTES = 1024 \* 1024/);
+  assert.match(
+    handoffJob,
+    /MAX_BUILD_EVIDENCE_BYTES = 1024 \* 1024/,
+  );
   assert.match(
     handoffJob,
     /MAX_GITHUB_TREE_RESPONSE_BYTES = 16 \* 1024 \* 1024/,
@@ -636,10 +618,7 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /--max-filesize 1048576/);
   assert.match(handoffJob, /process\.stdin\.on\("data"/);
   assert.match(handoffJob, /chunk\.byteLength > maxBytes - totalBytes/);
-  assert.match(
-    handoffJob,
-    /fs\.constants\.O_EXCL \| fs\.constants\.O_NOFOLLOW/,
-  );
+  assert.match(handoffJob, /fs\.constants\.O_EXCL \| fs\.constants\.O_NOFOLLOW/);
   assert.match(
     handoffJob,
     /EAI_RESPONSE_PATH=\.eai-build\/evidence\/workflow-evidence-response\.json/,
@@ -652,10 +631,7 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
     /const responsePath = '\.eai-build\/evidence\/workflow-evidence-response\.json'/,
   );
   assert.match(handoffJob, /fs\.constants\.O_NOFOLLOW/);
-  assert.match(
-    handoffJob,
-    /Deployment handoff response grew during verification/,
-  );
+  assert.match(handoffJob, /Deployment handoff response grew during verification/);
   assert.doesNotMatch(handoffJob, /actions\/checkout@/);
   assert.doesNotMatch(
     handoffJob,
@@ -731,18 +707,13 @@ test('reusable workflow compatibility keeps manual same-repository OIDC authorit
   assert.doesNotMatch(workflow, /secrets\.EAI_ACCESS_TOKEN|\$EAI_ACCESS_TOKEN/);
   assert.match(readme, /same repository/);
   assert.match(readme, /Cross-repository and cross-ref reusable calls fail/);
-  assert.match(
-    readme,
-    /`actions: read`, `attestations: write`, and `id-token: write`/,
-  );
+  assert.match(readme, /`actions: read`, `attestations: write`, and `id-token: write`/);
 });
 
 test('OIDC response parser bounds unknown-length input before token retention', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   const oidcStep = workflow.slice(
-    workflow.indexOf(
-      'name: Request GitHub OIDC token and submit workflow evidence',
-    ),
+    workflow.indexOf('name: Request GitHub OIDC token and submit workflow evidence'),
     workflow.indexOf('name: Assert evidence accepted'),
   );
   const scriptMatch = oidcStep.match(
@@ -776,9 +747,7 @@ test('OIDC response parser bounds unknown-length input before token retention', 
 test('handoff response writer bounds unknown-length input and creates no-follow output', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   const oidcStep = workflow.slice(
-    workflow.indexOf(
-      'name: Request GitHub OIDC token and submit workflow evidence',
-    ),
+    workflow.indexOf('name: Request GitHub OIDC token and submit workflow evidence'),
     workflow.indexOf('name: Assert evidence accepted'),
   );
   const scriptMatch = oidcStep.match(
@@ -805,10 +774,7 @@ test('handoff response writer bounds unknown-length input and creates no-follow 
       env: { ...process.env, EAI_RESPONSE_PATH: oversizedPath },
     });
     assert.notEqual(oversized.status, 0);
-    assert.match(
-      oversized.stderr,
-      /Deployment handoff response exceeds its 1 MiB limit/,
-    );
+    assert.match(oversized.stderr, /Deployment handoff response exceeds its 1 MiB limit/);
     assert.ok(readFileSync(oversizedPath).byteLength <= 1024 * 1024);
 
     const linkedPath = join(realpathSync(workDir), 'linked.json');
@@ -881,9 +847,20 @@ test('handoff binds the bounded OCI archive and referenced manifest bytes', () =
     archiveInspector,
     /manifest\.layers\.length > MAX_OCI_LAYER_COUNT/,
   );
-  assert.match(archiveInspector, /'--to-command', validatorCommand/);
+  assert.match(
+    archiveInspector,
+    /'--extract', '--verbose', '--quoting-style=escape', '--to-command', validatorCommand/,
+  );
   assert.match(archiveInspector, /process\.env\.TAR_FILETYPE !== 'f'/);
   assert.match(archiveInspector, /bytesRead !== descriptor\.size/);
+  assert.match(archiveInspector, /process\.stdout\.write\('verified:' \+ filename/);
+  assert.match(archiveInspector, /EAI_OCI_EXPECTED_BLOB_TABLE/);
+  assert.match(archiveInspector, /encodedExpectedTable/);
+  assert.match(
+    archiveInspector,
+    /Buffer\.byteLength\(encodedExpectedTable\) > MAX_OCI_EXPECTED_BLOB_TABLE_BYTES/,
+  );
+  assert.doesNotMatch(archiveInspector, /JSON\.stringify\(expected\)/);
   assert.match(
     archiveInspector,
     /verifyReferencedOciBlobs\(\[configDescriptor, \.\.\.layerDescriptors\]\)/,
@@ -896,6 +873,16 @@ test('handoff binds the bounded OCI archive and referenced manifest bytes', () =
   assert.doesNotMatch(
     archiveInspector,
     /execFileSync\('tar'.*\.eai-build\/eai-generated-app-image\.tar/,
+  );
+
+  const maximumCompactTable = Array.from(
+    { length: 1025 },
+    (_, index) =>
+      `${index.toString(16).padStart(64, '0')}:${10 * 1024 * 1024 * 1024}`,
+  ).join('\n');
+  assert.ok(
+    Buffer.byteLength(Buffer.from(maximumCompactTable).toString('base64')) <=
+      112 * 1024,
   );
 });
 
@@ -1083,7 +1070,7 @@ test(
       assert.equal(linkedReferenced.status, 1);
       assert.match(
         linkedReferenced.stderr,
-        /referenced blobs are missing or duplicated/,
+        /referenced blobs are missing, nonregular, or duplicated/,
       );
 
       const malformedManifests = [
@@ -1158,7 +1145,32 @@ test(
       assert.equal(duplicateReferenced.status, 1);
       assert.match(
         duplicateReferenced.stderr,
-        /referenced blobs are missing or duplicated/,
+        /referenced blobs are missing, nonregular, or duplicated/,
+      );
+
+      const mixedDuplicateArchive = createArchive('mixed-duplicate');
+      const mixedDuplicateRoot = join(workDir, 'mixed-duplicate-root');
+      const mixedDuplicatePath = join(
+        mixedDuplicateRoot,
+        'blobs/sha256',
+        configDigest.slice('sha256:'.length),
+      );
+      mkdirSync(dirname(mixedDuplicatePath), { recursive: true });
+      const mixedDuplicateTarget = join(mixedDuplicateRoot, 'target');
+      writeFileSync(mixedDuplicateTarget, configBytes);
+      symlinkSync(mixedDuplicateTarget, mixedDuplicatePath);
+      execFileSync('tar', [
+        '-rf',
+        mixedDuplicateArchive.archivePath,
+        '-C',
+        mixedDuplicateRoot,
+        `blobs/sha256/${configDigest.slice('sha256:'.length)}`,
+      ]);
+      const mixedDuplicate = inspect(mixedDuplicateArchive);
+      assert.equal(mixedDuplicate.status, 1);
+      assert.match(
+        mixedDuplicate.stderr,
+        /referenced blobs are missing, nonregular, or duplicated/,
       );
 
       const duplicateRoot = join(workDir, 'duplicate-root');
@@ -1617,15 +1629,9 @@ test('image preparation rejects preexisting isolated outputs without deleting th
         { encoding: 'utf8' },
       );
       assert.equal(result.status, 1);
-      assert.match(
-        result.stderr,
-        /must not exist before isolated image preparation/,
-      );
+      assert.match(result.stderr, /must not exist before isolated image preparation/);
       if (relativePath.endsWith('image-context')) {
-        assert.equal(
-          readFileSync(join(output, 'sentinel'), 'utf8'),
-          'unchanged',
-        );
+        assert.equal(readFileSync(join(output, 'sentinel'), 'utf8'), 'unchanged');
       } else {
         assert.equal(readFileSync(output, 'utf8'), 'unchanged');
       }
@@ -1642,7 +1648,10 @@ test('image preparation never truncates a hard-linked generated output', () => {
   try {
     const root = join(workDir, 'app');
     const protectedPath = join(workDir, 'protected.txt');
-    const dockerfilePath = join(root, '.eai-build/image-context/Dockerfile');
+    const dockerfilePath = join(
+      root,
+      '.eai-build/image-context/Dockerfile',
+    );
     const preload = join(workDir, 'hard-link-image-output.cjs');
     writeFixtureApp(root);
     writeFileSync(protectedPath, 'protected bytes\n');
@@ -1690,10 +1699,7 @@ syncBuiltinESMExports();
 test('collector error paths do not unlink a copy destination after parent validation fails', () => {
   const implementation = readFileSync(evidenceScript, 'utf8');
   const copyStart = implementation.indexOf('function copyRegularTreeNoFollow(');
-  const copyEnd = implementation.indexOf(
-    '\nfunction writeRegularFileNoFollow(',
-    copyStart,
-  );
+  const copyEnd = implementation.indexOf('\nfunction writeRegularFileNoFollow(', copyStart);
   assert.ok(copyStart >= 0 && copyEnd > copyStart);
   const copy = implementation.slice(copyStart, copyEnd);
   assert.doesNotMatch(copy, /rmSync\(destinationPath/);
@@ -1703,22 +1709,13 @@ test('collector error paths do not unlink a copy destination after parent valida
 test('image-tree copies bind each source ancestor and final path through the read', () => {
   const implementation = readFileSync(evidenceScript, 'utf8');
   const copyStart = implementation.indexOf('function copyRegularTreeNoFollow(');
-  const copyEnd = implementation.indexOf(
-    '\nfunction writeRegularFileNoFollow(',
-    copyStart,
-  );
+  const copyEnd = implementation.indexOf('\nfunction writeRegularFileNoFollow(', copyStart);
   assert.ok(copyStart >= 0 && copyEnd > copyStart);
   const copy = implementation.slice(copyStart, copyEnd);
-  assert.match(
-    copy,
-    /snapshotAbsoluteDirectoryPath\(\s*dirname\(sourcePath\),\s*label/,
-  );
+  assert.match(copy, /snapshotAbsoluteDirectoryPath\(\s*dirname\(sourcePath\),\s*label/);
   assert.equal(
-    (
-      copy.match(
-        /assertAbsoluteDirectorySnapshot\(sourceAncestors, label\)/g,
-      ) || []
-    ).length,
+    (copy.match(/assertAbsoluteDirectorySnapshot\(sourceAncestors, label\)/g) || [])
+      .length,
     2,
   );
   assert.match(copy, /sourceRebound\.ino !== opened\.ino/);
@@ -1734,9 +1731,7 @@ test('image-tree copies bind each source ancestor and final path through the rea
 });
 
 test('image tree and archive staging reject same-size rewrites before open', () => {
-  const workDir = realpathSync(
-    mkdtempSync(join(tmpdir(), 'eai-copy-pre-open-')),
-  );
+  const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-copy-pre-open-')));
   try {
     const preload = join(workDir, 'rewrite-source-before-open.cjs');
     writeFileSync(
@@ -1914,31 +1909,19 @@ test('bounded collector reads bind parent and leaf identity through the read', (
   const descriptorStart = implementation.indexOf(
     'function readExactBoundedDescriptor(',
   );
-  const start = implementation.indexOf(
-    'function readBoundedRegularFileNoFollow(',
-  );
+  const start = implementation.indexOf('function readBoundedRegularFileNoFollow(');
   const end = implementation.indexOf('\nfunction readImageDigest(', start);
   assert.ok(descriptorStart >= 0 && start > descriptorStart && end > start);
   const descriptorReader = implementation.slice(descriptorStart, start);
   const reader = implementation.slice(start, end);
-  assert.match(
-    descriptorReader,
-    /Buffer\.allocUnsafe\(BOUNDED_READ_BUFFER_BYTES\)/,
-  );
+  assert.match(descriptorReader, /Buffer\.allocUnsafe\(BOUNDED_READ_BUFFER_BYTES\)/);
   assert.match(descriptorReader, /readSync\(\s*descriptor,\s*buffer/);
-  assert.match(
-    descriptorReader,
-    /readSync\(descriptor, growthProbe, 0, 1, offset\)/,
-  );
+  assert.match(descriptorReader, /readSync\(descriptor, growthProbe, 0, 1, offset\)/);
   assert.match(descriptorReader, /grew during its bounded read/);
   assert.doesNotMatch(implementation, /readFileSync\(descriptor\)/);
-  assert.match(
-    reader,
-    /snapshotAbsoluteDirectoryPath\(dirname\(path\), label\)/,
-  );
+  assert.match(reader, /snapshotAbsoluteDirectoryPath\(dirname\(path\), label\)/);
   assert.equal(
-    (reader.match(/assertAbsoluteDirectorySnapshot\(ancestors, label\)/g) || [])
-      .length,
+    (reader.match(/assertAbsoluteDirectorySnapshot\(ancestors, label\)/g) || []).length,
     2,
   );
   assert.match(reader, /rebound\.dev !== opened\.dev/);
@@ -2113,9 +2096,7 @@ export const writeFileSync = fs.writeFileSync;
 });
 
 test('bounded collector reads reject post-open growth and archive shrinkage', () => {
-  const workDir = realpathSync(
-    mkdtempSync(join(tmpdir(), 'eai-bounded-growth-')),
-  );
+  const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-bounded-growth-')));
   try {
     const root = join(workDir, 'app');
     const preload = join(workDir, 'grow-after-open.cjs');
@@ -2208,7 +2189,10 @@ syncBuiltinESMExports();
     assert.equal(config.status, 1);
     assert.match(config.stderr, /grew during its bounded read/);
 
-    const archivePath = join(root, '.eai-build/eai-generated-app-image.tar');
+    const archivePath = join(
+      root,
+      '.eai-build/eai-generated-app-image.tar',
+    );
     const growingArchive = spawnSync(
       process.execPath,
       [evidenceScript, ...sourceUnknownCollectArgs(root)],
@@ -2264,9 +2248,7 @@ test('governed configuration reads enforce the explicit per-file cap', () => {
 });
 
 test('governed configuration accepts 4-10 MiB files and enforces the shared total cap', () => {
-  const workDir = realpathSync(
-    mkdtempSync(join(tmpdir(), 'eai-config-bounds-')),
-  );
+  const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-config-bounds-')));
   try {
     const acceptedRoot = join(workDir, 'accepted');
     writeFixtureApp(acceptedRoot);
@@ -2297,37 +2279,15 @@ test('governed configuration accepts 4-10 MiB files and enforces the shared tota
 test('configuration hashing repeats inventory and binds each post-read path', () => {
   const implementation = readFileSync(evidenceScript, 'utf8');
   const hashStart = implementation.indexOf('function buildConfigHash(');
-  const hashEnd = implementation.indexOf(
-    '\nfunction prepareImageContext(',
-    hashStart,
-  );
-  const readerStart = implementation.indexOf(
-    'function readRegularFileNoFollow(',
-  );
-  const readerEnd = implementation.indexOf(
-    '\nfunction optionalLstat(',
-    readerStart,
-  );
-  assert.ok(
-    hashStart >= 0 &&
-      hashEnd > hashStart &&
-      readerStart >= 0 &&
-      readerEnd > readerStart,
-  );
+  const hashEnd = implementation.indexOf('\nfunction prepareImageContext(', hashStart);
+  const readerStart = implementation.indexOf('function readRegularFileNoFollow(');
+  const readerEnd = implementation.indexOf('\nfunction optionalLstat(', readerStart);
+  assert.ok(hashStart >= 0 && hashEnd > hashStart && readerStart >= 0 && readerEnd > readerStart);
   const hash = implementation.slice(hashStart, hashEnd);
   const reader = implementation.slice(readerStart, readerEnd);
-  assert.equal(
-    (hash.match(/listGovernedConfigFiles\(root\)/g) || []).length,
-    2,
-  );
-  assert.match(
-    hash,
-    /paths\.some\(\(path, index\) => path !== finalPaths\[index\]\)/,
-  );
-  assert.match(
-    reader,
-    /assertRelativeDirectorySnapshot\(ancestors, relativePath\)/,
-  );
+  assert.equal((hash.match(/listGovernedConfigFiles\(root\)/g) || []).length, 2);
+  assert.match(hash, /paths\.some\(\(path, index\) => path !== finalPaths\[index\]\)/);
+  assert.match(reader, /assertRelativeDirectorySnapshot\(ancestors, relativePath\)/);
   assert.match(reader, /finalPath\.ino !== opened\.ino/);
   assert.match(reader, /opened\.size !== before\.size/);
   assert.match(reader, /opened\.mtimeMs !== before\.mtimeMs/);
@@ -2342,7 +2302,10 @@ test('configuration hashing repeats inventory and binds each post-read path', ()
   assert.match(reader, /MAX_GOVERNED_CONFIG_FILE_BYTES/);
   assert.match(reader, /readExactBoundedDescriptor\(/);
   assert.match(implementation, /paths\.length > MAX_GOVERNED_CONFIG_FILES/);
-  assert.match(implementation, /totalBytes > MAX_GOVERNED_CONFIG_TOTAL_BYTES/);
+  assert.match(
+    implementation,
+    /totalBytes > MAX_GOVERNED_CONFIG_TOTAL_BYTES/,
+  );
 });
 
 test('configuration hashing rejects an in-place rewrite before no-follow open', () => {
@@ -3331,9 +3294,7 @@ test('clean handoff validates bounded responses without a repository checkout', 
   const scriptMarker = "          node - <<'NODE'\n";
   const scriptStart = workflow.indexOf(scriptMarker, stepStart);
   const scriptEnd = workflow.indexOf('\n          NODE', scriptStart);
-  assert.ok(
-    stepStart >= 0 && scriptStart > stepStart && scriptEnd > scriptStart,
-  );
+  assert.ok(stepStart >= 0 && scriptStart > stepStart && scriptEnd > scriptStart);
   const script = workflow
     .slice(scriptStart + scriptMarker.length, scriptEnd)
     .replace(/^ {10}/gm, '');
@@ -3379,14 +3340,20 @@ test('clean handoff validates bounded responses without a repository checkout', 
 
     rmSync(responsePath);
     const targetPath = join(workDir, 'response-target.json');
-    writeFileSync(targetPath, JSON.stringify({ status: 'accepted' }));
+    writeFileSync(
+      targetPath,
+      JSON.stringify({ status: 'accepted' }),
+    );
     symlinkSync(targetPath, responsePath);
     const linked = run();
     assert.equal(linked.status, 1);
     assert.match(linked.stderr, /bounded no-follow regular file/);
 
     rmSync(responsePath);
-    writeFileSync(responsePath, JSON.stringify({ status: 'accepted' }));
+    writeFileSync(
+      responsePath,
+      JSON.stringify({ status: 'accepted' }),
+    );
     const preload = join(workDir, 'grow-inline-response-after-open.cjs');
     writeFileSync(
       preload,
@@ -3439,7 +3406,12 @@ test('assert-evidence-accepted bounds and binds the response file', () => {
   const run = (responsePath, env = process.env) =>
     spawnSync(
       process.execPath,
-      [evidenceScript, 'assert-evidence-accepted', '--response', responsePath],
+      [
+        evidenceScript,
+        'assert-evidence-accepted',
+        '--response',
+        responsePath,
+      ],
       { encoding: 'utf8', env },
     );
   const accepted = JSON.stringify({

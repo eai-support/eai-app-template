@@ -40,8 +40,7 @@ const GENERATED_CONFIG_FILES = new Set([
   'src/eai.config/object-types.provisioning.json',
 ]);
 const CANONICAL_WORKFLOW_PATH = '.github/workflows/eai-app.yml';
-const CANONICAL_COLLECTOR_PATH =
-  'scripts/source-unknown-deployment-evidence.mjs';
+const CANONICAL_COLLECTOR_PATH = 'scripts/source-unknown-deployment-evidence.mjs';
 const MAX_IMAGE_ARCHIVE_BYTES = 10 * 1024 * 1024 * 1024;
 const MAX_GOVERNED_CONFIG_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_GOVERNED_CONFIG_TOTAL_BYTES = 32 * 1024 * 1024;
@@ -59,7 +58,9 @@ function requiredOpenFlag(name) {
 
 function noFollowOpenFlags(flags, { nonblocking = false } = {}) {
   const noFollow = requiredOpenFlag('O_NOFOLLOW');
-  const nonblockingFlag = nonblocking ? requiredOpenFlag('O_NONBLOCK') : 0;
+  const nonblockingFlag = nonblocking
+    ? requiredOpenFlag('O_NONBLOCK')
+    : 0;
   return flags | noFollow | nonblockingFlag;
 }
 
@@ -400,10 +401,7 @@ function copyRegularTreeNoFollow(
           before.mode & 0o777,
         );
         const destinationOpened = fstatSync(destinationDescriptor);
-        assertAbsoluteDirectorySnapshot(
-          destinationAncestors,
-          `${label} destination`,
-        );
+        assertAbsoluteDirectorySnapshot(destinationAncestors, `${label} destination`);
         const destinationRebound = lstatSync(destinationPath);
         if (
           !destinationOpened.isFile() ||
@@ -441,10 +439,7 @@ function copyRegularTreeNoFollow(
           }
           copied += bytesRead;
         }
-        assertAbsoluteDirectorySnapshot(
-          destinationAncestors,
-          `${label} destination`,
-        );
+        assertAbsoluteDirectorySnapshot(destinationAncestors, `${label} destination`);
         const destinationAfter = fstatSync(destinationDescriptor);
         const destinationPathAfter = lstatSync(destinationPath);
         if (
@@ -454,9 +449,7 @@ function copyRegularTreeNoFollow(
           destinationPathAfter.dev !== destinationOpened.dev ||
           destinationPathAfter.ino !== destinationOpened.ino
         ) {
-          throw new Error(
-            `${label} destination changed during its bound write.`,
-          );
+          throw new Error(`${label} destination changed during its bound write.`);
         }
         const after = fstatSync(sourceDescriptor);
         assertAbsoluteDirectorySnapshot(sourceAncestors, label);
@@ -1052,9 +1045,7 @@ function digestFiles(root, paths, options = {}) {
     const bytes = readRegularFileNoFollow(root, relativePath, options);
     totalBytes += bytes.length;
     if (totalBytes > MAX_GOVERNED_CONFIG_TOTAL_BYTES) {
-      throw new Error(
-        'Governed configuration manifest exceeds its byte limit.',
-      );
+      throw new Error('Governed configuration manifest exceeds its byte limit.');
     }
     hash.update(relativePath);
     hash.update('\0');
@@ -1244,16 +1235,12 @@ function snapshotAbsoluteDirectoryPath(path, label) {
   const filesystemRoot = parse(target).root;
   const identities = [];
   let current = filesystemRoot;
-  for (const component of [
-    '',
-    ...relative(filesystemRoot, target).split(/[\\/]/).filter(Boolean),
-  ]) {
+  for (const component of ['', ...relative(filesystemRoot, target).split(/[\\/]/).filter(Boolean)]) {
     if (component) current = join(current, component);
     const status = lstatSync(current);
     // macOS exposes trusted system roots such as /var and /tmp as top-level links.
     // Bind every application-controlled descendant beneath that stable root alias.
-    if (status.isSymbolicLink() && dirname(current) === filesystemRoot)
-      continue;
+    if (status.isSymbolicLink() && dirname(current) === filesystemRoot) continue;
     if (status.isSymbolicLink() || !status.isDirectory()) {
       throw new Error(`${label} ancestors must be no-follow directories.`);
     }
@@ -1265,12 +1252,8 @@ function snapshotAbsoluteDirectoryPath(path, label) {
 function assertAbsoluteDirectorySnapshot(identities, label) {
   for (const identity of identities) {
     const status = lstatSync(identity.path);
-    if (
-      status.isSymbolicLink() ||
-      !status.isDirectory() ||
-      status.dev !== identity.dev ||
-      status.ino !== identity.ino
-    ) {
+    if (status.isSymbolicLink() || !status.isDirectory()
+      || status.dev !== identity.dev || status.ino !== identity.ino) {
       throw new Error(`${label} ancestors changed before the bound write.`);
     }
   }
@@ -1401,7 +1384,9 @@ function buildConfigHash(root, options = {}) {
     paths.length !== finalPaths.length ||
     paths.some((path, index) => path !== finalPaths[index])
   ) {
-    throw new Error('Governed configuration inventory changed during hashing.');
+    throw new Error(
+      'Governed configuration inventory changed during hashing.',
+    );
   }
   return digest;
 }

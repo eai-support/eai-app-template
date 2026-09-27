@@ -409,6 +409,7 @@ jobs:
           const MAX_OCI_LAYER_COUNT = 1024;
           const MAX_TAR_LISTING_BYTES = 64 * 1024;
           const MAX_OCI_BLOB_VALIDATION_OUTPUT_BYTES = 128 * 1024;
+          const MAX_OCI_EXPECTED_BLOB_TABLE_BYTES = 112 * 1024;
           const TAR_TIMEOUT_MS = 10 * 60 * 1000;
           const SHA256_DIGEST = /^sha256:[a-f0-9]{64}$/;
           const OCI_MANIFEST_MEDIA_TYPES = new Set([
@@ -561,12 +562,25 @@ jobs:
                 }
                 const memberPaths = [...expectedEntries.keys()].sort();
                 if (memberPaths.length < 1 || memberPaths.length > MAX_OCI_LAYER_COUNT + 1) throw new Error('OCI image blob count is invalid.');
-                const expected = Object.fromEntries(memberPaths.map((memberPath) => [memberPath, expectedEntries.get(memberPath)]));
+                const expectedTable = memberPaths.map((memberPath) => {
+                  const descriptor = expectedEntries.get(memberPath);
+                  return `${descriptor.digest.slice('sha256:'.length)}:${descriptor.size}`;
+                }).join('\n');
+                const encodedExpectedTable = Buffer.from(expectedTable).toString('base64');
+                if (Buffer.byteLength(encodedExpectedTable) > MAX_OCI_EXPECTED_BLOB_TABLE_BYTES) throw new Error('OCI image blob authority table exceeds its execution bound.');
                 const validatorSource = `
                   const { createHash } = require('node:crypto');
-                  const expected = JSON.parse(Buffer.from(process.env.EAI_OCI_EXPECTED_BLOBS, 'base64').toString('utf8'));
+                  const expected = new Map();
+                  for (const row of Buffer.from(process.env.EAI_OCI_EXPECTED_BLOB_TABLE || '', 'base64').toString('utf8').split('\\n')) {
+                    const match = /^([a-f0-9]{64}):(0|[1-9][0-9]*)$/.exec(row);
+                    if (!match) throw new Error('OCI image blob authority table is invalid.');
+                    const size = Number(match[2]);
+                    const filename = 'blobs/sha256/' + match[1];
+                    if (!Number.isSafeInteger(size) || expected.has(filename)) throw new Error('OCI image blob authority row is invalid.');
+                    expected.set(filename, { digest: 'sha256:' + match[1], size });
+                  }
                   const filename = process.env.TAR_FILENAME || '';
-                  const descriptor = Object.prototype.hasOwnProperty.call(expected, filename) ? expected[filename] : undefined;
+                  const descriptor = expected.get(filename);
                   const sizeText = process.env.TAR_SIZE || '';
                   if (process.env.TAR_FILETYPE !== 'f' || !descriptor || !/^(?:0|[1-9][0-9]*)$/.test(sizeText)) throw new Error('OCI image blob member identity is invalid.');
                   const declaredSize = Number(sizeText);
@@ -580,20 +594,20 @@ jobs:
                   });
                   process.stdin.on('end', () => {
                     if (bytesRead !== descriptor.size || ('sha256:' + hash.digest('hex')) !== descriptor.digest) throw new Error('OCI image blob bytes do not match their descriptor.');
-                    process.stdout.write(filename + '\\n');
+                    process.stdout.write('verified:' + filename + '\\n');
                   });
                 `;
                 const validatorCommand = `node -e 'eval(Buffer.from(process.env.EAI_OCI_BLOB_VALIDATOR, "base64").toString("utf8"))'`;
-                const validationOutput = runBoundedTar(
-                  ['--extract', '--to-command', validatorCommand, '--file', '/proc/self/fd/3', '--', ...memberPaths],
+                const validationRecords = runBoundedTar(
+                  ['--extract', '--verbose', '--quoting-style=escape', '--to-command', validatorCommand, '--file', '/proc/self/fd/3', '--', ...memberPaths],
                   MAX_OCI_BLOB_VALIDATION_OUTPUT_BYTES,
                   'OCI referenced blob validation',
                   {
                     EAI_OCI_BLOB_VALIDATOR: Buffer.from(validatorSource).toString('base64'),
-                    EAI_OCI_EXPECTED_BLOBS: Buffer.from(JSON.stringify(expected)).toString('base64'),
+                    EAI_OCI_EXPECTED_BLOB_TABLE: encodedExpectedTable,
                   },
                 ).toString('utf8').split(/\r?\n/).filter(Boolean);
-                if (validationOutput.length !== memberPaths.length || new Set(validationOutput).size !== memberPaths.length || memberPaths.some((memberPath) => !validationOutput.includes(memberPath))) throw new Error('OCI image referenced blobs are missing or duplicated.');
+                if (validationRecords.length !== memberPaths.length * 2 || memberPaths.some((memberPath) => validationRecords.filter((record) => record === memberPath).length !== 1 || validationRecords.filter((record) => record === `verified:${memberPath}`).length !== 1)) throw new Error('OCI image referenced blobs are missing, nonregular, or duplicated.');
               }
               const hash = createHash('sha256');
               const buffer = Buffer.allocUnsafe(1024 * 1024);
