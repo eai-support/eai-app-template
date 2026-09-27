@@ -64,6 +64,8 @@ The collector's archive digest reads exactly the opened snapshot through a fixed
 
 The handoff response is bounded twice: `curl` stops after 1 MiB, and the acceptance command reopens the response without following the leaf and reads only the bound descriptor snapshot. Status parsing therefore cannot turn a large or linked response path into an unbounded allocation.
 
+The isolated handoff treats downloaded build evidence and exact-source GitHub responses as bounded inputs until their identities are verified. Read the local evidence JSON through a 1 MiB no-follow descriptor snapshot. Stream remote bodies through explicit limits before JSON parsing or byte retention: 1 MiB for producer files and ordinary metadata, 10 MiB for the governed runtime, 16 MiB for a base64 Git blob response, and 16 MiB for the recursive tree response. The OIDC token response is also capped at 1 MiB during transfer. These limits preserve the accepted 10 MiB governed-file contract while preventing pre-verification memory growth.
+
 The upload action never reads the application-controlled build path directly. A trusted collector command creates a random directory beneath `RUNNER_TEMP`, copies the archive once through bounded no-follow source and exclusive destination descriptors, records its raw digest, and exposes only that staged path to upload and later evidence collection.
 
 The short-lived GitHub OIDC token remains inside one request-and-submit shell step. It is masked and sent directly to the allowlisted PublicAPI endpoint; it is never serialized through `$GITHUB_OUTPUT` or another mutable command file.

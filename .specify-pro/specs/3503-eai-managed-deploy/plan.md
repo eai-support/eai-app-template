@@ -17,3 +17,4 @@
 15. Bind copied generated-tree and archive sources to pre-open size, modification time, and change time, and use the same 10 MiB per-file, 32 MiB total, and 4,096-file governed-manifest limits in collector and isolated handoff.
 16. Hash the collector's staged archive only through its opened size with a fixed buffer and one-byte growth probe; no collector stream or descriptor read may continue to EOF without an explicit bound.
 17. Cap the PublicAPI handoff response at 1 MiB during transfer, then parse it through the collector's bounded no-follow descriptor reader instead of an unbounded path read.
+18. Read downloaded build evidence through a bounded no-follow descriptor and cap every GitHub provenance response before parsing or retaining bytes, including exact-source files, commit/tree/blob metadata, artifact metadata, and the OIDC token response.
