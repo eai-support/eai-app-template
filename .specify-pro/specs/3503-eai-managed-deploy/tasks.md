@@ -44,20 +44,20 @@
 - [x] Bind retained `workflow_call` compatibility to a manually dispatched same-repository caller, a canonical signed callee identity, and caller-provided least privilege without restoring `EAI_ACCESS_TOKEN` (DTE-025, DTE-026).
 - [x] Hash the downloaded OCI archive through a bounded fixed-size no-follow reader in the isolated handoff (DTE-025).
 - [x] Replace every collector descriptor-wide read with a fixed-size capped loop that rejects post-open growth before allocating beyond the opened snapshot (DTE-018, DTE-025).
-- [ ] Bind all generated-tree and archive-copy sources to pre-open size, mtime, and ctime through their final path checks (DTE-022, DTE-025).
-- [ ] Align collector and handoff governed-manifest limits at 10 MiB per file, 32 MiB total, and 4,096 files, including a valid 4–10 MiB regression (DTE-018, DTE-025).
+- [x] Bind all generated-tree and archive-copy sources to pre-open size, mtime, and ctime through their final path checks (DTE-022, DTE-025).
+- [x] Align collector and handoff governed-manifest limits at 10 MiB per file, 32 MiB total, and 4,096 files, including a valid 4–10 MiB regression (DTE-018, DTE-025).
 
 ## Exact-head evidence
 
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (45 passed)
+- `npm run test:source-unknown-evidence` (48 passed)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (330 passed)
 - `npm run typecheck`
 - `npm run build`
 - `actionlint .github/workflows/eai-app.yml`
-- Exact source evidence tests cover Git tree/blob configuration recomputation with capped fixed-buffer reads and pre-open size/time binding, exclusive generated-output creation, source/output ancestor binding including post-append command-file replacement, canonical handoff provenance validation, runner-temporary artifact staging, fixed-buffer no-follow handoff archive hashing, step-local OIDC submission, and pre-checkout reusable-caller gating without a legacy token; workflow digest `sha256:1d6381e7ce9647592bdf6bbb6033ebce28332cfc1e7c784496eb3d5698ce4234`, workflow Git blob `a5997b841c81e39b689915bae672727a2e266e39`, collector digest `sha256:16f7c7d6d6c667ead3e1d83bb8c8c1bc9f639a285dd503d8ea9189d087079a1d`.
+- Exact source evidence tests cover Git tree/blob configuration recomputation with aligned manifest bounds, capped fixed-buffer reads, and pre-open size/time binding for every read and source copy, exclusive generated-output creation, source/output ancestor binding including post-append command-file replacement, canonical handoff provenance validation, runner-temporary artifact staging, fixed-buffer no-follow handoff archive hashing, step-local OIDC submission, and pre-checkout reusable-caller gating without a legacy token; workflow digest `sha256:5f27736e3ca76712cf5960eb533445fa7320dcb36e5af38910bd470af67ae841`, workflow Git blob `596655a84151e953fa80fb5835f0b46b9d1bed9e`, collector digest `sha256:66f069e800bc3da29ad81d842268261fb19376550a941645ea3e711a0a7a5396`.
 - Readiness-focused route/runtime/contract tests passed 24/24, including exact, missing, changed, blank, noncanonical, and unconfigured deployment identity cases.
