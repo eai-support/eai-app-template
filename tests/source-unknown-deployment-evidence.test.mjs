@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import {
   cpSync,
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -590,6 +591,49 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
     /if \[\[ "\$SOURCE_MODE" == "eai-cli-generated" \|\| -n "\$TARGET_TENANT_ID" \]\]; then/,
   );
   assert.match(workflow, /--max-redirs 0/);
+  assert.match(
+    handoffJob,
+    /MAX_BUILD_EVIDENCE_BYTES = 1024 \* 1024/,
+  );
+  assert.match(
+    handoffJob,
+    /MAX_GITHUB_TREE_RESPONSE_BYTES = 16 \* 1024 \* 1024/,
+  );
+  assert.match(
+    handoffJob,
+    /MAX_GITHUB_BLOB_RESPONSE_BYTES = 16 \* 1024 \* 1024/,
+  );
+  assert.match(handoffJob, /function readBoundedRegularFile\(/);
+  assert.match(handoffJob, /async function readBoundedResponseBytes\(/);
+  assert.match(handoffJob, /response\.body\.getReader\(\)/);
+  assert.match(handoffJob, /value\.byteLength > maxBytes - totalBytes/);
+  assert.match(handoffJob, /reader\.cancel\(\)\.catch/);
+  assert.match(handoffJob, /readBoundedResponseJson\(/);
+  assert.match(handoffJob, /MAX_PRODUCER_SOURCE_BYTES/);
+  assert.match(handoffJob, /MAX_GOVERNED_CONFIG_FILE_BYTES/);
+  assert.match(
+    handoffJob,
+    /readBoundedRegularFile\(\s*'\.eai-build\/evidence\/source-unknown-deployment-evidence\.json'/,
+  );
+  assert.match(handoffJob, /--max-filesize 1048576/);
+  assert.match(
+    handoffJob,
+    /--output \.eai-build\/evidence\/workflow-evidence-response\.json/,
+  );
+  assert.match(
+    handoffJob,
+    /const responsePath = '\.eai-build\/evidence\/workflow-evidence-response\.json'/,
+  );
+  assert.match(handoffJob, /fs\.constants\.O_NOFOLLOW/);
+  assert.match(handoffJob, /Deployment handoff response grew during verification/);
+  assert.doesNotMatch(handoffJob, /actions\/checkout@/);
+  assert.doesNotMatch(
+    handoffJob,
+    /node scripts\/source-unknown-deployment-evidence\.mjs assert-evidence-accepted/,
+  );
+  assert.doesNotMatch(handoffJob, /fs\.readFileSync\(/);
+  assert.doesNotMatch(handoffJob, /response\.(?:arrayBuffer|json)\(/);
+  assert.doesNotMatch(handoffJob, /\|\s*tee /);
   for (const action of workflow.matchAll(/^\s+uses:\s+([^\s#]+)/gm)) {
     assert.match(action[1], /@[a-f0-9]{40}$/);
   }
@@ -637,6 +681,11 @@ test('handoff hashes the bounded OCI archive without whole-file allocation', () 
   assert.match(archiveHasher, /Buffer\.allocUnsafe\(1024 \* 1024\)/);
   assert.match(archiveHasher, /while \(offset < opened\.size\)/);
   assert.match(archiveHasher, /fs\.readSync\(descriptor, buffer/);
+  assert.match(archiveHasher, /growthProbe = Buffer\.allocUnsafe\(1\)/);
+  assert.match(
+    archiveHasher,
+    /fs\.readSync\(descriptor, growthProbe, 0, 1, offset\)/,
+  );
   assert.match(archiveHasher, /afterDescriptor = fs\.fstatSync\(descriptor\)/);
   assert.match(archiveHasher, /afterPath = fs\.lstatSync\(filePath\)/);
   assert.doesNotMatch(
@@ -1309,6 +1358,10 @@ test('archive staging binds source timestamps from pre-open through final path',
   assert.match(digest, /rebound\.ctimeMs !== opened\.ctimeMs/);
   assert.match(digest, /finalPath\.mtimeMs !== opened\.mtimeMs/);
   assert.match(digest, /finalPath\.ctimeMs !== opened\.ctimeMs/);
+  assert.match(digest, /Buffer\.allocUnsafe\(BOUNDED_READ_BUFFER_BYTES\)/);
+  assert.match(digest, /while \(digested < opened\.size\)/);
+  assert.match(digest, /readSync\(descriptor, growthProbe, 0, 1, digested\)/);
+  assert.doesNotMatch(implementation, /createReadStream/);
   assert.match(staging, /opened\.mtimeMs !== before\.mtimeMs/);
   assert.match(staging, /opened\.ctimeMs !== before\.ctimeMs/);
   assert.match(staging, /sourceRebound\.mtimeMs !== opened\.mtimeMs/);
@@ -1379,7 +1432,7 @@ test('bounded collector reads bind parent and leaf identity through the read', (
   assert.match(reader, /bytes\.length !== opened\.size/);
 });
 
-test('bounded metadata and governed configuration reads reject post-open growth', () => {
+test('bounded collector reads reject post-open growth and archive shrinkage', () => {
   const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-bounded-growth-')));
   try {
     const root = join(workDir, 'app');
@@ -1392,31 +1445,41 @@ const fs = require('node:fs');
 const { syncBuiltinESMExports } = require('node:module');
 const originalOpenSync = fs.openSync;
 const originalCloseSync = fs.closeSync;
+const originalFtruncateSync = fs.ftruncateSync;
 const originalReadSync = fs.readSync;
 const originalWriteSync = fs.writeSync;
 let targetDescriptor;
-let grew = false;
+let mutated = false;
 fs.openSync = function patchedOpenSync(path, ...args) {
   const descriptor = originalOpenSync.call(fs, path, ...args);
   if (
     targetDescriptor === undefined &&
-    process.env.EAI_TEST_GROW_PATH &&
-    String(path) === process.env.EAI_TEST_GROW_PATH
+    process.env.EAI_TEST_MUTATE_PATH &&
+    String(path) === process.env.EAI_TEST_MUTATE_PATH
   ) {
     targetDescriptor = descriptor;
   }
   return descriptor;
 };
 fs.readSync = function patchedReadSync(descriptor, ...args) {
-  if (!grew && descriptor === targetDescriptor) {
-    grew = true;
+  if (!mutated && descriptor === targetDescriptor) {
+    mutated = true;
     const writer = originalOpenSync.call(
       fs,
-      process.env.EAI_TEST_GROW_PATH,
-      fs.constants.O_WRONLY | fs.constants.O_APPEND,
+      process.env.EAI_TEST_MUTATE_PATH,
+      fs.constants.O_WRONLY |
+        (process.env.EAI_TEST_MUTATION === 'truncate' ? 0 : fs.constants.O_APPEND),
     );
     try {
-      originalWriteSync.call(fs, writer, Buffer.from('x'));
+      if (process.env.EAI_TEST_MUTATION === 'truncate') {
+        originalFtruncateSync.call(
+          fs,
+          writer,
+          Math.max(0, fs.fstatSync(writer).size - 1),
+        );
+      } else {
+        originalWriteSync.call(fs, writer, Buffer.from('x'));
+      }
     } finally {
       originalCloseSync.call(fs, writer);
     }
@@ -1440,7 +1503,7 @@ syncBuiltinESMExports();
         env: {
           ...process.env,
           NODE_OPTIONS: `--require=${preload}`,
-          EAI_TEST_GROW_PATH: metadataPath,
+          EAI_TEST_MUTATE_PATH: metadataPath,
         },
       },
     );
@@ -1456,12 +1519,47 @@ syncBuiltinESMExports();
         env: {
           ...process.env,
           NODE_OPTIONS: `--require=${preload}`,
-          EAI_TEST_GROW_PATH: configPath,
+          EAI_TEST_MUTATE_PATH: configPath,
         },
       },
     );
     assert.equal(config.status, 1);
     assert.match(config.stderr, /grew during its bounded read/);
+
+    const archivePath = join(
+      root,
+      '.eai-build/eai-generated-app-image.tar',
+    );
+    const growingArchive = spawnSync(
+      process.execPath,
+      [evidenceScript, ...sourceUnknownCollectArgs(root)],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_MUTATE_PATH: archivePath,
+        },
+      },
+    );
+    assert.equal(growingArchive.status, 1);
+    assert.match(growingArchive.stderr, /grew during its bounded digest/);
+
+    const shrinkingArchive = spawnSync(
+      process.execPath,
+      [evidenceScript, ...sourceUnknownCollectArgs(root)],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_MUTATE_PATH: archivePath,
+          EAI_TEST_MUTATION: 'truncate',
+        },
+      },
+    );
+    assert.equal(shrinkingArchive.status, 1);
+    assert.match(shrinkingArchive.stderr, /shrank during its bounded digest/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
@@ -2522,6 +2620,229 @@ test('assert-evidence-accepted rejects unknown states and unpersisted pending ha
         /Expected accepted evidence or a persisted pending handoff/,
       );
     }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('clean handoff validates bounded responses without a repository checkout', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const stepStart = workflow.indexOf('      - name: Assert evidence accepted');
+  const scriptMarker = "          node - <<'NODE'\n";
+  const scriptStart = workflow.indexOf(scriptMarker, stepStart);
+  const scriptEnd = workflow.indexOf('\n          NODE', scriptStart);
+  assert.ok(stepStart >= 0 && scriptStart > stepStart && scriptEnd > scriptStart);
+  const script = workflow
+    .slice(scriptStart + scriptMarker.length, scriptEnd)
+    .replace(/^ {10}/gm, '');
+  const workDir = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-inline-handoff-response-')),
+  );
+  const responseDirectory = join(workDir, '.eai-build/evidence');
+  const responsePath = join(
+    responseDirectory,
+    'workflow-evidence-response.json',
+  );
+  const run = (env = process.env) =>
+    spawnSync(process.execPath, ['-e', script], {
+      cwd: workDir,
+      encoding: 'utf8',
+      env,
+    });
+  try {
+    mkdirSync(responseDirectory, { recursive: true });
+    for (const response of [
+      {
+        status: 'accepted',
+        deploymentRequestId: 'source-unknown-deploy-1',
+        requiresTenantInfra: false,
+      },
+      {
+        response: {
+          status: 'handoff_pending',
+          deploymentRequestId: 'source-unknown-deploy-1',
+          requiresTenantInfra: true,
+        },
+      },
+    ]) {
+      writeFileSync(responsePath, JSON.stringify(response));
+      assert.equal(run().status, 0);
+    }
+
+    writeFileSync(responsePath, 'x');
+    truncateSync(responsePath, 1024 * 1024 + 1);
+    const oversized = run();
+    assert.equal(oversized.status, 1);
+    assert.match(oversized.stderr, /bounded no-follow regular file/);
+
+    rmSync(responsePath);
+    const targetPath = join(workDir, 'response-target.json');
+    writeFileSync(
+      targetPath,
+      JSON.stringify({ status: 'accepted' }),
+    );
+    symlinkSync(targetPath, responsePath);
+    const linked = run();
+    assert.equal(linked.status, 1);
+    assert.match(linked.stderr, /bounded no-follow regular file/);
+
+    rmSync(responsePath);
+    writeFileSync(
+      responsePath,
+      JSON.stringify({ status: 'accepted' }),
+    );
+    const preload = join(workDir, 'grow-inline-response-after-open.cjs');
+    writeFileSync(
+      preload,
+      String.raw`
+const fs = require('node:fs');
+const originalOpenSync = fs.openSync;
+const originalCloseSync = fs.closeSync;
+const originalReadSync = fs.readSync;
+const originalWriteSync = fs.writeSync;
+let targetDescriptor;
+let grew = false;
+fs.openSync = function patchedOpenSync(path, ...args) {
+  const descriptor = originalOpenSync.call(fs, path, ...args);
+  if (targetDescriptor === undefined && String(path) === process.env.EAI_TEST_RESPONSE_PATH) {
+    targetDescriptor = descriptor;
+  }
+  return descriptor;
+};
+fs.readSync = function patchedReadSync(descriptor, ...args) {
+  if (!grew && descriptor === targetDescriptor) {
+    grew = true;
+    const writer = originalOpenSync.call(fs, process.env.EAI_TEST_RESPONSE_PATH, fs.constants.O_WRONLY | fs.constants.O_APPEND);
+    try {
+      originalWriteSync.call(fs, writer, Buffer.from('x'));
+    } finally {
+      originalCloseSync.call(fs, writer);
+    }
+  }
+  return originalReadSync.call(fs, descriptor, ...args);
+};
+`,
+    );
+    const growing = run({
+      ...process.env,
+      NODE_OPTIONS: `--require=${preload}`,
+      EAI_TEST_RESPONSE_PATH:
+        '.eai-build/evidence/workflow-evidence-response.json',
+    });
+    assert.equal(growing.status, 1);
+    assert.match(growing.stderr, /grew during verification/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('assert-evidence-accepted bounds and binds the response file', () => {
+  const workDir = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-source-unknown-handoff-file-')),
+  );
+  const run = (responsePath, env = process.env) =>
+    spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        'assert-evidence-accepted',
+        '--response',
+        responsePath,
+      ],
+      { encoding: 'utf8', env },
+    );
+  const accepted = JSON.stringify({
+    status: 'accepted',
+    deploymentRequestId: 'source-unknown-deploy-1',
+    requiresTenantInfra: false,
+  });
+  try {
+    const oversizedPath = join(workDir, 'oversized.json');
+    writeFileSync(oversizedPath, 'x');
+    truncateSync(oversizedPath, 1024 * 1024 + 1);
+    const oversized = run(oversizedPath);
+    assert.equal(oversized.status, 1);
+    assert.match(oversized.stderr, /bounded no-follow regular file/);
+
+    const targetPath = join(workDir, 'target.json');
+    writeFileSync(targetPath, accepted);
+    const linkedPath = join(workDir, 'linked.json');
+    symlinkSync(targetPath, linkedPath);
+    const linked = run(linkedPath);
+    assert.equal(linked.status, 1);
+    assert.match(linked.stderr, /bounded no-follow regular file/);
+
+    const hardLinkedPath = join(workDir, 'hard-linked.json');
+    linkSync(targetPath, hardLinkedPath);
+    const hardLinked = run(hardLinkedPath);
+    assert.equal(hardLinked.status, 1);
+    assert.match(hardLinked.stderr, /changed before its no-follow read/);
+
+    const directoryPath = join(workDir, 'directory.json');
+    mkdirSync(directoryPath);
+    const directory = run(directoryPath);
+    assert.equal(directory.status, 1);
+    assert.match(directory.stderr, /bounded no-follow regular file/);
+
+    const outside = join(workDir, 'outside');
+    const linkedParent = join(workDir, 'linked-parent');
+    mkdirSync(outside);
+    writeFileSync(join(outside, 'response.json'), accepted);
+    symlinkSync(outside, linkedParent, 'dir');
+    const parentLinked = run(join(linkedParent, 'response.json'));
+    assert.equal(parentLinked.status, 1);
+    assert.match(parentLinked.stderr, /no-follow directory/);
+
+    const growingPath = join(workDir, 'growing.json');
+    const preload = join(workDir, 'grow-response-after-open.cjs');
+    writeFileSync(growingPath, accepted);
+    writeFileSync(
+      preload,
+      String.raw`
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const originalOpenSync = fs.openSync;
+const originalCloseSync = fs.closeSync;
+const originalReadSync = fs.readSync;
+const originalWriteSync = fs.writeSync;
+let targetDescriptor;
+let grew = false;
+fs.openSync = function patchedOpenSync(path, ...args) {
+  const descriptor = originalOpenSync.call(fs, path, ...args);
+  if (
+    targetDescriptor === undefined &&
+    String(path) === process.env.EAI_TEST_GROW_RESPONSE_PATH
+  ) {
+    targetDescriptor = descriptor;
+  }
+  return descriptor;
+};
+fs.readSync = function patchedReadSync(descriptor, ...args) {
+  if (!grew && descriptor === targetDescriptor) {
+    grew = true;
+    const writer = originalOpenSync.call(
+      fs,
+      process.env.EAI_TEST_GROW_RESPONSE_PATH,
+      fs.constants.O_WRONLY | fs.constants.O_APPEND,
+    );
+    try {
+      originalWriteSync.call(fs, writer, Buffer.from('x'));
+    } finally {
+      originalCloseSync.call(fs, writer);
+    }
+  }
+  return originalReadSync.call(fs, descriptor, ...args);
+};
+syncBuiltinESMExports();
+`,
+    );
+    const growing = run(growingPath, {
+      ...process.env,
+      NODE_OPTIONS: `--require=${preload}`,
+      EAI_TEST_GROW_RESPONSE_PATH: growingPath,
+    });
+    assert.equal(growing.status, 1);
+    assert.match(growing.stderr, /grew during its bounded read/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
