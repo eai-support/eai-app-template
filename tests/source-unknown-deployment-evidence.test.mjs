@@ -618,13 +618,14 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /--max-filesize 1048576/);
   assert.match(handoffJob, /process\.stdin\.on\("data"/);
   assert.match(handoffJob, /chunk\.byteLength > maxBytes - totalBytes/);
-  assert.match(handoffJob, /GitHub OIDC token response exceeds its 1 MiB limit/);
-  assert.doesNotMatch(handoffJob, /response="\$\(curl/);
-  assert.doesNotMatch(handoffJob, /let s=''; process\.stdin/);
+  assert.match(handoffJob, /fs\.constants\.O_EXCL \| fs\.constants\.O_NOFOLLOW/);
   assert.match(
     handoffJob,
-    /--output \.eai-build\/evidence\/workflow-evidence-response\.json/,
+    /EAI_RESPONSE_PATH=\.eai-build\/evidence\/workflow-evidence-response\.json/,
   );
+  assert.doesNotMatch(handoffJob, /response="\$\(curl/);
+  assert.doesNotMatch(handoffJob, /let s=''; process\.stdin/);
+  assert.doesNotMatch(handoffJob, /--output \.eai-build\/evidence/);
   assert.match(
     handoffJob,
     /const responsePath = '\.eai-build\/evidence\/workflow-evidence-response\.json'/,
@@ -716,31 +717,80 @@ test('OIDC response parser bounds unknown-length input before token retention', 
     workflow.indexOf('name: Assert evidence accepted'),
   );
   const scriptMatch = oidcStep.match(
-    /node -e '\n([\s\S]*?)\n\s{12}'\n\s{10}\)"/,
+    /bounded_response_reader='\n([\s\S]*?)\n\s{10}'\n\s{10}case/,
   );
   assert.ok(scriptMatch, 'expected inline bounded OIDC response parser');
   const parser = scriptMatch[1];
   const token = 'header.payload.signature';
-  const accepted = spawnSync(process.execPath, ['-e', parser], {
+  const accepted = spawnSync(process.execPath, ['-e', parser, 'token'], {
     input: JSON.stringify({ value: token }),
     encoding: 'utf8',
   });
   assert.equal(accepted.status, 0, accepted.stderr);
   assert.equal(accepted.stdout, token);
 
-  const oversized = spawnSync(process.execPath, ['-e', parser], {
+  const oversized = spawnSync(process.execPath, ['-e', parser, 'token'], {
     input: Buffer.alloc(1024 * 1024 + 1, 0x61),
     encoding: 'utf8',
   });
   assert.notEqual(oversized.status, 0);
   assert.match(oversized.stderr, /exceeds its 1 MiB limit/);
 
-  const multiline = spawnSync(process.execPath, ['-e', parser], {
+  const multiline = spawnSync(process.execPath, ['-e', parser, 'token'], {
     input: JSON.stringify({ value: 'header.payload.signature\ninjected' }),
     encoding: 'utf8',
   });
   assert.notEqual(multiline.status, 0);
   assert.match(multiline.stderr, /canonical JWT/);
+});
+
+test('handoff response writer bounds unknown-length input and creates no-follow output', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const oidcStep = workflow.slice(
+    workflow.indexOf('name: Request GitHub OIDC token and submit workflow evidence'),
+    workflow.indexOf('name: Assert evidence accepted'),
+  );
+  const scriptMatch = oidcStep.match(
+    /bounded_response_reader='\n([\s\S]*?)\n\s{10}'\n\s{10}case/,
+  );
+  assert.ok(scriptMatch, 'expected inline bounded response reader');
+  const parser = scriptMatch[1];
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-bounded-handoff-'));
+  try {
+    const responsePath = join(realpathSync(workDir), 'response.json');
+    const acceptedBody = '{"status":"accepted"}';
+    const accepted = spawnSync(process.execPath, ['-e', parser, 'file'], {
+      input: acceptedBody,
+      encoding: 'utf8',
+      env: { ...process.env, EAI_RESPONSE_PATH: responsePath },
+    });
+    assert.equal(accepted.status, 0, accepted.stderr);
+    assert.equal(readFileSync(responsePath, 'utf8'), acceptedBody);
+
+    const oversizedPath = join(realpathSync(workDir), 'oversized.json');
+    const oversized = spawnSync(process.execPath, ['-e', parser, 'file'], {
+      input: Buffer.alloc(1024 * 1024 + 1, 0x61),
+      encoding: 'utf8',
+      env: { ...process.env, EAI_RESPONSE_PATH: oversizedPath },
+    });
+    assert.notEqual(oversized.status, 0);
+    assert.match(oversized.stderr, /Deployment handoff response exceeds its 1 MiB limit/);
+    assert.ok(readFileSync(oversizedPath).byteLength <= 1024 * 1024);
+
+    const linkedPath = join(realpathSync(workDir), 'linked.json');
+    const linkedTarget = join(realpathSync(workDir), 'linked-target.json');
+    writeFileSync(linkedTarget, 'unchanged');
+    symlinkSync(linkedTarget, linkedPath);
+    const linked = spawnSync(process.execPath, ['-e', parser, 'file'], {
+      input: acceptedBody,
+      encoding: 'utf8',
+      env: { ...process.env, EAI_RESPONSE_PATH: linkedPath },
+    });
+    assert.notEqual(linked.status, 0);
+    assert.equal(readFileSync(linkedTarget, 'utf8'), 'unchanged');
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
 });
 
 test('handoff hashes the bounded OCI archive without whole-file allocation', () => {
