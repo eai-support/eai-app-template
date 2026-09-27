@@ -103,6 +103,10 @@ the same repository, was started manually with `workflow_dispatch`, and uses
 the same source ref as the canonical EAI workflow. PublicAPI verifies the
 signed GitHub caller and callee workflow claims, ref, and source SHA before it
 accepts the handoff. Cross-repository and cross-ref reusable calls fail.
+The direct CLI dispatch supplies the server-approved `config_hash`. A reusable
+caller can omit that newer input: the called workflow derives the exact
+checked-out configuration digest before application work. If the reusable
+caller supplies `config_hash`, it must match that digest.
 
 The reusable caller must grant `contents: read`, `packages: read`,
 `actions: read`, `attestations: write`, and `id-token: write`. GitHub can reduce

@@ -616,6 +616,11 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
     /readBoundedRegularFile\(\s*'\.eai-build\/evidence\/source-unknown-deployment-evidence\.json'/,
   );
   assert.match(handoffJob, /--max-filesize 1048576/);
+  assert.match(handoffJob, /process\.stdin\.on\("data"/);
+  assert.match(handoffJob, /chunk\.byteLength > maxBytes - totalBytes/);
+  assert.match(handoffJob, /GitHub OIDC token response exceeds its 1 MiB limit/);
+  assert.doesNotMatch(handoffJob, /response="\$\(curl/);
+  assert.doesNotMatch(handoffJob, /let s=''; process\.stdin/);
   assert.match(
     handoffJob,
     /--output \.eai-build\/evidence\/workflow-evidence-response\.json/,
@@ -642,8 +647,19 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
 test('reusable workflow compatibility keeps manual same-repository OIDC authority', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   const readme = readFileSync(readmePath, 'utf8');
+  const dispatchInputs = workflow.slice(
+    workflow.indexOf('  workflow_dispatch:'),
+    workflow.indexOf('  workflow_call:'),
+  );
+  const reusableInputs = workflow.slice(
+    workflow.indexOf('  workflow_call:'),
+    workflow.indexOf('\npermissions:'),
+  );
   const invocationGate = workflow.indexOf('name: Validate workflow invocation');
   const checkout = workflow.indexOf('name: Check out repository');
+  const configResolution = workflow.indexOf(
+    'name: Resolve immutable configuration hash',
+  );
   const applicationInstall = workflow.indexOf(
     'name: Install dependencies without running application-controlled scripts',
   );
@@ -658,13 +674,73 @@ test('reusable workflow compatibility keeps manual same-repository OIDC authorit
     /if \[\[ "\$EAI_CALLER_EVENT_NAME" != "workflow_dispatch" \]\]; then/,
   );
   assert.ok(invocationGate >= 0 && invocationGate < checkout);
-  assert.ok(checkout < applicationInstall);
+  assert.ok(
+    checkout < configResolution && configResolution < applicationInstall,
+  );
+  assert.match(
+    dispatchInputs,
+    /config_hash:\n\s+description:[^\n]+\n\s+required: true/,
+  );
+  assert.match(
+    reusableInputs,
+    /config_hash:\n\s+description:[^\n]+\n\s+required: false/,
+  );
+  assert.match(
+    workflow,
+    /config_hash="\$\(node scripts\/source-unknown-deployment-evidence\.mjs config-hash\)"/,
+  );
+  assert.match(
+    workflow,
+    /-n "\$REQUESTED_CONFIG_HASH" && "\$REQUESTED_CONFIG_HASH" != "\$config_hash"/,
+  );
+  assert.match(
+    workflow,
+    /CONFIG_HASH: \$\{\{ steps\.deployment-binding\.outputs\.config_hash \}\}/,
+  );
+  assert.match(
+    workflow,
+    /CONFIG_HASH: \$\{\{ needs\.build\.outputs\.config_hash \}\}/,
+  );
   assert.match(workflow, /workflow_ref/);
   assert.match(workflow, /job_workflow_ref\/job_workflow_sha/);
   assert.doesNotMatch(workflow, /secrets\.EAI_ACCESS_TOKEN|\$EAI_ACCESS_TOKEN/);
   assert.match(readme, /same repository/);
   assert.match(readme, /Cross-repository and cross-ref reusable calls fail/);
   assert.match(readme, /`actions: read`, `attestations: write`, and `id-token: write`/);
+});
+
+test('OIDC response parser bounds unknown-length input before token retention', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const oidcStep = workflow.slice(
+    workflow.indexOf('name: Request GitHub OIDC token and submit workflow evidence'),
+    workflow.indexOf('name: Assert evidence accepted'),
+  );
+  const scriptMatch = oidcStep.match(
+    /node -e '\n([\s\S]*?)\n\s{12}'\n\s{10}\)"/,
+  );
+  assert.ok(scriptMatch, 'expected inline bounded OIDC response parser');
+  const parser = scriptMatch[1];
+  const token = 'header.payload.signature';
+  const accepted = spawnSync(process.execPath, ['-e', parser], {
+    input: JSON.stringify({ value: token }),
+    encoding: 'utf8',
+  });
+  assert.equal(accepted.status, 0, accepted.stderr);
+  assert.equal(accepted.stdout, token);
+
+  const oversized = spawnSync(process.execPath, ['-e', parser], {
+    input: Buffer.alloc(1024 * 1024 + 1, 0x61),
+    encoding: 'utf8',
+  });
+  assert.notEqual(oversized.status, 0);
+  assert.match(oversized.stderr, /exceeds its 1 MiB limit/);
+
+  const multiline = spawnSync(process.execPath, ['-e', parser], {
+    input: JSON.stringify({ value: 'header.payload.signature\ninjected' }),
+    encoding: 'utf8',
+  });
+  assert.notEqual(multiline.status, 0);
+  assert.match(multiline.stderr, /canonical JWT/);
 });
 
 test('handoff hashes the bounded OCI archive without whole-file allocation', () => {
