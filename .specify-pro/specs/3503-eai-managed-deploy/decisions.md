@@ -111,3 +111,17 @@ The downloaded artifact must also contain each unique referenced configuration a
 Do not serialize the expected descriptors as repeated JSON keys and values in one environment variable. Linux limits each argument and environment string to 128 KiB. Use one compact `digest:size` row per unique blob, base64 encode it, and reject the table above 112 KiB. The worst-case table for the accepted configuration plus 1,024 layers stays below that cap and preserves the existing layer-count contract.
 
 Derive the validator stdout cap from the same accepted maximum: one archive-member record and one `verified:` record for the configuration plus 1,024 layers. Do not use a fixed cap below the complete valid record set. Any additional record must still exceed the exact derived bound and fail.
+
+## Bound Buildx output
+
+Do not give Buildx a mutable application-workspace destination path. The trusted collector exclusively creates the OCI archive through a no-follow descriptor and invokes the OCI exporter with `dest=-`, binding Buildx stdout directly to that descriptor. Derive the image digest from the resulting bounded archive and exclusively create the small metadata file afterward. Revalidate the archive descriptor, leaf, parent chain, link count, and size before it becomes evidence. A failed build leaves its disposable output in place and does not perform path-based cleanup.
+
+Every collector destination write must bind the byte count as well as device, inode, regular-file type, and single-link identity at the descriptor and final path. Tree copies bind destination size to the copied source size. Generated text and evidence bind destination size to the exact serialized byte count.
+
+## Direct dispatch source commit
+
+GitHub's required input declaration does not replace runtime validation. A direct `workflow_dispatch` must provide one lowercase 40-hex `commit_sha`, and the first job step rejects an empty or malformed value before checkout. Only the same-repository reusable compatibility path may use the signed caller `github.sha` fallback.
+
+## GitHub artifact digest representation
+
+The upload action emits a bare SHA-256 hex value, which the collector converts to the canonical `sha256:<hex>` evidence form. GitHub's REST artifact `digest` is already algorithm-qualified. Compare that REST value directly to canonical evidence; do not add a second prefix.

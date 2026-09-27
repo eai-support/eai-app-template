@@ -24,3 +24,7 @@
 22. Route every collector no-follow open through one fail-closed capability helper and prove the flag cannot silently degrade to zero.
 23. Preserve local Windows configuration hashing through a command-scoped read-only fallback with the same complete path and descriptor binding, while keeping every deployment command fail closed when secure open flags are unavailable.
 24. Validate the OCI layout marker and the bound manifest's configuration and layer descriptor structure, family, count, and byte limits, then stream each unique referenced blob once and verify its regular member type, path, size, and digest before OIDC. Count both archive-member and validator records to reject mixed-type duplicates, keep the full 1,024-layer expected table below Linux's per-string execution limit, and derive the validator output cap so the complete valid maximum fits while any extra record fails.
+25. Route Buildx OCI bytes through collector-owned stdout into an exclusively opened no-follow descriptor, derive metadata from that bound archive, and revalidate the exact output without exposing a mutable Buildx destination path.
+26. Bind every copied, generated, and evidence destination to its exact expected byte length and single-link identity after writing.
+27. Reject an empty or malformed direct-dispatch commit before checkout while preserving the signed same-repository reusable caller SHA fallback.
+28. Retain the canonical algorithm-qualified GitHub REST artifact digest comparison and record its live/API contract evidence.
