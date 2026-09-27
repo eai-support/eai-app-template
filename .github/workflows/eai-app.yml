@@ -402,14 +402,38 @@ jobs:
           const MAX_GITHUB_METADATA_RESPONSE_BYTES = 1024 * 1024;
           const MAX_GITHUB_TREE_RESPONSE_BYTES = 16 * 1024 * 1024;
           const MAX_GITHUB_BLOB_RESPONSE_BYTES = 16 * 1024 * 1024;
+          const MAX_OCI_LAYOUT_BYTES = 1024;
           const MAX_OCI_INDEX_BYTES = 1024 * 1024;
           const MAX_OCI_MANIFEST_BYTES = 4 * 1024 * 1024;
+          const MAX_OCI_CONFIG_BYTES = 4 * 1024 * 1024;
+          const MAX_OCI_LAYER_COUNT = 1024;
           const MAX_TAR_LISTING_BYTES = 64 * 1024;
-          const TAR_TIMEOUT_MS = 30 * 1000;
+          const MAX_OCI_BLOB_VALIDATION_OUTPUT_BYTES = 128 * 1024;
+          const TAR_TIMEOUT_MS = 10 * 60 * 1000;
           const SHA256_DIGEST = /^sha256:[a-f0-9]{64}$/;
           const OCI_MANIFEST_MEDIA_TYPES = new Set([
             'application/vnd.oci.image.manifest.v1+json',
             'application/vnd.docker.distribution.manifest.v2+json',
+          ]);
+          const OCI_CONFIG_MEDIA_TYPES = new Set([
+            'application/vnd.oci.image.config.v1+json',
+          ]);
+          const DOCKER_CONFIG_MEDIA_TYPES = new Set([
+            'application/vnd.docker.container.image.v1+json',
+          ]);
+          const OCI_LAYER_MEDIA_TYPES = new Set([
+            'application/vnd.oci.image.layer.v1.tar',
+            'application/vnd.oci.image.layer.v1.tar+gzip',
+            'application/vnd.oci.image.layer.v1.tar+zstd',
+            'application/vnd.oci.image.layer.nondistributable.v1.tar',
+            'application/vnd.oci.image.layer.nondistributable.v1.tar+gzip',
+            'application/vnd.oci.image.layer.nondistributable.v1.tar+zstd',
+          ]);
+          const DOCKER_LAYER_MEDIA_TYPES = new Set([
+            'application/vnd.docker.image.rootfs.diff.tar',
+            'application/vnd.docker.image.rootfs.diff.tar.gzip',
+            'application/vnd.docker.image.rootfs.foreign.diff.tar',
+            'application/vnd.docker.image.rootfs.foreign.diff.tar.gzip',
           ]);
           function sameFileIdentity(left, right) {
             return left.dev === right.dev && left.ino === right.ino;
@@ -488,13 +512,13 @@ jobs:
                   if (!current.isFile() || current.nlink !== 1 || !sameFileIdentity(opened, current) || current.size !== opened.size || current.mtimeMs !== opened.mtimeMs || current.ctimeMs !== opened.ctimeMs) throw new Error('Downloaded image archive changed during verification.');
                 }
               }
-              function runBoundedTar(arguments_, outputLimit, label) {
+              function runBoundedTar(arguments_, outputLimit, label, additionalEnvironment = {}) {
                 let output;
                 try {
                   output = execFileSync('tar', arguments_, {
                     cwd: '/',
                     encoding: null,
-                    env: { PATH: process.env.PATH, LC_ALL: 'C' },
+                    env: { PATH: process.env.PATH, LC_ALL: 'C', ...additionalEnvironment },
                     maxBuffer: outputLimit + 1,
                     timeout: TAR_TIMEOUT_MS,
                     stdio: ['ignore', 'pipe', 'pipe', descriptor],
@@ -515,10 +539,61 @@ jobs:
                 const entries = listing.split(/\r?\n/).filter(Boolean);
                 if (entries.length !== 1 || !entries[0].startsWith('-') || !entries[0].endsWith(` ${memberPath}`)) throw new Error(`${label} must be one regular archive entry.`);
                 return runBoundedTar(
-                  ['--extract', '--to-stdout', '--file', archivePath, '--', memberPath],
+                  ['--extract', '--to-stdout', '--occurrence=1', '--fast-read', '--file', archivePath, '--', memberPath],
                   outputLimit,
                   label,
                 );
+              }
+              function assertOciDescriptor(value, mediaTypes, maxDescriptorBytes, label) {
+                if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} descriptor is invalid.`);
+                if (!mediaTypes.has(value.mediaType)) throw new Error(`${label} media type is invalid.`);
+                if (!SHA256_DIGEST.test(value.digest || '')) throw new Error(`${label} digest is invalid.`);
+                if (!Number.isSafeInteger(value.size) || value.size < 0 || value.size > maxDescriptorBytes) throw new Error(`${label} size is invalid.`);
+                return value;
+              }
+              function verifyReferencedOciBlobs(descriptors) {
+                const expectedEntries = new Map();
+                for (const descriptor of descriptors) {
+                  const memberPath = `blobs/sha256/${descriptor.digest.slice('sha256:'.length)}`;
+                  const existing = expectedEntries.get(memberPath);
+                  if (existing && (existing.digest !== descriptor.digest || existing.size !== descriptor.size)) throw new Error('OCI image blob descriptors conflict.');
+                  expectedEntries.set(memberPath, { digest: descriptor.digest, size: descriptor.size });
+                }
+                const memberPaths = [...expectedEntries.keys()].sort();
+                if (memberPaths.length < 1 || memberPaths.length > MAX_OCI_LAYER_COUNT + 1) throw new Error('OCI image blob count is invalid.');
+                const expected = Object.fromEntries(memberPaths.map((memberPath) => [memberPath, expectedEntries.get(memberPath)]));
+                const validatorSource = `
+                  const { createHash } = require('node:crypto');
+                  const expected = JSON.parse(Buffer.from(process.env.EAI_OCI_EXPECTED_BLOBS, 'base64').toString('utf8'));
+                  const filename = process.env.TAR_FILENAME || '';
+                  const descriptor = Object.prototype.hasOwnProperty.call(expected, filename) ? expected[filename] : undefined;
+                  const sizeText = process.env.TAR_SIZE || '';
+                  if (process.env.TAR_FILETYPE !== 'f' || !descriptor || !/^(?:0|[1-9][0-9]*)$/.test(sizeText)) throw new Error('OCI image blob member identity is invalid.');
+                  const declaredSize = Number(sizeText);
+                  if (!Number.isSafeInteger(declaredSize) || declaredSize !== descriptor.size) throw new Error('OCI image blob member size is invalid.');
+                  const hash = createHash('sha256');
+                  let bytesRead = 0;
+                  process.stdin.on('data', (chunk) => {
+                    bytesRead += chunk.byteLength;
+                    if (bytesRead > descriptor.size) throw new Error('OCI image blob exceeds its descriptor size.');
+                    hash.update(chunk);
+                  });
+                  process.stdin.on('end', () => {
+                    if (bytesRead !== descriptor.size || ('sha256:' + hash.digest('hex')) !== descriptor.digest) throw new Error('OCI image blob bytes do not match their descriptor.');
+                    process.stdout.write(filename + '\\n');
+                  });
+                `;
+                const validatorCommand = `node -e 'eval(Buffer.from(process.env.EAI_OCI_BLOB_VALIDATOR, "base64").toString("utf8"))'`;
+                const validationOutput = runBoundedTar(
+                  ['--extract', '--to-command', validatorCommand, '--file', '/proc/self/fd/3', '--', ...memberPaths],
+                  MAX_OCI_BLOB_VALIDATION_OUTPUT_BYTES,
+                  'OCI referenced blob validation',
+                  {
+                    EAI_OCI_BLOB_VALIDATOR: Buffer.from(validatorSource).toString('base64'),
+                    EAI_OCI_EXPECTED_BLOBS: Buffer.from(JSON.stringify(expected)).toString('base64'),
+                  },
+                ).toString('utf8').split(/\r?\n/).filter(Boolean);
+                if (validationOutput.length !== memberPaths.length || new Set(validationOutput).size !== memberPaths.length || memberPaths.some((memberPath) => !validationOutput.includes(memberPath))) throw new Error('OCI image referenced blobs are missing or duplicated.');
               }
               const hash = createHash('sha256');
               const buffer = Buffer.allocUnsafe(1024 * 1024);
@@ -533,6 +608,9 @@ jobs:
               if (fs.readSync(descriptor, growthProbe, 0, 1, offset) !== 0) throw new Error('Downloaded image archive grew during verification.');
               assertArchiveBinding();
               const archiveDigest = `sha256:${hash.digest('hex')}`;
+              const layoutBytes = extractBoundedRegularEntry('oci-layout', MAX_OCI_LAYOUT_BYTES, 'OCI image layout');
+              const layout = JSON.parse(layoutBytes.toString('utf8'));
+              if (!layout || typeof layout !== 'object' || Array.isArray(layout) || layout.imageLayoutVersion !== '1.0.0') throw new Error('OCI image layout is invalid.');
               const indexBytes = extractBoundedRegularEntry('index.json', MAX_OCI_INDEX_BYTES, 'OCI image index');
               const index = JSON.parse(indexBytes.toString('utf8'));
               if (!index || typeof index !== 'object' || Array.isArray(index) || index.schemaVersion !== 2) throw new Error('OCI image index is invalid.');
@@ -549,6 +627,13 @@ jobs:
               if (manifestDigest !== imageManifest.digest || manifestDigest !== expectedImageDigest) throw new Error('OCI image manifest bytes do not match build evidence.');
               const manifest = JSON.parse(manifestBytes.toString('utf8'));
               if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest) || manifest.schemaVersion !== 2 || manifest.mediaType !== imageManifest.mediaType) throw new Error('OCI image manifest payload is invalid.');
+              const isOciManifest = manifest.mediaType === 'application/vnd.oci.image.manifest.v1+json';
+              const configMediaTypes = isOciManifest ? OCI_CONFIG_MEDIA_TYPES : DOCKER_CONFIG_MEDIA_TYPES;
+              const layerMediaTypes = isOciManifest ? OCI_LAYER_MEDIA_TYPES : DOCKER_LAYER_MEDIA_TYPES;
+              const configDescriptor = assertOciDescriptor(manifest.config, configMediaTypes, MAX_OCI_CONFIG_BYTES, 'OCI image configuration');
+              if (!Array.isArray(manifest.layers) || manifest.layers.length > MAX_OCI_LAYER_COUNT) throw new Error('OCI image layers are invalid or exceed their count limit.');
+              const layerDescriptors = manifest.layers.map((layer, index) => assertOciDescriptor(layer, layerMediaTypes, maxBytes, `OCI image layer ${index}`));
+              verifyReferencedOciBlobs([configDescriptor, ...layerDescriptors]);
               assertArchiveBinding();
               return { archiveDigest, imageDigest: manifestDigest };
             } finally {

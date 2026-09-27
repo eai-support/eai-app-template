@@ -40,7 +40,8 @@ const GENERATED_CONFIG_FILES = new Set([
   'src/eai.config/object-types.provisioning.json',
 ]);
 const CANONICAL_WORKFLOW_PATH = '.github/workflows/eai-app.yml';
-const CANONICAL_COLLECTOR_PATH = 'scripts/source-unknown-deployment-evidence.mjs';
+const CANONICAL_COLLECTOR_PATH =
+  'scripts/source-unknown-deployment-evidence.mjs';
 const MAX_IMAGE_ARCHIVE_BYTES = 10 * 1024 * 1024 * 1024;
 const MAX_GOVERNED_CONFIG_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_GOVERNED_CONFIG_TOTAL_BYTES = 32 * 1024 * 1024;
@@ -58,10 +59,20 @@ function requiredOpenFlag(name) {
 
 function noFollowOpenFlags(flags, { nonblocking = false } = {}) {
   const noFollow = requiredOpenFlag('O_NOFOLLOW');
-  const nonblockingFlag = nonblocking
-    ? requiredOpenFlag('O_NONBLOCK')
-    : 0;
+  const nonblockingFlag = nonblocking ? requiredOpenFlag('O_NONBLOCK') : 0;
   return flags | noFollow | nonblockingFlag;
+}
+
+function governedConfigReadOpenFlags({
+  allowWindowsValidatedFallback = false,
+} = {}) {
+  if (allowWindowsValidatedFallback && process.platform === 'win32') {
+    if (!Number.isSafeInteger(constants.O_RDONLY) || constants.O_RDONLY < 0) {
+      throw new Error('Secure file opens require O_RDONLY support.');
+    }
+    return constants.O_RDONLY;
+  }
+  return noFollowOpenFlags(constants.O_RDONLY, { nonblocking: true });
 }
 
 function sourceMode(options) {
@@ -389,7 +400,10 @@ function copyRegularTreeNoFollow(
           before.mode & 0o777,
         );
         const destinationOpened = fstatSync(destinationDescriptor);
-        assertAbsoluteDirectorySnapshot(destinationAncestors, `${label} destination`);
+        assertAbsoluteDirectorySnapshot(
+          destinationAncestors,
+          `${label} destination`,
+        );
         const destinationRebound = lstatSync(destinationPath);
         if (
           !destinationOpened.isFile() ||
@@ -427,7 +441,10 @@ function copyRegularTreeNoFollow(
           }
           copied += bytesRead;
         }
-        assertAbsoluteDirectorySnapshot(destinationAncestors, `${label} destination`);
+        assertAbsoluteDirectorySnapshot(
+          destinationAncestors,
+          `${label} destination`,
+        );
         const destinationAfter = fstatSync(destinationDescriptor);
         const destinationPathAfter = lstatSync(destinationPath);
         if (
@@ -437,7 +454,9 @@ function copyRegularTreeNoFollow(
           destinationPathAfter.dev !== destinationOpened.dev ||
           destinationPathAfter.ino !== destinationOpened.ino
         ) {
-          throw new Error(`${label} destination changed during its bound write.`);
+          throw new Error(
+            `${label} destination changed during its bound write.`,
+          );
         }
         const after = fstatSync(sourceDescriptor);
         assertAbsoluteDirectorySnapshot(sourceAncestors, label);
@@ -1018,7 +1037,7 @@ function stageImageArtifact(options) {
   }
 }
 
-function digestFiles(root, paths) {
+function digestFiles(root, paths, options = {}) {
   if (paths.length > MAX_GOVERNED_CONFIG_FILES) {
     throw new Error('Governed configuration manifest exceeds its file limit.');
   }
@@ -1030,10 +1049,12 @@ function digestFiles(root, paths) {
         `Governed configuration ancestor does not exist: ${relativePath}`,
       );
     }
-    const bytes = readRegularFileNoFollow(root, relativePath);
+    const bytes = readRegularFileNoFollow(root, relativePath, options);
     totalBytes += bytes.length;
     if (totalBytes > MAX_GOVERNED_CONFIG_TOTAL_BYTES) {
-      throw new Error('Governed configuration manifest exceeds its byte limit.');
+      throw new Error(
+        'Governed configuration manifest exceeds its byte limit.',
+      );
     }
     hash.update(relativePath);
     hash.update('\0');
@@ -1050,7 +1071,11 @@ function gitBlobSha(bytes) {
     .digest('hex');
 }
 
-function readRegularFileNoFollow(root, relativePath) {
+function readRegularFileNoFollow(
+  root,
+  relativePath,
+  { allowWindowsValidatedFallback = false } = {},
+) {
   if (!assertGovernedAncestors(root, relativePath)) {
     throw new Error(
       `Governed configuration ancestor does not exist: ${relativePath}`,
@@ -1075,7 +1100,7 @@ function readRegularFileNoFollow(root, relativePath) {
   );
   const descriptor = openSync(
     path,
-    noFollowOpenFlags(constants.O_RDONLY, { nonblocking: true }),
+    governedConfigReadOpenFlags({ allowWindowsValidatedFallback }),
   );
   try {
     const opened = fstatSync(descriptor);
@@ -1219,12 +1244,16 @@ function snapshotAbsoluteDirectoryPath(path, label) {
   const filesystemRoot = parse(target).root;
   const identities = [];
   let current = filesystemRoot;
-  for (const component of ['', ...relative(filesystemRoot, target).split(/[\\/]/).filter(Boolean)]) {
+  for (const component of [
+    '',
+    ...relative(filesystemRoot, target).split(/[\\/]/).filter(Boolean),
+  ]) {
     if (component) current = join(current, component);
     const status = lstatSync(current);
     // macOS exposes trusted system roots such as /var and /tmp as top-level links.
     // Bind every application-controlled descendant beneath that stable root alias.
-    if (status.isSymbolicLink() && dirname(current) === filesystemRoot) continue;
+    if (status.isSymbolicLink() && dirname(current) === filesystemRoot)
+      continue;
     if (status.isSymbolicLink() || !status.isDirectory()) {
       throw new Error(`${label} ancestors must be no-follow directories.`);
     }
@@ -1236,8 +1265,12 @@ function snapshotAbsoluteDirectoryPath(path, label) {
 function assertAbsoluteDirectorySnapshot(identities, label) {
   for (const identity of identities) {
     const status = lstatSync(identity.path);
-    if (status.isSymbolicLink() || !status.isDirectory()
-      || status.dev !== identity.dev || status.ino !== identity.ino) {
+    if (
+      status.isSymbolicLink() ||
+      !status.isDirectory() ||
+      status.dev !== identity.dev ||
+      status.ino !== identity.ino
+    ) {
       throw new Error(`${label} ancestors changed before the bound write.`);
     }
   }
@@ -1359,18 +1392,16 @@ function readSchemaProvenance(root) {
   return provenance;
 }
 
-function buildConfigHash(root) {
+function buildConfigHash(root, options = {}) {
   assertExists(join(root, 'eai.runtime.json'), 'eai.runtime.json');
   const paths = listGovernedConfigFiles(root).sort();
-  const digest = digestFiles(root, paths);
+  const digest = digestFiles(root, paths, options);
   const finalPaths = listGovernedConfigFiles(root).sort();
   if (
     paths.length !== finalPaths.length ||
     paths.some((path, index) => path !== finalPaths[index])
   ) {
-    throw new Error(
-      'Governed configuration inventory changed during hashing.',
-    );
+    throw new Error('Governed configuration inventory changed during hashing.');
   }
   return digest;
 }
@@ -1800,7 +1831,9 @@ if (command === 'validate-dispatch') {
   validateDispatch(options);
 } else if (command === 'config-hash') {
   process.stdout.write(
-    `${buildConfigHash(resolve(option(options, 'root', process.cwd())))}\n`,
+    `${buildConfigHash(resolve(option(options, 'root', process.cwd())), {
+      allowWindowsValidatedFallback: true,
+    })}\n`,
   );
 } else if (command === 'prepare-image-context') {
   prepareImageContext(options);

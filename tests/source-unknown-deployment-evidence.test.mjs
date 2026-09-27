@@ -71,7 +71,10 @@ function writeFixtureApp(root) {
     join(root, 'tests/fixtures/schema-provenance/valid.json'),
   );
   cpSync(workflowPath, join(root, '.github/workflows/eai-app.yml'));
-  cpSync(evidenceScript, join(root, 'scripts/source-unknown-deployment-evidence.mjs'));
+  cpSync(
+    evidenceScript,
+    join(root, 'scripts/source-unknown-deployment-evidence.mjs'),
+  );
 }
 
 function runEvidenceScript(args, options = {}) {
@@ -507,8 +510,14 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /workflowBlobSha/);
   assert.match(handoffJob, /collectorDigest/);
   assert.match(handoffJob, /async function sourceConfigHash\(\)/);
-  assert.match(handoffJob, /\/git\/commits\/\$\{encodeURIComponent\(process\.env\.SOURCE_COMMIT_SHA\)\}/);
-  assert.match(handoffJob, /\/git\/trees\/\$\{commit\.tree\.sha\}\?recursive=1/);
+  assert.match(
+    handoffJob,
+    /\/git\/commits\/\$\{encodeURIComponent\(process\.env\.SOURCE_COMMIT_SHA\)\}/,
+  );
+  assert.match(
+    handoffJob,
+    /\/git\/trees\/\$\{commit\.tree\.sha\}\?recursive=1/,
+  );
   assert.match(handoffJob, /\/git\/blobs\/\$\{entry\.sha\}/);
   assert.match(handoffJob, /Math\.min\(8, sortedEntries\.length\)/);
   assert.match(handoffJob, /blobs\[index\] = \{ path: entry\.path, bytes \}/);
@@ -526,17 +535,29 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /totalBytes > MAX_GOVERNED_CONFIG_TOTAL_BYTES/);
   assert.doesNotMatch(handoffJob, /entry\.size > 4 \* 1024 \* 1024/);
   assert.doesNotMatch(handoffJob, /Promise\.all\(entries\.sort/);
-  assert.match(handoffJob, /src\/eai\.config\/object-types\.provisioning\.json/);
+  assert.match(
+    handoffJob,
+    /src\/eai\.config\/object-types\.provisioning\.json/,
+  );
   assert.match(handoffJob, /canonicalConfigHash !== process\.env\.CONFIG_HASH/);
   assert.match(handoffJob, /canonicalConfigHash !== evidence\.configHash/);
   assert.match(handoffJob, /function validateSchemaProvenance\(provenance\)/);
   assert.match(handoffJob, /Array\.isArray\(provenance\)/);
-  assert.match(handoffJob, /Object\.keys\(provenance\).*canonicalFields\.has\(key\)/);
+  assert.match(
+    handoffJob,
+    /Object\.keys\(provenance\).*canonicalFields\.has\(key\)/,
+  );
   assert.match(handoffJob, /\^sha256:\[a-f0-9\]\{64\}\$/);
   assert.match(handoffJob, /\^\[a-f0-9\]\{40\}\$/);
-  assert.match(handoffJob, /provenance\.templateVersion\.trim\(\) !== provenance\.templateVersion/);
+  assert.match(
+    handoffJob,
+    /provenance\.templateVersion\.trim\(\) !== provenance\.templateVersion/,
+  );
   assert.match(handoffJob, /\[\\r\\n\]\/\.test\(value\)/);
-  assert.match(handoffJob, /anchors\.some\(\(\[, value\]\) => value !== undefined\)/);
+  assert.match(
+    handoffJob,
+    /anchors\.some\(\(\[, value\]\) => value !== undefined\)/,
+  );
   assert.match(
     handoffJob,
     /const sourceProvenance = validateSchemaProvenance\(runtime\.schemaProvenance\)/,
@@ -591,10 +612,7 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
     /if \[\[ "\$SOURCE_MODE" == "eai-cli-generated" \|\| -n "\$TARGET_TENANT_ID" \]\]; then/,
   );
   assert.match(workflow, /--max-redirs 0/);
-  assert.match(
-    handoffJob,
-    /MAX_BUILD_EVIDENCE_BYTES = 1024 \* 1024/,
-  );
+  assert.match(handoffJob, /MAX_BUILD_EVIDENCE_BYTES = 1024 \* 1024/);
   assert.match(
     handoffJob,
     /MAX_GITHUB_TREE_RESPONSE_BYTES = 16 \* 1024 \* 1024/,
@@ -618,7 +636,10 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /--max-filesize 1048576/);
   assert.match(handoffJob, /process\.stdin\.on\("data"/);
   assert.match(handoffJob, /chunk\.byteLength > maxBytes - totalBytes/);
-  assert.match(handoffJob, /fs\.constants\.O_EXCL \| fs\.constants\.O_NOFOLLOW/);
+  assert.match(
+    handoffJob,
+    /fs\.constants\.O_EXCL \| fs\.constants\.O_NOFOLLOW/,
+  );
   assert.match(
     handoffJob,
     /EAI_RESPONSE_PATH=\.eai-build\/evidence\/workflow-evidence-response\.json/,
@@ -631,7 +652,10 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
     /const responsePath = '\.eai-build\/evidence\/workflow-evidence-response\.json'/,
   );
   assert.match(handoffJob, /fs\.constants\.O_NOFOLLOW/);
-  assert.match(handoffJob, /Deployment handoff response grew during verification/);
+  assert.match(
+    handoffJob,
+    /Deployment handoff response grew during verification/,
+  );
   assert.doesNotMatch(handoffJob, /actions\/checkout@/);
   assert.doesNotMatch(
     handoffJob,
@@ -707,13 +731,18 @@ test('reusable workflow compatibility keeps manual same-repository OIDC authorit
   assert.doesNotMatch(workflow, /secrets\.EAI_ACCESS_TOKEN|\$EAI_ACCESS_TOKEN/);
   assert.match(readme, /same repository/);
   assert.match(readme, /Cross-repository and cross-ref reusable calls fail/);
-  assert.match(readme, /`actions: read`, `attestations: write`, and `id-token: write`/);
+  assert.match(
+    readme,
+    /`actions: read`, `attestations: write`, and `id-token: write`/,
+  );
 });
 
 test('OIDC response parser bounds unknown-length input before token retention', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   const oidcStep = workflow.slice(
-    workflow.indexOf('name: Request GitHub OIDC token and submit workflow evidence'),
+    workflow.indexOf(
+      'name: Request GitHub OIDC token and submit workflow evidence',
+    ),
     workflow.indexOf('name: Assert evidence accepted'),
   );
   const scriptMatch = oidcStep.match(
@@ -747,7 +776,9 @@ test('OIDC response parser bounds unknown-length input before token retention', 
 test('handoff response writer bounds unknown-length input and creates no-follow output', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   const oidcStep = workflow.slice(
-    workflow.indexOf('name: Request GitHub OIDC token and submit workflow evidence'),
+    workflow.indexOf(
+      'name: Request GitHub OIDC token and submit workflow evidence',
+    ),
     workflow.indexOf('name: Assert evidence accepted'),
   );
   const scriptMatch = oidcStep.match(
@@ -774,7 +805,10 @@ test('handoff response writer bounds unknown-length input and creates no-follow 
       env: { ...process.env, EAI_RESPONSE_PATH: oversizedPath },
     });
     assert.notEqual(oversized.status, 0);
-    assert.match(oversized.stderr, /Deployment handoff response exceeds its 1 MiB limit/);
+    assert.match(
+      oversized.stderr,
+      /Deployment handoff response exceeds its 1 MiB limit/,
+    );
     assert.ok(readFileSync(oversizedPath).byteLength <= 1024 * 1024);
 
     const linkedPath = join(realpathSync(workDir), 'linked.json');
@@ -801,7 +835,10 @@ test('handoff binds the bounded OCI archive and referenced manifest bytes', () =
     handoffJob.indexOf('const expected = {'),
   );
 
-  assert.match(handoffJob, /MAX_IMAGE_ARCHIVE_BYTES = 10 \* 1024 \* 1024 \* 1024/);
+  assert.match(
+    handoffJob,
+    /MAX_IMAGE_ARCHIVE_BYTES = 10 \* 1024 \* 1024 \* 1024/,
+  );
   assert.match(archiveInspector, /fs\.constants\.O_NOFOLLOW/);
   assert.match(archiveInspector, /fs\.constants\.O_NONBLOCK/);
   assert.match(archiveInspector, /before\.size > maxBytes/);
@@ -813,15 +850,44 @@ test('handoff binds the bounded OCI archive and referenced manifest bytes', () =
     archiveInspector,
     /fs\.readSync\(descriptor, growthProbe, 0, 1, offset\)/,
   );
-  assert.match(archiveInspector, /stdio: \['ignore', 'pipe', 'pipe', descriptor\]/);
+  assert.match(
+    archiveInspector,
+    /stdio: \['ignore', 'pipe', 'pipe', descriptor\]/,
+  );
   assert.match(archiveInspector, /'\/proc\/self\/fd\/3'/);
   assert.match(archiveInspector, /timeout: TAR_TIMEOUT_MS/);
+  assert.match(handoffJob, /TAR_TIMEOUT_MS = 10 \* 60 \* 1000/);
   assert.match(archiveInspector, /maxBuffer: outputLimit \+ 1/);
   assert.match(archiveInspector, /entries\.length !== 1/);
-  assert.match(archiveInspector, /blobs\/sha256\/\$\{imageManifest\.digest\.slice/);
-  assert.match(archiveInspector, /manifestBytes\.length !== imageManifest\.size/);
-  assert.match(archiveInspector, /createHash\('sha256'\)\.update\(manifestBytes\)/);
+  assert.match(archiveInspector, /'--occurrence=1', '--fast-read'/);
+  assert.match(archiveInspector, /extractBoundedRegularEntry\('oci-layout'/);
+  assert.match(
+    archiveInspector,
+    /blobs\/sha256\/\$\{imageManifest\.digest\.slice/,
+  );
+  assert.match(
+    archiveInspector,
+    /manifestBytes\.length !== imageManifest\.size/,
+  );
+  assert.match(
+    archiveInspector,
+    /createHash\('sha256'\)\.update\(manifestBytes\)/,
+  );
   assert.match(archiveInspector, /manifestDigest !== expectedImageDigest/);
+  assert.match(archiveInspector, /function assertOciDescriptor\(/);
+  assert.match(archiveInspector, /function verifyReferencedOciBlobs\(/);
+  assert.match(archiveInspector, /assertOciDescriptor\(manifest\.config/);
+  assert.match(
+    archiveInspector,
+    /manifest\.layers\.length > MAX_OCI_LAYER_COUNT/,
+  );
+  assert.match(archiveInspector, /'--to-command', validatorCommand/);
+  assert.match(archiveInspector, /process\.env\.TAR_FILETYPE !== 'f'/);
+  assert.match(archiveInspector, /bytesRead !== descriptor\.size/);
+  assert.match(
+    archiveInspector,
+    /verifyReferencedOciBlobs\(\[configDescriptor, \.\.\.layerDescriptors\]\)/,
+  );
   assert.match(archiveInspector, /assertArchiveBinding\(\)/);
   assert.doesNotMatch(
     handoffJob,
@@ -838,38 +904,94 @@ test(
   { skip: process.platform !== 'linux' },
   () => {
     const workflow = readFileSync(workflowPath, 'utf8');
-    const scriptStart = workflow.indexOf("          const { createHash } = require('node:crypto');");
-    const scriptEnd = workflow.indexOf('          const evidence = JSON.parse(', scriptStart);
+    const scriptStart = workflow.indexOf(
+      "          const { createHash } = require('node:crypto');",
+    );
+    const scriptEnd = workflow.indexOf(
+      '          const evidence = JSON.parse(',
+      scriptStart,
+    );
     assert.ok(scriptStart >= 0 && scriptEnd > scriptStart);
     const definitions = workflow
       .slice(scriptStart, scriptEnd)
       .replace(/^ {10}/gm, '');
     const inspectScript = `${definitions}\nconst result = inspectOciArchive(process.argv[1], MAX_IMAGE_ARCHIVE_BYTES, process.argv[2]);\nprocess.stdout.write(JSON.stringify(result));\n`;
-    const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-oci-manifest-')));
-    const mediaType = 'application/vnd.oci.image.manifest.v1+json';
-    const validManifest = Buffer.from(
-      JSON.stringify({
-        schemaVersion: 2,
-        mediaType,
-        config: {
-          mediaType: 'application/vnd.oci.image.config.v1+json',
-          digest: `sha256:${'1'.repeat(64)}`,
-          size: 2,
-        },
-        layers: [],
-      }),
+    const workDir = realpathSync(
+      mkdtempSync(join(tmpdir(), 'eai-oci-manifest-')),
     );
+    const mediaType = 'application/vnd.oci.image.manifest.v1+json';
+    const configBytes = Buffer.from('{"architecture":"amd64","os":"linux"}');
+    const layerBytes = Buffer.from('compressed layer fixture');
+    const configDigest = `sha256:${createHash('sha256').update(configBytes).digest('hex')}`;
+    const layerDigest = `sha256:${createHash('sha256').update(layerBytes).digest('hex')}`;
+    const validManifestValue = {
+      schemaVersion: 2,
+      mediaType,
+      config: {
+        mediaType: 'application/vnd.oci.image.config.v1+json',
+        digest: configDigest,
+        size: configBytes.length,
+      },
+      layers: [
+        {
+          mediaType: 'application/vnd.oci.image.layer.v1.tar+gzip',
+          digest: layerDigest,
+          size: layerBytes.length,
+        },
+      ],
+    };
+    const validManifest = Buffer.from(JSON.stringify(validManifestValue));
     const validDigest = `sha256:${createHash('sha256').update(validManifest).digest('hex')}`;
 
-    const createArchive = (name, blobBytes = validManifest, includeBlob = true) => {
+    const createArchive = (
+      name,
+      {
+        blobBytes = validManifest,
+        descriptorDigest = `sha256:${createHash('sha256').update(blobBytes).digest('hex')}`,
+        includeBlob = true,
+        includeLayout = true,
+        omitReferencedDigest,
+        substituteReferencedDigest,
+        linkReferencedDigest,
+      } = {},
+    ) => {
       const contentRoot = join(workDir, `${name}-root`);
       const blobPath = join(
         contentRoot,
         'blobs/sha256',
-        validDigest.slice('sha256:'.length),
+        descriptorDigest.slice('sha256:'.length),
       );
       mkdirSync(dirname(blobPath), { recursive: true });
       if (includeBlob) writeFileSync(blobPath, blobBytes);
+      for (const [digest, bytes] of [
+        [configDigest, configBytes],
+        [layerDigest, layerBytes],
+      ]) {
+        if (digest === omitReferencedDigest) continue;
+        const referencedPath = join(
+          contentRoot,
+          'blobs/sha256',
+          digest.slice('sha256:'.length),
+        );
+        if (digest === linkReferencedDigest) {
+          const linkTarget = join(contentRoot, `${digest.slice(-12)}.target`);
+          writeFileSync(linkTarget, bytes);
+          symlinkSync(linkTarget, referencedPath);
+        } else {
+          writeFileSync(
+            referencedPath,
+            digest === substituteReferencedDigest
+              ? Buffer.from('substituted')
+              : bytes,
+          );
+        }
+      }
+      if (includeLayout) {
+        writeFileSync(
+          join(contentRoot, 'oci-layout'),
+          JSON.stringify({ imageLayoutVersion: '1.0.0' }),
+        );
+      }
       writeFileSync(
         join(contentRoot, 'index.json'),
         JSON.stringify({
@@ -877,7 +999,7 @@ test(
           manifests: [
             {
               mediaType,
-              digest: validDigest,
+              digest: descriptorDigest,
               size: blobBytes.length,
               platform: { os: 'linux', architecture: 'amd64' },
             },
@@ -885,16 +1007,25 @@ test(
         }),
       );
       const archivePath = join(workDir, `${name}.tar`);
-      execFileSync(
-        'tar',
-        ['-cf', archivePath, '-C', contentRoot, 'index.json', 'blobs'],
-      );
-      return archivePath;
+      execFileSync('tar', [
+        '-cf',
+        archivePath,
+        '-C',
+        contentRoot,
+        ...(includeLayout ? ['oci-layout'] : []),
+        'index.json',
+        'blobs',
+      ]);
+      return { archivePath, descriptorDigest };
     };
-    const inspect = (archivePath) =>
-      spawnSync(process.execPath, ['-e', inspectScript, archivePath, validDigest], {
-        encoding: 'utf8',
-      });
+    const inspect = ({ archivePath, descriptorDigest }) =>
+      spawnSync(
+        process.execPath,
+        ['-e', inspectScript, archivePath, descriptorDigest],
+        {
+          encoding: 'utf8',
+        },
+      );
 
     try {
       const validArchive = createArchive('valid');
@@ -904,25 +1035,138 @@ test(
       assert.equal(result.imageDigest, validDigest);
       assert.match(result.archiveDigest, digestPattern);
 
-      const substitutedArchive = createArchive(
-        'substituted',
-        Buffer.from(validManifest.toString('utf8').replace('"layers":[]', '"layers":[{}]')),
-      );
+      const substitutedArchive = createArchive('substituted', {
+        blobBytes: Buffer.from(
+          JSON.stringify({ ...validManifestValue, layers: [{}] }),
+        ),
+        descriptorDigest: validDigest,
+      });
       const substituted = inspect(substitutedArchive);
       assert.equal(substituted.status, 1);
-      assert.match(substituted.stderr, /manifest bytes do not match build evidence/);
+      assert.match(
+        substituted.stderr,
+        /manifest bytes do not match build evidence/,
+      );
 
-      const missingArchive = createArchive('missing', validManifest, false);
+      const missingArchive = createArchive('missing', { includeBlob: false });
       const missing = inspect(missingArchive);
       assert.equal(missing.status, 1);
       assert.match(missing.stderr, /Command failed: tar/);
+
+      const missingLayout = inspect(
+        createArchive('missing-layout', { includeLayout: false }),
+      );
+      assert.equal(missingLayout.status, 1);
+      assert.match(missingLayout.stderr, /Command failed: tar/);
+
+      const missingReferenced = inspect(
+        createArchive('missing-referenced', {
+          omitReferencedDigest: configDigest,
+        }),
+      );
+      assert.equal(missingReferenced.status, 1);
+      assert.match(missingReferenced.stderr, /Command failed: tar/);
+
+      const substitutedReferenced = inspect(
+        createArchive('substituted-referenced', {
+          substituteReferencedDigest: configDigest,
+        }),
+      );
+      assert.equal(substitutedReferenced.status, 1);
+      assert.match(substitutedReferenced.stderr, /Command failed: tar/);
+
+      const linkedReferenced = inspect(
+        createArchive('linked-referenced', {
+          linkReferencedDigest: configDigest,
+        }),
+      );
+      assert.equal(linkedReferenced.status, 1);
+      assert.match(
+        linkedReferenced.stderr,
+        /referenced blobs are missing or duplicated/,
+      );
+
+      const malformedManifests = [
+        ['missing-config', { ...validManifestValue, config: undefined }],
+        ['missing-layers', { ...validManifestValue, layers: undefined }],
+        [
+          'mixed-media-family',
+          {
+            ...validManifestValue,
+            config: {
+              ...validManifestValue.config,
+              mediaType: 'application/vnd.docker.container.image.v1+json',
+            },
+          },
+        ],
+        [
+          'invalid-layer-digest',
+          {
+            ...validManifestValue,
+            layers: [
+              {
+                ...validManifestValue.layers[0],
+                digest: `sha256:${'A'.repeat(64)}`,
+              },
+            ],
+          },
+        ],
+        [
+          'too-many-layers',
+          {
+            ...validManifestValue,
+            layers: Array.from(
+              { length: 1025 },
+              () => validManifestValue.layers[0],
+            ),
+          },
+        ],
+      ];
+      for (const [name, value] of malformedManifests) {
+        const malformed = inspect(
+          createArchive(name, {
+            blobBytes: Buffer.from(JSON.stringify(value)),
+          }),
+        );
+        assert.equal(malformed.status, 1, `${name}: ${malformed.stderr}`);
+        assert.match(
+          malformed.stderr,
+          /OCI image (?:configuration|layers|layer)/,
+        );
+      }
+
+      const duplicateReferencedArchive = createArchive('duplicate-referenced');
+      const duplicateReferencedRoot = join(
+        workDir,
+        'duplicate-referenced-root',
+      );
+      const duplicateReferencedPath = join(
+        duplicateReferencedRoot,
+        'blobs/sha256',
+        configDigest.slice('sha256:'.length),
+      );
+      mkdirSync(dirname(duplicateReferencedPath), { recursive: true });
+      writeFileSync(duplicateReferencedPath, configBytes);
+      execFileSync('tar', [
+        '-rf',
+        duplicateReferencedArchive.archivePath,
+        '-C',
+        duplicateReferencedRoot,
+        `blobs/sha256/${configDigest.slice('sha256:'.length)}`,
+      ]);
+      const duplicateReferenced = inspect(duplicateReferencedArchive);
+      assert.equal(duplicateReferenced.status, 1);
+      assert.match(
+        duplicateReferenced.stderr,
+        /referenced blobs are missing or duplicated/,
+      );
 
       const duplicateRoot = join(workDir, 'duplicate-root');
       mkdirSync(duplicateRoot);
       writeFileSync(join(duplicateRoot, 'index.json'), '{}');
       execFileSync('tar', [
         '-rf',
-        validArchive,
+        validArchive.archivePath,
         '-C',
         duplicateRoot,
         'index.json',
@@ -1373,9 +1617,15 @@ test('image preparation rejects preexisting isolated outputs without deleting th
         { encoding: 'utf8' },
       );
       assert.equal(result.status, 1);
-      assert.match(result.stderr, /must not exist before isolated image preparation/);
+      assert.match(
+        result.stderr,
+        /must not exist before isolated image preparation/,
+      );
       if (relativePath.endsWith('image-context')) {
-        assert.equal(readFileSync(join(output, 'sentinel'), 'utf8'), 'unchanged');
+        assert.equal(
+          readFileSync(join(output, 'sentinel'), 'utf8'),
+          'unchanged',
+        );
       } else {
         assert.equal(readFileSync(output, 'utf8'), 'unchanged');
       }
@@ -1392,10 +1642,7 @@ test('image preparation never truncates a hard-linked generated output', () => {
   try {
     const root = join(workDir, 'app');
     const protectedPath = join(workDir, 'protected.txt');
-    const dockerfilePath = join(
-      root,
-      '.eai-build/image-context/Dockerfile',
-    );
+    const dockerfilePath = join(root, '.eai-build/image-context/Dockerfile');
     const preload = join(workDir, 'hard-link-image-output.cjs');
     writeFixtureApp(root);
     writeFileSync(protectedPath, 'protected bytes\n');
@@ -1443,7 +1690,10 @@ syncBuiltinESMExports();
 test('collector error paths do not unlink a copy destination after parent validation fails', () => {
   const implementation = readFileSync(evidenceScript, 'utf8');
   const copyStart = implementation.indexOf('function copyRegularTreeNoFollow(');
-  const copyEnd = implementation.indexOf('\nfunction writeRegularFileNoFollow(', copyStart);
+  const copyEnd = implementation.indexOf(
+    '\nfunction writeRegularFileNoFollow(',
+    copyStart,
+  );
   assert.ok(copyStart >= 0 && copyEnd > copyStart);
   const copy = implementation.slice(copyStart, copyEnd);
   assert.doesNotMatch(copy, /rmSync\(destinationPath/);
@@ -1453,13 +1703,22 @@ test('collector error paths do not unlink a copy destination after parent valida
 test('image-tree copies bind each source ancestor and final path through the read', () => {
   const implementation = readFileSync(evidenceScript, 'utf8');
   const copyStart = implementation.indexOf('function copyRegularTreeNoFollow(');
-  const copyEnd = implementation.indexOf('\nfunction writeRegularFileNoFollow(', copyStart);
+  const copyEnd = implementation.indexOf(
+    '\nfunction writeRegularFileNoFollow(',
+    copyStart,
+  );
   assert.ok(copyStart >= 0 && copyEnd > copyStart);
   const copy = implementation.slice(copyStart, copyEnd);
-  assert.match(copy, /snapshotAbsoluteDirectoryPath\(\s*dirname\(sourcePath\),\s*label/);
+  assert.match(
+    copy,
+    /snapshotAbsoluteDirectoryPath\(\s*dirname\(sourcePath\),\s*label/,
+  );
   assert.equal(
-    (copy.match(/assertAbsoluteDirectorySnapshot\(sourceAncestors, label\)/g) || [])
-      .length,
+    (
+      copy.match(
+        /assertAbsoluteDirectorySnapshot\(sourceAncestors, label\)/g,
+      ) || []
+    ).length,
     2,
   );
   assert.match(copy, /sourceRebound\.ino !== opened\.ino/);
@@ -1475,7 +1734,9 @@ test('image-tree copies bind each source ancestor and final path through the rea
 });
 
 test('image tree and archive staging reject same-size rewrites before open', () => {
-  const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-copy-pre-open-')));
+  const workDir = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-copy-pre-open-')),
+  );
   try {
     const preload = join(workDir, 'rewrite-source-before-open.cjs');
     writeFileSync(
@@ -1653,19 +1914,31 @@ test('bounded collector reads bind parent and leaf identity through the read', (
   const descriptorStart = implementation.indexOf(
     'function readExactBoundedDescriptor(',
   );
-  const start = implementation.indexOf('function readBoundedRegularFileNoFollow(');
+  const start = implementation.indexOf(
+    'function readBoundedRegularFileNoFollow(',
+  );
   const end = implementation.indexOf('\nfunction readImageDigest(', start);
   assert.ok(descriptorStart >= 0 && start > descriptorStart && end > start);
   const descriptorReader = implementation.slice(descriptorStart, start);
   const reader = implementation.slice(start, end);
-  assert.match(descriptorReader, /Buffer\.allocUnsafe\(BOUNDED_READ_BUFFER_BYTES\)/);
+  assert.match(
+    descriptorReader,
+    /Buffer\.allocUnsafe\(BOUNDED_READ_BUFFER_BYTES\)/,
+  );
   assert.match(descriptorReader, /readSync\(\s*descriptor,\s*buffer/);
-  assert.match(descriptorReader, /readSync\(descriptor, growthProbe, 0, 1, offset\)/);
+  assert.match(
+    descriptorReader,
+    /readSync\(descriptor, growthProbe, 0, 1, offset\)/,
+  );
   assert.match(descriptorReader, /grew during its bounded read/);
   assert.doesNotMatch(implementation, /readFileSync\(descriptor\)/);
-  assert.match(reader, /snapshotAbsoluteDirectoryPath\(dirname\(path\), label\)/);
+  assert.match(
+    reader,
+    /snapshotAbsoluteDirectoryPath\(dirname\(path\), label\)/,
+  );
   assert.equal(
-    (reader.match(/assertAbsoluteDirectorySnapshot\(ancestors, label\)/g) || []).length,
+    (reader.match(/assertAbsoluteDirectorySnapshot\(ancestors, label\)/g) || [])
+      .length,
     2,
   );
   assert.match(reader, /rebound\.dev !== opened\.dev/);
@@ -1677,13 +1950,20 @@ test('bounded collector reads bind parent and leaf identity through the read', (
 test('collector requires no-follow and nonblocking open capabilities centrally', () => {
   const implementation = readFileSync(evidenceScript, 'utf8');
   const openCount = (implementation.match(/\bopenSync\(/g) || []).length;
-  const guardedOpenCount =
-    (implementation.match(/\bnoFollowOpenFlags\(/g) || []).length - 1;
+  const strictGuardedOpenCount =
+    (implementation.match(/\bnoFollowOpenFlags\(/g) || []).length - 2;
+  const governedConfigOpenCount =
+    (implementation.match(/\bgovernedConfigReadOpenFlags\(/g) || []).length - 1;
   assert.match(implementation, /function requiredOpenFlag\(name\)/);
   assert.match(implementation, /Number\.isSafeInteger\(flag\) \|\| flag <= 0/);
   assert.match(implementation, /requiredOpenFlag\('O_NOFOLLOW'\)/);
   assert.match(implementation, /requiredOpenFlag\('O_NONBLOCK'\)/);
-  assert.equal(guardedOpenCount, openCount);
+  assert.match(implementation, /function governedConfigReadOpenFlags\(/);
+  assert.match(
+    implementation,
+    /allowWindowsValidatedFallback && process\.platform === 'win32'/,
+  );
+  assert.equal(strictGuardedOpenCount + governedConfigOpenCount, openCount);
   assert.doesNotMatch(implementation, /O_NOFOLLOW\s*(?:\|\||\?\?)/);
   assert.doesNotMatch(implementation, /O_NONBLOCK\s*(?:\|\||\?\?)/);
 
@@ -1745,8 +2025,97 @@ export function openSync() {
   }
 });
 
+test('Windows local config hashing uses only its validated read fallback', () => {
+  const implementation = readFileSync(evidenceScript, 'utf8');
+  const workDir = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-windows-config-open-')),
+  );
+  try {
+    const root = join(workDir, 'app');
+    const deploymentRoot = join(workDir, 'deployment-app');
+    const copiedScript = join(workDir, 'evidence.mjs');
+    const fakeFs = join(workDir, 'fake-fs.mjs');
+    const windowsPlatform = join(workDir, 'windows-platform.cjs');
+    writeFixtureApp(root);
+    writeFixtureApp(deploymentRoot);
+    writeFileSync(
+      windowsPlatform,
+      "Object.defineProperty(process, 'platform', { value: 'win32' });\n",
+    );
+    writeFileSync(
+      fakeFs,
+      String.raw`
+import { createRequire } from 'node:module';
+const fs = createRequire(import.meta.url)('node:fs');
+const mutableConstants = { ...fs.constants };
+delete mutableConstants.O_NOFOLLOW;
+delete mutableConstants.O_NONBLOCK;
+export const constants = Object.freeze(mutableConstants);
+export const closeSync = fs.closeSync;
+export const existsSync = fs.existsSync;
+export const fstatSync = fs.fstatSync;
+export const lstatSync = fs.lstatSync;
+export const mkdtempSync = fs.mkdtempSync;
+export const mkdirSync = fs.mkdirSync;
+export const openSync = fs.openSync;
+export const readSync = fs.readSync;
+export const realpathSync = fs.realpathSync;
+export const readdirSync = fs.readdirSync;
+export const writeSync = fs.writeSync;
+export const writeFileSync = fs.writeFileSync;
+`,
+    );
+    writeFileSync(
+      copiedScript,
+      implementation.replace("from 'node:fs';", "from './fake-fs.mjs';"),
+    );
+    const env = {
+      ...process.env,
+      NODE_OPTIONS: `--require=${windowsPlatform}`,
+    };
+
+    const valid = spawnSync(
+      process.execPath,
+      [copiedScript, 'config-hash', '--root', root],
+      { encoding: 'utf8', env },
+    );
+    assert.equal(valid.status, 0, valid.stderr);
+    assert.match(valid.stdout.trim(), digestPattern);
+
+    const outsideRuntime = join(workDir, 'outside-runtime.json');
+    writeFileSync(outsideRuntime, readFileSync(join(root, 'eai.runtime.json')));
+    rmSync(join(root, 'eai.runtime.json'));
+    symlinkSync(outsideRuntime, join(root, 'eai.runtime.json'));
+    const linked = spawnSync(
+      process.execPath,
+      [copiedScript, 'config-hash', '--root', root],
+      { encoding: 'utf8', env },
+    );
+    assert.equal(linked.status, 1);
+    assert.match(
+      linked.stderr,
+      /Governed configuration must be a regular file/,
+    );
+
+    const deployment = spawnSync(
+      process.execPath,
+      [copiedScript, 'prepare-image-context', '--root', deploymentRoot],
+      { encoding: 'utf8', env },
+    );
+    assert.equal(deployment.status, 1);
+    assert.match(
+      deployment.stderr,
+      /Secure file opens require O_NOFOLLOW support/,
+    );
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test('bounded collector reads reject post-open growth and archive shrinkage', () => {
-  const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-bounded-growth-')));
+  const workDir = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-bounded-growth-')),
+  );
   try {
     const root = join(workDir, 'app');
     const preload = join(workDir, 'grow-after-open.cjs');
@@ -1839,10 +2208,7 @@ syncBuiltinESMExports();
     assert.equal(config.status, 1);
     assert.match(config.stderr, /grew during its bounded read/);
 
-    const archivePath = join(
-      root,
-      '.eai-build/eai-generated-app-image.tar',
-    );
+    const archivePath = join(root, '.eai-build/eai-generated-app-image.tar');
     const growingArchive = spawnSync(
       process.execPath,
       [evidenceScript, ...sourceUnknownCollectArgs(root)],
@@ -1898,7 +2264,9 @@ test('governed configuration reads enforce the explicit per-file cap', () => {
 });
 
 test('governed configuration accepts 4-10 MiB files and enforces the shared total cap', () => {
-  const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-config-bounds-')));
+  const workDir = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-config-bounds-')),
+  );
   try {
     const acceptedRoot = join(workDir, 'accepted');
     writeFixtureApp(acceptedRoot);
@@ -1929,15 +2297,37 @@ test('governed configuration accepts 4-10 MiB files and enforces the shared tota
 test('configuration hashing repeats inventory and binds each post-read path', () => {
   const implementation = readFileSync(evidenceScript, 'utf8');
   const hashStart = implementation.indexOf('function buildConfigHash(');
-  const hashEnd = implementation.indexOf('\nfunction prepareImageContext(', hashStart);
-  const readerStart = implementation.indexOf('function readRegularFileNoFollow(');
-  const readerEnd = implementation.indexOf('\nfunction optionalLstat(', readerStart);
-  assert.ok(hashStart >= 0 && hashEnd > hashStart && readerStart >= 0 && readerEnd > readerStart);
+  const hashEnd = implementation.indexOf(
+    '\nfunction prepareImageContext(',
+    hashStart,
+  );
+  const readerStart = implementation.indexOf(
+    'function readRegularFileNoFollow(',
+  );
+  const readerEnd = implementation.indexOf(
+    '\nfunction optionalLstat(',
+    readerStart,
+  );
+  assert.ok(
+    hashStart >= 0 &&
+      hashEnd > hashStart &&
+      readerStart >= 0 &&
+      readerEnd > readerStart,
+  );
   const hash = implementation.slice(hashStart, hashEnd);
   const reader = implementation.slice(readerStart, readerEnd);
-  assert.equal((hash.match(/listGovernedConfigFiles\(root\)/g) || []).length, 2);
-  assert.match(hash, /paths\.some\(\(path, index\) => path !== finalPaths\[index\]\)/);
-  assert.match(reader, /assertRelativeDirectorySnapshot\(ancestors, relativePath\)/);
+  assert.equal(
+    (hash.match(/listGovernedConfigFiles\(root\)/g) || []).length,
+    2,
+  );
+  assert.match(
+    hash,
+    /paths\.some\(\(path, index\) => path !== finalPaths\[index\]\)/,
+  );
+  assert.match(
+    reader,
+    /assertRelativeDirectorySnapshot\(ancestors, relativePath\)/,
+  );
   assert.match(reader, /finalPath\.ino !== opened\.ino/);
   assert.match(reader, /opened\.size !== before\.size/);
   assert.match(reader, /opened\.mtimeMs !== before\.mtimeMs/);
@@ -1952,10 +2342,7 @@ test('configuration hashing repeats inventory and binds each post-read path', ()
   assert.match(reader, /MAX_GOVERNED_CONFIG_FILE_BYTES/);
   assert.match(reader, /readExactBoundedDescriptor\(/);
   assert.match(implementation, /paths\.length > MAX_GOVERNED_CONFIG_FILES/);
-  assert.match(
-    implementation,
-    /totalBytes > MAX_GOVERNED_CONFIG_TOTAL_BYTES/,
-  );
+  assert.match(implementation, /totalBytes > MAX_GOVERNED_CONFIG_TOTAL_BYTES/);
 });
 
 test('configuration hashing rejects an in-place rewrite before no-follow open', () => {
@@ -2944,7 +3331,9 @@ test('clean handoff validates bounded responses without a repository checkout', 
   const scriptMarker = "          node - <<'NODE'\n";
   const scriptStart = workflow.indexOf(scriptMarker, stepStart);
   const scriptEnd = workflow.indexOf('\n          NODE', scriptStart);
-  assert.ok(stepStart >= 0 && scriptStart > stepStart && scriptEnd > scriptStart);
+  assert.ok(
+    stepStart >= 0 && scriptStart > stepStart && scriptEnd > scriptStart,
+  );
   const script = workflow
     .slice(scriptStart + scriptMarker.length, scriptEnd)
     .replace(/^ {10}/gm, '');
@@ -2990,20 +3379,14 @@ test('clean handoff validates bounded responses without a repository checkout', 
 
     rmSync(responsePath);
     const targetPath = join(workDir, 'response-target.json');
-    writeFileSync(
-      targetPath,
-      JSON.stringify({ status: 'accepted' }),
-    );
+    writeFileSync(targetPath, JSON.stringify({ status: 'accepted' }));
     symlinkSync(targetPath, responsePath);
     const linked = run();
     assert.equal(linked.status, 1);
     assert.match(linked.stderr, /bounded no-follow regular file/);
 
     rmSync(responsePath);
-    writeFileSync(
-      responsePath,
-      JSON.stringify({ status: 'accepted' }),
-    );
+    writeFileSync(responsePath, JSON.stringify({ status: 'accepted' }));
     const preload = join(workDir, 'grow-inline-response-after-open.cjs');
     writeFileSync(
       preload,
@@ -3056,12 +3439,7 @@ test('assert-evidence-accepted bounds and binds the response file', () => {
   const run = (responsePath, env = process.env) =>
     spawnSync(
       process.execPath,
-      [
-        evidenceScript,
-        'assert-evidence-accepted',
-        '--response',
-        responsePath,
-      ],
+      [evidenceScript, 'assert-evidence-accepted', '--response', responsePath],
       { encoding: 'utf8', env },
     );
   const accepted = JSON.stringify({
