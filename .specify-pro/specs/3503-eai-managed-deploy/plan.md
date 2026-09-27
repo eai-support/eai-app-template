@@ -9,3 +9,5 @@
 7. Expand owned tests, run the repository validation suite, and publish no release.
 8. Recompute the complete governed configuration from exact commit GitHub reads at handoff and bind every generated output write to stable parent and leaf identities.
 9. Bind authenticated readiness to TenantInfra's exact active deployment ID, preserve the response schema, and cover exact, missing, and substituted deployment identities in owned route and runtime-contract tests.
+10. Revalidate the bound GitHub output descriptor, exact leaf path, and complete parent chain after each trusted append, with a deterministic replacement-race regression.
+11. Reapply canonical runtime provenance validation in the isolated OIDC handoff, create generated files exclusively, and bind governed-file size and timestamps before every read.

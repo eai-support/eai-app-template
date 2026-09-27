@@ -37,18 +37,22 @@
 - [x] Stage the OCI archive through bounded descriptors before artifact upload (DTE-022, DTE-025).
 - [x] Keep the minted OIDC token within the request-and-submit step (DTE-025).
 - [x] Require the exact TenantInfra deployment identity in runtime configuration and every authenticated readiness probe (DTE-036, DTE-074).
+- [x] Revalidate the bound `$GITHUB_OUTPUT` descriptor, leaf, and parent chain after append (DTE-025).
+- [x] Validate canonical schema provenance inside the isolated OIDC-authorized handoff (DTE-025).
+- [x] Create generated image-context files exclusively before any destructive write (DTE-022).
+- [x] Bind governed configuration size and timestamps between pre-open and opened descriptors (DTE-018).
 
 ## Exact-head evidence
 
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (38 passed)
+- `npm run test:source-unknown-evidence` (41 passed)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (330 passed)
 - `npm run typecheck`
 - `npm run build`
 - `actionlint .github/workflows/eai-app.yml`
-- Exact source evidence tests cover Git tree/blob configuration recomputation, source/output ancestor binding, runner-temporary artifact staging, and step-local OIDC submission; workflow digest `sha256:d7f14c0af056d836db2d50c70cf1205b0dc06a15c8c7144d360320ebcbfcbb64`, collector digest `sha256:d17c4d5e460dee967adb9a9b25c0b9aed73cc09ebd76c771e22ee796aff1d275`.
+- Exact source evidence tests cover Git tree/blob configuration recomputation with pre-open size/time binding, exclusive generated-output creation, source/output ancestor binding including post-append command-file replacement, canonical handoff provenance validation, runner-temporary artifact staging, and step-local OIDC submission; workflow digest `sha256:18b346bf69f0f989a7e07cff60d70c3e475bb5316b0e6622c68d548a8046a293`, workflow Git blob `e6ea1d159cc6ea8edb8010f50dad323746d4f6dd`, collector digest `sha256:b4bf40bd5a5ae4daa46a321fc1533190df231a87e6cb6ff6f2f3d25de58e5613`.
 - Readiness-focused route/runtime/contract tests passed 24/24, including exact, missing, changed, blank, noncanonical, and unconfigured deployment identity cases.
