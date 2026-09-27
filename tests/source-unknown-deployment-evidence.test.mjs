@@ -884,6 +884,27 @@ test('handoff binds the bounded OCI archive and referenced manifest bytes', () =
     Buffer.byteLength(Buffer.from(maximumCompactTable).toString('base64')) <=
       112 * 1024,
   );
+  const maximumValidationOutputBytes =
+    1025 *
+    (Buffer.byteLength(`blobs/sha256/${'0'.repeat(64)}\n`) +
+      Buffer.byteLength(`verified:blobs/sha256/${'0'.repeat(64)}\n`));
+  assert.equal(maximumValidationOutputBytes, 169125);
+  assert.match(
+    handoffJob,
+    /MAX_OCI_BLOB_PATH_BYTES = Buffer\.byteLength\('blobs\/sha256\/'\) \+ 64/,
+  );
+  assert.match(
+    handoffJob,
+    /MAX_OCI_BLOB_MEMBER_RECORD_BYTES = MAX_OCI_BLOB_PATH_BYTES \+ 1/,
+  );
+  assert.match(
+    handoffJob,
+    /MAX_OCI_BLOB_VERIFIED_RECORD_BYTES = Buffer\.byteLength\('verified:'\) \+ MAX_OCI_BLOB_PATH_BYTES \+ 1/,
+  );
+  assert.match(
+    handoffJob,
+    /MAX_OCI_BLOB_VALIDATION_OUTPUT_BYTES = \(MAX_OCI_LAYER_COUNT \+ 1\) \* \(MAX_OCI_BLOB_MEMBER_RECORD_BYTES \+ MAX_OCI_BLOB_VERIFIED_RECORD_BYTES\)/,
+  );
 });
 
 test(

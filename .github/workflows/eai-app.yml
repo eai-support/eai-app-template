@@ -408,7 +408,10 @@ jobs:
           const MAX_OCI_CONFIG_BYTES = 4 * 1024 * 1024;
           const MAX_OCI_LAYER_COUNT = 1024;
           const MAX_TAR_LISTING_BYTES = 64 * 1024;
-          const MAX_OCI_BLOB_VALIDATION_OUTPUT_BYTES = 128 * 1024;
+          const MAX_OCI_BLOB_PATH_BYTES = Buffer.byteLength('blobs/sha256/') + 64;
+          const MAX_OCI_BLOB_MEMBER_RECORD_BYTES = MAX_OCI_BLOB_PATH_BYTES + 1;
+          const MAX_OCI_BLOB_VERIFIED_RECORD_BYTES = Buffer.byteLength('verified:') + MAX_OCI_BLOB_PATH_BYTES + 1;
+          const MAX_OCI_BLOB_VALIDATION_OUTPUT_BYTES = (MAX_OCI_LAYER_COUNT + 1) * (MAX_OCI_BLOB_MEMBER_RECORD_BYTES + MAX_OCI_BLOB_VERIFIED_RECORD_BYTES);
           const MAX_OCI_EXPECTED_BLOB_TABLE_BYTES = 112 * 1024;
           const TAR_TIMEOUT_MS = 10 * 60 * 1000;
           const SHA256_DIGEST = /^sha256:[a-f0-9]{64}$/;
