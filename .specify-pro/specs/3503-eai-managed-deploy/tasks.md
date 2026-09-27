@@ -35,6 +35,7 @@
 - [x] Repeat the governed configuration inventory and bind every post-read path and file identity (DTE-018).
 - [x] Bind every image-tree source ancestor and final path through the copy (DTE-022).
 - [x] Stage the OCI archive through bounded descriptors before artifact upload (DTE-022, DTE-025).
+- [x] Keep the minted OIDC token within the request-and-submit step (DTE-025).
 
 ## Exact-head evidence
 
@@ -48,4 +49,4 @@
 - `npm run typecheck`
 - `npm run build`
 - `actionlint .github/workflows/eai-app.yml`
-- Exact source evidence tests cover Git tree/blob configuration recomputation, source/output ancestor binding, and runner-temporary artifact staging; workflow digest `sha256:e2c293704fafa1466c74455ab226bf67d6bfd23df7fb8279d7a1d33dcc4a4914`, collector digest `sha256:d17c4d5e460dee967adb9a9b25c0b9aed73cc09ebd76c771e22ee796aff1d275`.
+- Exact source evidence tests cover Git tree/blob configuration recomputation, source/output ancestor binding, runner-temporary artifact staging, and step-local OIDC submission; workflow digest `sha256:d7f14c0af056d836db2d50c70cf1205b0dc06a15c8c7144d360320ebcbfcbb64`, collector digest `sha256:d17c4d5e460dee967adb9a9b25c0b9aed73cc09ebd76c771e22ee796aff1d275`.

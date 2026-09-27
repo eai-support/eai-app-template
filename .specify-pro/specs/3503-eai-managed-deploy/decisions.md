@@ -47,3 +47,5 @@ The configuration digest is calculated only from a stable governed inventory. Th
 Image-tree copying treats each source file's complete ancestor chain and contained final path as part of the read authority. Snapshot before the no-follow open, bind the opened inode to the path, and repeat the ancestor, path, inode, size, modification-time, and change-time checks after the copy.
 
 The upload action never reads the application-controlled build path directly. A trusted collector command creates a random directory beneath `RUNNER_TEMP`, copies the archive once through bounded no-follow source and exclusive destination descriptors, records its raw digest, and exposes only that staged path to upload and later evidence collection.
+
+The short-lived GitHub OIDC token remains inside one request-and-submit shell step. It is masked and sent directly to the allowlisted PublicAPI endpoint; it is never serialized through `$GITHUB_OUTPUT` or another mutable command file.

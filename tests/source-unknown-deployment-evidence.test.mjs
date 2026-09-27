@@ -547,6 +547,13 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
     workflow.indexOf('async function sourceConfigHash()') <
       workflow.indexOf('Request GitHub OIDC token'),
   );
+  assert.match(
+    handoffJob,
+    /name: Request GitHub OIDC token and submit workflow evidence/,
+  );
+  assert.match(handoffJob, /Authorization: Bearer \$token/);
+  assert.doesNotMatch(handoffJob, /steps\.github-oidc\.outputs\.token/);
+  assert.doesNotMatch(handoffJob, /token=\$token.*GITHUB_OUTPUT/);
   assert.match(handoffJob, /\[\[ "\$EAI_BOUND_PUBLIC_API_URL" =~ \^https:\/\//);
   assert.match(
     handoffJob,
