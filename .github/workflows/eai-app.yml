@@ -402,6 +402,15 @@ jobs:
           const MAX_GITHUB_METADATA_RESPONSE_BYTES = 1024 * 1024;
           const MAX_GITHUB_TREE_RESPONSE_BYTES = 16 * 1024 * 1024;
           const MAX_GITHUB_BLOB_RESPONSE_BYTES = 16 * 1024 * 1024;
+          const MAX_OCI_INDEX_BYTES = 1024 * 1024;
+          const MAX_OCI_MANIFEST_BYTES = 4 * 1024 * 1024;
+          const MAX_TAR_LISTING_BYTES = 64 * 1024;
+          const TAR_TIMEOUT_MS = 30 * 1000;
+          const SHA256_DIGEST = /^sha256:[a-f0-9]{64}$/;
+          const OCI_MANIFEST_MEDIA_TYPES = new Set([
+            'application/vnd.oci.image.manifest.v1+json',
+            'application/vnd.docker.distribution.manifest.v2+json',
+          ]);
           function sameFileIdentity(left, right) {
             return left.dev === right.dev && left.ino === right.ino;
           }
@@ -429,8 +438,9 @@ jobs:
             const before = fs.lstatSync(filePath);
             if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1) throw new Error(`${label} must be a no-follow regular file.`);
             if (!Number.isSafeInteger(before.size) || before.size < 1 || before.size > maxBytes) throw new Error(`${label} is empty or exceeds its byte limit.`);
-            if (typeof fs.constants.O_NOFOLLOW !== 'number') throw new Error(`No-follow ${label} verification is unavailable.`);
-            const descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+            if (!Number.isSafeInteger(fs.constants.O_NOFOLLOW) || fs.constants.O_NOFOLLOW <= 0) throw new Error(`No-follow ${label} verification is unavailable.`);
+            if (!Number.isSafeInteger(fs.constants.O_NONBLOCK) || fs.constants.O_NONBLOCK <= 0) throw new Error(`Nonblocking ${label} verification is unavailable.`);
+            const descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
             try {
               const opened = fs.fstatSync(descriptor);
               assertDirectorySnapshot(ancestors, label);
@@ -457,17 +467,59 @@ jobs:
               fs.closeSync(descriptor);
             }
           }
-          function hashBoundedRegularFile(filePath, maxBytes) {
+          function inspectOciArchive(filePath, maxBytes, expectedImageDigest) {
             const ancestors = snapshotDirectoryPath(filePath, 'Downloaded image archive');
             const before = fs.lstatSync(filePath);
             if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1) throw new Error('Downloaded image archive must be a no-follow regular file.');
             if (!Number.isSafeInteger(before.size) || before.size < 1 || before.size > maxBytes) throw new Error('Downloaded image archive is empty or exceeds the handoff byte limit.');
-            if (typeof fs.constants.O_NOFOLLOW !== 'number') throw new Error('No-follow archive verification is unavailable.');
-            const descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+            if (!Number.isSafeInteger(fs.constants.O_NOFOLLOW) || fs.constants.O_NOFOLLOW <= 0) throw new Error('No-follow archive verification is unavailable.');
+            if (!Number.isSafeInteger(fs.constants.O_NONBLOCK) || fs.constants.O_NONBLOCK <= 0) throw new Error('Nonblocking archive verification is unavailable.');
+            if (!SHA256_DIGEST.test(expectedImageDigest || '')) throw new Error('Build evidence image digest is invalid.');
+            const descriptor = fs.openSync(filePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
             try {
               const opened = fs.fstatSync(descriptor);
               assertDirectorySnapshot(ancestors, 'Downloaded image archive');
               if (!opened.isFile() || opened.nlink !== 1 || !sameFileIdentity(before, opened) || opened.size !== before.size || opened.mtimeMs !== before.mtimeMs || opened.ctimeMs !== before.ctimeMs) throw new Error('Downloaded image archive changed before verification.');
+              function assertArchiveBinding() {
+                const afterDescriptor = fs.fstatSync(descriptor);
+                assertDirectorySnapshot(ancestors, 'Downloaded image archive');
+                const afterPath = fs.lstatSync(filePath);
+                for (const current of [afterDescriptor, afterPath]) {
+                  if (!current.isFile() || current.nlink !== 1 || !sameFileIdentity(opened, current) || current.size !== opened.size || current.mtimeMs !== opened.mtimeMs || current.ctimeMs !== opened.ctimeMs) throw new Error('Downloaded image archive changed during verification.');
+                }
+              }
+              function runBoundedTar(arguments_, outputLimit, label) {
+                let output;
+                try {
+                  output = execFileSync('tar', arguments_, {
+                    cwd: '/',
+                    encoding: null,
+                    env: { PATH: process.env.PATH, LC_ALL: 'C' },
+                    maxBuffer: outputLimit + 1,
+                    timeout: TAR_TIMEOUT_MS,
+                    stdio: ['ignore', 'pipe', 'pipe', descriptor],
+                  });
+                } finally {
+                  assertArchiveBinding();
+                }
+                if (!Buffer.isBuffer(output) || output.length < 1 || output.length > outputLimit) throw new Error(`${label} is empty or exceeds its byte limit.`);
+                return output;
+              }
+              function extractBoundedRegularEntry(memberPath, outputLimit, label) {
+                const archivePath = '/proc/self/fd/3';
+                const listing = runBoundedTar(
+                  ['--list', '--verbose', '--file', archivePath, '--', memberPath],
+                  MAX_TAR_LISTING_BYTES,
+                  `${label} listing`,
+                ).toString('utf8');
+                const entries = listing.split(/\r?\n/).filter(Boolean);
+                if (entries.length !== 1 || !entries[0].startsWith('-') || !entries[0].endsWith(` ${memberPath}`)) throw new Error(`${label} must be one regular archive entry.`);
+                return runBoundedTar(
+                  ['--extract', '--to-stdout', '--file', archivePath, '--', memberPath],
+                  outputLimit,
+                  label,
+                );
+              }
               const hash = createHash('sha256');
               const buffer = Buffer.allocUnsafe(1024 * 1024);
               let offset = 0;
@@ -479,13 +531,26 @@ jobs:
               }
               const growthProbe = Buffer.allocUnsafe(1);
               if (fs.readSync(descriptor, growthProbe, 0, 1, offset) !== 0) throw new Error('Downloaded image archive grew during verification.');
-              const afterDescriptor = fs.fstatSync(descriptor);
-              assertDirectorySnapshot(ancestors, 'Downloaded image archive');
-              const afterPath = fs.lstatSync(filePath);
-              for (const current of [afterDescriptor, afterPath]) {
-                if (!current.isFile() || current.nlink !== 1 || !sameFileIdentity(opened, current) || current.size !== opened.size || current.mtimeMs !== opened.mtimeMs || current.ctimeMs !== opened.ctimeMs) throw new Error('Downloaded image archive changed during verification.');
-              }
-              return `sha256:${hash.digest('hex')}`;
+              assertArchiveBinding();
+              const archiveDigest = `sha256:${hash.digest('hex')}`;
+              const indexBytes = extractBoundedRegularEntry('index.json', MAX_OCI_INDEX_BYTES, 'OCI image index');
+              const index = JSON.parse(indexBytes.toString('utf8'));
+              if (!index || typeof index !== 'object' || Array.isArray(index) || index.schemaVersion !== 2) throw new Error('OCI image index is invalid.');
+              const imageManifests = Array.isArray(index.manifests) ? index.manifests.filter((entry) => entry && typeof entry === 'object' && !Array.isArray(entry) && entry.platform?.os === 'linux' && entry.platform?.architecture === 'amd64') : [];
+              if (imageManifests.length !== 1) throw new Error('OCI image index must contain one Linux/amd64 manifest.');
+              const imageManifest = imageManifests[0];
+              if (!SHA256_DIGEST.test(imageManifest.digest || '') || imageManifest.digest !== expectedImageDigest) throw new Error('Downloaded OCI image descriptor does not match build evidence.');
+              if (!Number.isSafeInteger(imageManifest.size) || imageManifest.size < 1 || imageManifest.size > MAX_OCI_MANIFEST_BYTES) throw new Error('OCI image manifest size is invalid.');
+              if (!OCI_MANIFEST_MEDIA_TYPES.has(imageManifest.mediaType)) throw new Error('OCI image manifest media type is invalid.');
+              const manifestPath = `blobs/sha256/${imageManifest.digest.slice('sha256:'.length)}`;
+              const manifestBytes = extractBoundedRegularEntry(manifestPath, MAX_OCI_MANIFEST_BYTES, 'OCI image manifest');
+              if (manifestBytes.length !== imageManifest.size) throw new Error('OCI image manifest size does not match its descriptor.');
+              const manifestDigest = `sha256:${createHash('sha256').update(manifestBytes).digest('hex')}`;
+              if (manifestDigest !== imageManifest.digest || manifestDigest !== expectedImageDigest) throw new Error('OCI image manifest bytes do not match build evidence.');
+              const manifest = JSON.parse(manifestBytes.toString('utf8'));
+              if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest) || manifest.schemaVersion !== 2 || manifest.mediaType !== imageManifest.mediaType) throw new Error('OCI image manifest payload is invalid.');
+              assertArchiveBinding();
+              return { archiveDigest, imageDigest: manifestDigest };
             } finally {
               fs.closeSync(descriptor);
             }
@@ -511,13 +576,11 @@ jobs:
           if (process.env.TARGET_TENANT_ID && evidence.targetTenantId !== process.env.TARGET_TENANT_ID) throw new Error('Build evidence target tenant does not match.');
           if (String(evidence.workflowRun?.id) !== process.env.GITHUB_RUN_ID || String(evidence.workflowRun?.attempt) !== process.env.GITHUB_RUN_ATTEMPT) throw new Error('Build evidence workflow run does not match.');
           if (evidence.validationSummary?.status !== 'passed') throw new Error('Build evidence validation did not pass.');
-          const archiveDigest = hashBoundedRegularFile('.eai-build/eai-generated-app-image.tar', MAX_IMAGE_ARCHIVE_BYTES);
-          if (evidence.imageArtifact?.archiveDigest !== archiveDigest) throw new Error('Downloaded image archive does not match build evidence.');
+          const archive = inspectOciArchive('.eai-build/eai-generated-app-image.tar', MAX_IMAGE_ARCHIVE_BYTES, evidence.imageDigest);
+          if (evidence.imageArtifact?.archiveDigest !== archive.archiveDigest) throw new Error('Downloaded image archive does not match build evidence.');
           if (evidence.imageArtifact?.name !== 'eai-generated-app-image' || !/^[1-9][0-9]*$/.test(String(evidence.imageArtifact?.id || ''))) throw new Error('Build evidence image artifact identity is invalid.');
           if (new Set([evidence.artifactDigest, evidence.imageArtifact.archiveDigest, evidence.imageDigest]).size !== 3) throw new Error('Build evidence digests must be independently bound.');
-          const index = JSON.parse(execFileSync('tar', ['-xOf', '.eai-build/eai-generated-app-image.tar', 'index.json'], { encoding: 'utf8', maxBuffer: 1024 * 1024 }));
-          const imageManifests = Array.isArray(index.manifests) ? index.manifests.filter((entry) => entry?.platform?.os === 'linux' && entry?.platform?.architecture === 'amd64') : [];
-          if (imageManifests.length !== 1 || imageManifests[0].digest !== evidence.imageDigest) throw new Error('Downloaded OCI image digest does not match build evidence.');
+          if (archive.imageDigest !== evidence.imageDigest) throw new Error('Downloaded OCI image digest does not match build evidence.');
 
           const repositoryParts = process.env.GITHUB_REPOSITORY.split('/');
           if (repositoryParts.length !== 2) throw new Error('GitHub repository identity is invalid.');
@@ -759,6 +822,9 @@ jobs:
               if (mode === "file") {
                 const binding = snapshotAncestors(process.env.EAI_RESPONSE_PATH || "");
                 assertAncestors(binding.ancestors);
+                if (!Number.isSafeInteger(fs.constants.O_NOFOLLOW) || fs.constants.O_NOFOLLOW <= 0) {
+                  throw new Error("No-follow deployment handoff response creation is unavailable.");
+                }
                 descriptor = fs.openSync(
                   binding.target,
                   fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW,
@@ -886,8 +952,9 @@ jobs:
           };
           const before = fs.lstatSync(responsePath);
           if (before.isSymbolicLink() || !before.isFile() || before.nlink !== 1 || !Number.isSafeInteger(before.size) || before.size < 1 || before.size > maxBytes) throw new Error('Deployment handoff response must be a bounded no-follow regular file.');
-          if (typeof fs.constants.O_NOFOLLOW !== 'number') throw new Error('No-follow response verification is unavailable.');
-          const descriptor = fs.openSync(responsePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+          if (!Number.isSafeInteger(fs.constants.O_NOFOLLOW) || fs.constants.O_NOFOLLOW <= 0) throw new Error('No-follow response verification is unavailable.');
+          if (!Number.isSafeInteger(fs.constants.O_NONBLOCK) || fs.constants.O_NONBLOCK <= 0) throw new Error('Nonblocking response verification is unavailable.');
+          const descriptor = fs.openSync(responsePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
           let bytes;
           try {
             const opened = fs.fstatSync(descriptor);

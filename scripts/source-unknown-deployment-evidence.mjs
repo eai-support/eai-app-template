@@ -48,6 +48,22 @@ const MAX_GOVERNED_CONFIG_FILES = 4096;
 const MAX_HANDOFF_RESPONSE_BYTES = 1024 * 1024;
 const BOUNDED_READ_BUFFER_BYTES = 64 * 1024;
 
+function requiredOpenFlag(name) {
+  const flag = constants[name];
+  if (!Number.isSafeInteger(flag) || flag <= 0) {
+    throw new Error(`Secure file opens require ${name} support.`);
+  }
+  return flag;
+}
+
+function noFollowOpenFlags(flags, { nonblocking = false } = {}) {
+  const noFollow = requiredOpenFlag('O_NOFOLLOW');
+  const nonblockingFlag = nonblocking
+    ? requiredOpenFlag('O_NONBLOCK')
+    : 0;
+  return flags | noFollow | nonblockingFlag;
+}
+
 function sourceMode(options) {
   const mode = option(options, 'sourceMode', 'source-unknown');
   if (!SOURCE_MODES.has(mode)) {
@@ -332,7 +348,7 @@ function copyRegularTreeNoFollow(
       );
       const sourceDescriptor = openSync(
         sourcePath,
-        constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
+        noFollowOpenFlags(constants.O_RDONLY, { nonblocking: true }),
       );
       const destinationAncestors = snapshotAbsoluteDirectoryPath(
         dirname(destinationPath),
@@ -367,10 +383,9 @@ function copyRegularTreeNoFollow(
         }
         destinationDescriptor = openSync(
           destinationPath,
-          constants.O_WRONLY |
-            constants.O_CREAT |
-            constants.O_EXCL |
-            (constants.O_NOFOLLOW || 0),
+          noFollowOpenFlags(
+            constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+          ),
           before.mode & 0o777,
         );
         const destinationOpened = fstatSync(destinationDescriptor);
@@ -476,10 +491,9 @@ function writeRegularFileNoFollow(root, path, content) {
   );
   const descriptor = openSync(
     path,
-    constants.O_WRONLY |
-      constants.O_CREAT |
-      constants.O_EXCL |
-      (constants.O_NOFOLLOW || 0),
+    noFollowOpenFlags(
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+    ),
     0o600,
   );
   try {
@@ -528,10 +542,9 @@ function writeEvidenceFileNoFollow(root, outputDir, evidencePath, content) {
 
   const descriptor = openSync(
     evidencePath,
-    constants.O_WRONLY |
-      constants.O_CREAT |
-      constants.O_EXCL |
-      (constants.O_NOFOLLOW || 0),
+    noFollowOpenFlags(
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+    ),
     0o600,
   );
   try {
@@ -631,7 +644,7 @@ function readBoundedRegularFileNoFollow(
   }
   const descriptor = openSync(
     path,
-    constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
+    noFollowOpenFlags(constants.O_RDONLY, { nonblocking: true }),
   );
   try {
     const opened = fstatSync(descriptor);
@@ -727,7 +740,7 @@ async function digestFile(
   }
   const descriptor = openSync(
     path,
-    constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
+    noFollowOpenFlags(constants.O_RDONLY, { nonblocking: true }),
   );
   try {
     const opened = fstatSync(descriptor);
@@ -849,7 +862,7 @@ function stageImageArtifact(options) {
   }
   const sourceDescriptor = openSync(
     sourcePath,
-    constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
+    noFollowOpenFlags(constants.O_RDONLY, { nonblocking: true }),
   );
   let destinationDescriptor;
   try {
@@ -872,10 +885,9 @@ function stageImageArtifact(options) {
     );
     destinationDescriptor = openSync(
       stagedPath,
-      constants.O_WRONLY |
-        constants.O_CREAT |
-        constants.O_EXCL |
-        (constants.O_NOFOLLOW || 0),
+      noFollowOpenFlags(
+        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL,
+      ),
       0o600,
     );
     const opened = fstatSync(sourceDescriptor);
@@ -1063,7 +1075,7 @@ function readRegularFileNoFollow(root, relativePath) {
   );
   const descriptor = openSync(
     path,
-    constants.O_RDONLY | (constants.O_NOFOLLOW || 0),
+    noFollowOpenFlags(constants.O_RDONLY, { nonblocking: true }),
   );
   try {
     const opened = fstatSync(descriptor);
@@ -1482,11 +1494,10 @@ function appendOutputs(path, outputs) {
   );
   const descriptor = openSync(
     boundPath,
-    constants.O_WRONLY |
-      constants.O_APPEND |
-      constants.O_CREAT |
-      constants.O_NONBLOCK |
-      (constants.O_NOFOLLOW || 0),
+    noFollowOpenFlags(
+      constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT,
+      { nonblocking: true },
+    ),
     0o600,
   );
   try {

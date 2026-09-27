@@ -549,7 +549,7 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
     handoffJob,
     /actions\/artifacts\/\$\{evidence\.imageArtifact\.id\}/,
   );
-  assert.match(handoffJob, /'tar', \['-xOf'/);
+  assert.match(handoffJob, /execFileSync\('tar', arguments_/);
   assert.doesNotMatch(workflow, /secrets\.EAI_ACCESS_TOKEN|\$EAI_ACCESS_TOKEN/);
   assert.doesNotMatch(buildJob, /GITHUB_TOKEN|NODE_AUTH_TOKEN|_authToken/);
   assert.match(handoffJob, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/);
@@ -793,32 +793,148 @@ test('handoff response writer bounds unknown-length input and creates no-follow 
   }
 });
 
-test('handoff hashes the bounded OCI archive without whole-file allocation', () => {
+test('handoff binds the bounded OCI archive and referenced manifest bytes', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   const handoffJob = workflow.slice(workflow.indexOf('  handoff:'));
-  const archiveHasher = handoffJob.slice(
-    handoffJob.indexOf('function hashBoundedRegularFile('),
+  const archiveInspector = handoffJob.slice(
+    handoffJob.indexOf('function inspectOciArchive('),
     handoffJob.indexOf('const expected = {'),
   );
 
   assert.match(handoffJob, /MAX_IMAGE_ARCHIVE_BYTES = 10 \* 1024 \* 1024 \* 1024/);
-  assert.match(archiveHasher, /fs\.constants\.O_NOFOLLOW/);
-  assert.match(archiveHasher, /before\.size > maxBytes/);
-  assert.match(archiveHasher, /Buffer\.allocUnsafe\(1024 \* 1024\)/);
-  assert.match(archiveHasher, /while \(offset < opened\.size\)/);
-  assert.match(archiveHasher, /fs\.readSync\(descriptor, buffer/);
-  assert.match(archiveHasher, /growthProbe = Buffer\.allocUnsafe\(1\)/);
+  assert.match(archiveInspector, /fs\.constants\.O_NOFOLLOW/);
+  assert.match(archiveInspector, /fs\.constants\.O_NONBLOCK/);
+  assert.match(archiveInspector, /before\.size > maxBytes/);
+  assert.match(archiveInspector, /Buffer\.allocUnsafe\(1024 \* 1024\)/);
+  assert.match(archiveInspector, /while \(offset < opened\.size\)/);
+  assert.match(archiveInspector, /fs\.readSync\(descriptor, buffer/);
+  assert.match(archiveInspector, /growthProbe = Buffer\.allocUnsafe\(1\)/);
   assert.match(
-    archiveHasher,
+    archiveInspector,
     /fs\.readSync\(descriptor, growthProbe, 0, 1, offset\)/,
   );
-  assert.match(archiveHasher, /afterDescriptor = fs\.fstatSync\(descriptor\)/);
-  assert.match(archiveHasher, /afterPath = fs\.lstatSync\(filePath\)/);
+  assert.match(archiveInspector, /stdio: \['ignore', 'pipe', 'pipe', descriptor\]/);
+  assert.match(archiveInspector, /'\/proc\/self\/fd\/3'/);
+  assert.match(archiveInspector, /timeout: TAR_TIMEOUT_MS/);
+  assert.match(archiveInspector, /maxBuffer: outputLimit \+ 1/);
+  assert.match(archiveInspector, /entries\.length !== 1/);
+  assert.match(archiveInspector, /blobs\/sha256\/\$\{imageManifest\.digest\.slice/);
+  assert.match(archiveInspector, /manifestBytes\.length !== imageManifest\.size/);
+  assert.match(archiveInspector, /createHash\('sha256'\)\.update\(manifestBytes\)/);
+  assert.match(archiveInspector, /manifestDigest !== expectedImageDigest/);
+  assert.match(archiveInspector, /assertArchiveBinding\(\)/);
   assert.doesNotMatch(
     handoffJob,
     /fs\.readFileSync\('\.eai-build\/eai-generated-app-image\.tar'/,
   );
+  assert.doesNotMatch(
+    archiveInspector,
+    /execFileSync\('tar'.*\.eai-build\/eai-generated-app-image\.tar/,
+  );
 });
+
+test(
+  'handoff verifies the actual OCI manifest blob selected by the index',
+  { skip: process.platform !== 'linux' },
+  () => {
+    const workflow = readFileSync(workflowPath, 'utf8');
+    const scriptStart = workflow.indexOf("          const { createHash } = require('node:crypto');");
+    const scriptEnd = workflow.indexOf('          const evidence = JSON.parse(', scriptStart);
+    assert.ok(scriptStart >= 0 && scriptEnd > scriptStart);
+    const definitions = workflow
+      .slice(scriptStart, scriptEnd)
+      .replace(/^ {10}/gm, '');
+    const inspectScript = `${definitions}\nconst result = inspectOciArchive(process.argv[1], MAX_IMAGE_ARCHIVE_BYTES, process.argv[2]);\nprocess.stdout.write(JSON.stringify(result));\n`;
+    const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-oci-manifest-')));
+    const mediaType = 'application/vnd.oci.image.manifest.v1+json';
+    const validManifest = Buffer.from(
+      JSON.stringify({
+        schemaVersion: 2,
+        mediaType,
+        config: {
+          mediaType: 'application/vnd.oci.image.config.v1+json',
+          digest: `sha256:${'1'.repeat(64)}`,
+          size: 2,
+        },
+        layers: [],
+      }),
+    );
+    const validDigest = `sha256:${createHash('sha256').update(validManifest).digest('hex')}`;
+
+    const createArchive = (name, blobBytes = validManifest, includeBlob = true) => {
+      const contentRoot = join(workDir, `${name}-root`);
+      const blobPath = join(
+        contentRoot,
+        'blobs/sha256',
+        validDigest.slice('sha256:'.length),
+      );
+      mkdirSync(dirname(blobPath), { recursive: true });
+      if (includeBlob) writeFileSync(blobPath, blobBytes);
+      writeFileSync(
+        join(contentRoot, 'index.json'),
+        JSON.stringify({
+          schemaVersion: 2,
+          manifests: [
+            {
+              mediaType,
+              digest: validDigest,
+              size: blobBytes.length,
+              platform: { os: 'linux', architecture: 'amd64' },
+            },
+          ],
+        }),
+      );
+      const archivePath = join(workDir, `${name}.tar`);
+      execFileSync(
+        'tar',
+        ['-cf', archivePath, '-C', contentRoot, 'index.json', 'blobs'],
+      );
+      return archivePath;
+    };
+    const inspect = (archivePath) =>
+      spawnSync(process.execPath, ['-e', inspectScript, archivePath, validDigest], {
+        encoding: 'utf8',
+      });
+
+    try {
+      const validArchive = createArchive('valid');
+      const valid = inspect(validArchive);
+      assert.equal(valid.status, 0, valid.stderr);
+      const result = JSON.parse(valid.stdout);
+      assert.equal(result.imageDigest, validDigest);
+      assert.match(result.archiveDigest, digestPattern);
+
+      const substitutedArchive = createArchive(
+        'substituted',
+        Buffer.from(validManifest.toString('utf8').replace('"layers":[]', '"layers":[{}]')),
+      );
+      const substituted = inspect(substitutedArchive);
+      assert.equal(substituted.status, 1);
+      assert.match(substituted.stderr, /manifest bytes do not match build evidence/);
+
+      const missingArchive = createArchive('missing', validManifest, false);
+      const missing = inspect(missingArchive);
+      assert.equal(missing.status, 1);
+      assert.match(missing.stderr, /Command failed: tar/);
+
+      const duplicateRoot = join(workDir, 'duplicate-root');
+      mkdirSync(duplicateRoot);
+      writeFileSync(join(duplicateRoot, 'index.json'), '{}');
+      execFileSync('tar', [
+        '-rf',
+        validArchive,
+        '-C',
+        duplicateRoot,
+        'index.json',
+      ]);
+      const duplicate = inspect(validArchive);
+      assert.equal(duplicate.status, 1);
+      assert.match(duplicate.stderr, /must be one regular archive entry/);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  },
+);
 
 test('dispatch accepts only trusted endpoints and the exact source and workflow identity', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-dispatch-validation-'));
@@ -1556,6 +1672,77 @@ test('bounded collector reads bind parent and leaf identity through the read', (
   assert.match(reader, /after\.mtimeMs !== opened\.mtimeMs/);
   assert.match(reader, /finalPath\.ino !== opened\.ino/);
   assert.match(reader, /bytes\.length !== opened\.size/);
+});
+
+test('collector requires no-follow and nonblocking open capabilities centrally', () => {
+  const implementation = readFileSync(evidenceScript, 'utf8');
+  const openCount = (implementation.match(/\bopenSync\(/g) || []).length;
+  const guardedOpenCount =
+    (implementation.match(/\bnoFollowOpenFlags\(/g) || []).length - 1;
+  assert.match(implementation, /function requiredOpenFlag\(name\)/);
+  assert.match(implementation, /Number\.isSafeInteger\(flag\) \|\| flag <= 0/);
+  assert.match(implementation, /requiredOpenFlag\('O_NOFOLLOW'\)/);
+  assert.match(implementation, /requiredOpenFlag\('O_NONBLOCK'\)/);
+  assert.equal(guardedOpenCount, openCount);
+  assert.doesNotMatch(implementation, /O_NOFOLLOW\s*(?:\|\||\?\?)/);
+  assert.doesNotMatch(implementation, /O_NONBLOCK\s*(?:\|\||\?\?)/);
+
+  const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-open-flags-')));
+  try {
+    const root = join(workDir, 'app');
+    const copiedScript = join(workDir, 'evidence.mjs');
+    const fakeFs = join(workDir, 'fake-fs.mjs');
+    writeFixtureApp(root);
+    writeFileSync(
+      fakeFs,
+      String.raw`
+import { createRequire } from 'node:module';
+const fs = createRequire(import.meta.url)('node:fs');
+const mutableConstants = { ...fs.constants };
+delete mutableConstants[process.env.EAI_TEST_MISSING_OPEN_FLAG];
+export const constants = Object.freeze(mutableConstants);
+export const closeSync = fs.closeSync;
+export const existsSync = fs.existsSync;
+export const fstatSync = fs.fstatSync;
+export const lstatSync = fs.lstatSync;
+export const mkdtempSync = fs.mkdtempSync;
+export const mkdirSync = fs.mkdirSync;
+export const readSync = fs.readSync;
+export const realpathSync = fs.realpathSync;
+export const readdirSync = fs.readdirSync;
+export const writeSync = fs.writeSync;
+export const writeFileSync = fs.writeFileSync;
+export function openSync() {
+  throw new Error('openSync must not run without required secure flags.');
+}
+`,
+    );
+    writeFileSync(
+      copiedScript,
+      implementation.replace("from 'node:fs';", "from './fake-fs.mjs';"),
+    );
+    for (const missingFlag of ['O_NOFOLLOW', 'O_NONBLOCK']) {
+      const result = spawnSync(
+        process.execPath,
+        [copiedScript, 'config-hash', '--root', root],
+        {
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            EAI_TEST_MISSING_OPEN_FLAG: missingFlag,
+          },
+        },
+      );
+      assert.equal(result.status, 1);
+      assert.match(
+        result.stderr,
+        new RegExp(`Secure file opens require ${missingFlag} support`),
+      );
+      assert.doesNotMatch(result.stderr, /openSync must not run/);
+    }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
 });
 
 test('bounded collector reads reject post-open growth and archive shrinkage', () => {
