@@ -10,6 +10,7 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  truncateSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -1201,10 +1202,19 @@ test('image metadata digest is read through a bounded no-follow path', () => {
 
 test('bounded collector reads bind parent and leaf identity through the read', () => {
   const implementation = readFileSync(evidenceScript, 'utf8');
+  const descriptorStart = implementation.indexOf(
+    'function readExactBoundedDescriptor(',
+  );
   const start = implementation.indexOf('function readBoundedRegularFileNoFollow(');
   const end = implementation.indexOf('\nfunction readImageDigest(', start);
-  assert.ok(start >= 0 && end > start);
+  assert.ok(descriptorStart >= 0 && start > descriptorStart && end > start);
+  const descriptorReader = implementation.slice(descriptorStart, start);
   const reader = implementation.slice(start, end);
+  assert.match(descriptorReader, /Buffer\.allocUnsafe\(BOUNDED_READ_BUFFER_BYTES\)/);
+  assert.match(descriptorReader, /readSync\(\s*descriptor,\s*buffer/);
+  assert.match(descriptorReader, /readSync\(descriptor, growthProbe, 0, 1, offset\)/);
+  assert.match(descriptorReader, /grew during its bounded read/);
+  assert.doesNotMatch(implementation, /readFileSync\(descriptor\)/);
   assert.match(reader, /snapshotAbsoluteDirectoryPath\(dirname\(path\), label\)/);
   assert.equal(
     (reader.match(/assertAbsoluteDirectorySnapshot\(ancestors, label\)/g) || []).length,
@@ -1214,6 +1224,113 @@ test('bounded collector reads bind parent and leaf identity through the read', (
   assert.match(reader, /after\.mtimeMs !== opened\.mtimeMs/);
   assert.match(reader, /finalPath\.ino !== opened\.ino/);
   assert.match(reader, /bytes\.length !== opened\.size/);
+});
+
+test('bounded metadata and governed configuration reads reject post-open growth', () => {
+  const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-bounded-growth-')));
+  try {
+    const root = join(workDir, 'app');
+    const preload = join(workDir, 'grow-after-open.cjs');
+    writeFixtureApp(root);
+    writeFileSync(
+      preload,
+      String.raw`
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const originalOpenSync = fs.openSync;
+const originalCloseSync = fs.closeSync;
+const originalReadSync = fs.readSync;
+const originalWriteSync = fs.writeSync;
+let targetDescriptor;
+let grew = false;
+fs.openSync = function patchedOpenSync(path, ...args) {
+  const descriptor = originalOpenSync.call(fs, path, ...args);
+  if (
+    targetDescriptor === undefined &&
+    process.env.EAI_TEST_GROW_PATH &&
+    String(path) === process.env.EAI_TEST_GROW_PATH
+  ) {
+    targetDescriptor = descriptor;
+  }
+  return descriptor;
+};
+fs.readSync = function patchedReadSync(descriptor, ...args) {
+  if (!grew && descriptor === targetDescriptor) {
+    grew = true;
+    const writer = originalOpenSync.call(
+      fs,
+      process.env.EAI_TEST_GROW_PATH,
+      fs.constants.O_WRONLY | fs.constants.O_APPEND,
+    );
+    try {
+      originalWriteSync.call(fs, writer, Buffer.from('x'));
+    } finally {
+      originalCloseSync.call(fs, writer);
+    }
+  }
+  return originalReadSync.call(fs, descriptor, ...args);
+};
+syncBuiltinESMExports();
+`,
+    );
+
+    const metadataPath = join(root, '.eai-build/image-metadata.json');
+    writeFileSync(
+      metadataPath,
+      JSON.stringify({ 'containerimage.digest': `sha256:${'a'.repeat(64)}` }),
+    );
+    const metadata = spawnSync(
+      process.execPath,
+      [evidenceScript, 'read-image-digest', '--root', root],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_GROW_PATH: metadataPath,
+        },
+      },
+    );
+    assert.equal(metadata.status, 1);
+    assert.match(metadata.stderr, /grew during its bounded read/);
+
+    const configPath = join(root, 'eai.runtime.json');
+    const config = spawnSync(
+      process.execPath,
+      [evidenceScript, 'config-hash', '--root', root],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_GROW_PATH: configPath,
+        },
+      },
+    );
+    assert.equal(config.status, 1);
+    assert.match(config.stderr, /grew during its bounded read/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('governed configuration reads enforce the explicit per-file cap', () => {
+  const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-config-cap-')));
+  try {
+    const root = join(workDir, 'app');
+    const target = join(root, 'eai.runtime.json');
+    writeFixtureApp(root);
+    truncateSync(target, 10 * 1024 * 1024 + 1);
+    const result = spawnSync(
+      process.execPath,
+      [evidenceScript, 'config-hash', '--root', root],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /bounded regular file/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
 });
 
 test('configuration hashing repeats inventory and binds each post-read path', () => {
@@ -1239,6 +1356,8 @@ test('configuration hashing repeats inventory and binds each post-read path', ()
   assert.match(reader, /finalPath\.mtimeMs !== opened\.mtimeMs/);
   assert.match(reader, /finalPath\.ctimeMs !== opened\.ctimeMs/);
   assert.match(reader, /bytes\.length !== opened\.size/);
+  assert.match(reader, /MAX_GOVERNED_CONFIG_FILE_BYTES/);
+  assert.match(reader, /readExactBoundedDescriptor\(/);
 });
 
 test('configuration hashing rejects an in-place rewrite before no-follow open', () => {
