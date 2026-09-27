@@ -20,3 +20,5 @@
 18. Read downloaded build evidence through a bounded no-follow descriptor and cap every GitHub provenance response before parsing or retaining bytes, including exact-source files, commit/tree/blob metadata, artifact metadata, and the OIDC token response.
 19. Preserve the historical reusable-call schema by deriving the exact governed configuration digest when `workflow_call` omits `config_hash`, while keeping the direct dispatch input required and rejecting any supplied mismatch before application work.
 20. Replace the OIDC token command-substitution response buffer with an actual-stream byte counter so unknown-length and chunked responses cannot bypass the 1 MiB cap.
+21. Verify the actual bounded OCI manifest blob bytes selected by the archive index before OIDC, and reject descriptor-only digest agreement.
+22. Route every collector no-follow open through one fail-closed capability helper and prove the flag cannot silently degrade to zero.

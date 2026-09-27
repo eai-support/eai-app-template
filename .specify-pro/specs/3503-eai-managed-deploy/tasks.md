@@ -51,6 +51,8 @@
 - [x] Bound downloaded evidence, exact-source bytes, GitHub metadata bodies, and the OIDC token response before parsing or retention, without narrowing the governed-file contract (DTE-025).
 - [x] Keep `workflow_call.config_hash` optional, derive the exact checked-out digest when absent, and carry one validated value through build evidence and isolated handoff (DTE-026).
 - [x] Enforce both OIDC and handoff response limits against bytes actually read when `Content-Length` is absent or false, and create the handoff response through a new no-follow descriptor (DTE-025).
+- [ ] Hash the exact bounded OCI manifest blob referenced by the Linux/amd64 archive index and bind it to evidence before OIDC (DTE-025).
+- [ ] Replace every collector `O_NOFOLLOW` fallback with one shared fail-closed capability guard and add regression evidence (DTE-022, DTE-025).
 
 ## Exact-head evidence
 

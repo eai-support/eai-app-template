@@ -91,3 +91,9 @@ Do not restore `EAI_ACCESS_TOKEN` or `EAI_PUBLIC_API_URL` as runtime authorities
 ## Bounded archive verification
 
 The OCI archive may be as large as 10 GiB. The isolated handoff must not materialize it in one `Buffer`. Open it without following the leaf, prove a nonempty bounded regular file, hash it through a fixed-size buffer, and revalidate the descriptor and path identity plus size and timestamps after the final read.
+
+The archive index is routing metadata rather than digest proof. Require exactly one Linux/amd64 descriptor with a canonical lowercase SHA-256 digest, derive the fixed `blobs/sha256/<hex>` member name only from that digest, extract that member through a capped subprocess stream, and hash its actual bytes. The computed digest must match both the descriptor and the evidence before OIDC authority is requested.
+
+## No-follow capability
+
+No collector operation may translate an unavailable `O_NOFOLLOW` constant to zero. A shared flag helper accepts only a nonzero integer capability and combines it with the requested open flags. Every collector read, copy, create, staging, evidence, configuration, and GitHub command-file open uses that helper and fails before path access when the runtime cannot provide no-follow semantics.
