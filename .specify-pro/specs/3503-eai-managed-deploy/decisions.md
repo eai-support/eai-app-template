@@ -68,6 +68,12 @@ Keep the successful readiness payload unchanged. The application does not accept
 
 Retain `workflow_call` for compatibility only when a same-repository caller was itself started by `workflow_dispatch` at the exact source ref. Reject other caller events before checkout or application-controlled work. Direct CLI `workflow_dispatch` remains the canonical path.
 
+GitHub documents that a called workflow's `github` context is associated with its caller, and its reusable-workflow OIDC example retains the caller's `event_name`. The early `github.event_name` gate therefore checks the caller trigger; it does not see a synthetic `workflow_call` value. PublicAPI still rechecks the signed token claim. See https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#github-context and https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-with-reusable-workflows#how-the-token-works-with-reusable-workflows.
+
 The workflow cannot safely establish the reusable callee identity from ordinary runner environment variables. PublicAPI therefore verifies the signed GitHub OIDC claims. A direct dispatch must have no `job_workflow_ref` or `job_workflow_sha`. A reusable invocation must have both: the caller `workflow_ref` names a safe workflow path in the source repository and ref, while `job_workflow_ref` names that repository's canonical `.github/workflows/eai-app.yml` at the same ref. `job_workflow_sha`, the token `sha`, and the submitted source commit must be the same lowercase 40-hex value. Partial, malformed, cross-repository, and cross-ref claim sets fail.
 
 Do not restore `EAI_ACCESS_TOKEN` or `EAI_PUBLIC_API_URL` as runtime authorities. Their optional declarations remain only as input compatibility markers and are unused. A reusable caller must grant `contents: read`, `packages: read`, `actions: read`, `attestations: write`, and `id-token: write`; GitHub does not let a called workflow elevate the caller's permissions.
+
+## Bounded archive verification
+
+The OCI archive may be as large as 10 GiB. The isolated handoff must not materialize it in one `Buffer`. Open it without following the leaf, prove a nonempty bounded regular file, hash it through a fixed-size buffer, and revalidate the descriptor and path identity plus size and timestamps after the final read.

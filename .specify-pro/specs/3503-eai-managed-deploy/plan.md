@@ -12,3 +12,4 @@
 10. Revalidate the bound GitHub output descriptor, exact leaf path, and complete parent chain after each trusted append, with a deterministic replacement-race regression.
 11. Reapply canonical runtime provenance validation in the isolated OIDC handoff, create generated files exclusively, and bind governed-file size and timestamps before every read.
 12. Retain same-repository reusable workflow compatibility for manually dispatched callers, reject unsupported caller events before source checkout, and rely on PublicAPI's signed caller/callee OIDC claim binding without restoring a long-lived token.
+13. Replace whole-file archive hashing in the isolated handoff with a bounded fixed-buffer no-follow read that revalidates the opened file identity.
