@@ -511,6 +511,19 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /\/git\/blobs\/\$\{entry\.sha\}/);
   assert.match(handoffJob, /Math\.min\(8, sortedEntries\.length\)/);
   assert.match(handoffJob, /blobs\[index\] = \{ path: entry\.path, bytes \}/);
+  assert.match(
+    handoffJob,
+    /MAX_GOVERNED_CONFIG_FILE_BYTES = 10 \* 1024 \* 1024/,
+  );
+  assert.match(
+    handoffJob,
+    /MAX_GOVERNED_CONFIG_TOTAL_BYTES = 32 \* 1024 \* 1024/,
+  );
+  assert.match(handoffJob, /MAX_GOVERNED_CONFIG_FILES = 4096/);
+  assert.match(handoffJob, /entry\.size > MAX_GOVERNED_CONFIG_FILE_BYTES/);
+  assert.match(handoffJob, /entries\.length >= MAX_GOVERNED_CONFIG_FILES/);
+  assert.match(handoffJob, /totalBytes > MAX_GOVERNED_CONFIG_TOTAL_BYTES/);
+  assert.doesNotMatch(handoffJob, /entry\.size > 4 \* 1024 \* 1024/);
   assert.doesNotMatch(handoffJob, /Promise\.all\(entries\.sort/);
   assert.match(handoffJob, /src\/eai\.config\/object-types\.provisioning\.json/);
   assert.match(handoffJob, /canonicalConfigHash !== process\.env\.CONFIG_HASH/);
@@ -1159,9 +1172,149 @@ test('image-tree copies bind each source ancestor and final path through the rea
     2,
   );
   assert.match(copy, /sourceRebound\.ino !== opened\.ino/);
+  assert.match(copy, /opened\.mtimeMs !== before\.mtimeMs/);
+  assert.match(copy, /opened\.ctimeMs !== before\.ctimeMs/);
+  assert.match(copy, /sourceRebound\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(copy, /sourceRebound\.ctimeMs !== opened\.ctimeMs/);
   assert.match(copy, /sourcePathAfter\.ino !== opened\.ino/);
+  assert.match(copy, /sourcePathAfter\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(copy, /sourcePathAfter\.ctimeMs !== opened\.ctimeMs/);
   assert.match(copy, /after\.mtimeMs !== opened\.mtimeMs/);
   assert.match(copy, /realpathSync\(sourcePath\)/);
+});
+
+test('image tree and archive staging reject same-size rewrites before open', () => {
+  const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-copy-pre-open-')));
+  try {
+    const preload = join(workDir, 'rewrite-source-before-open.cjs');
+    writeFileSync(
+      preload,
+      String.raw`
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const originalOpenSync = fs.openSync;
+const originalCloseSync = fs.closeSync;
+const originalWriteSync = fs.writeSync;
+let rewritten = false;
+fs.openSync = function patchedOpenSync(path, ...args) {
+  const target = process.env.EAI_TEST_SOURCE_REWRITE_PATH;
+  if (!rewritten && target && String(path) === target) {
+    rewritten = true;
+    const length = fs.readFileSync(target).length;
+    const writer = originalOpenSync.call(
+      fs,
+      target,
+      fs.constants.O_WRONLY | fs.constants.O_TRUNC,
+    );
+    try {
+      originalWriteSync.call(fs, writer, Buffer.alloc(length, 0x78));
+    } finally {
+      originalCloseSync.call(fs, writer);
+    }
+    const future = new Date(Date.now() + 60_000);
+    fs.utimesSync(target, future, future);
+  }
+  return originalOpenSync.call(fs, path, ...args);
+};
+syncBuiltinESMExports();
+`,
+    );
+
+    const treeRoot = join(workDir, 'tree-app');
+    writeFixtureApp(treeRoot);
+    const treeTarget = join(treeRoot, '.next/standalone/server.js');
+    const treeResult = spawnSync(
+      process.execPath,
+      [evidenceScript, 'prepare-image-context', '--root', treeRoot],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_SOURCE_REWRITE_PATH: treeTarget,
+        },
+      },
+    );
+    assert.equal(treeResult.status, 1);
+    assert.match(treeResult.stderr, /changed before its no-follow copy/);
+
+    const archiveRoot = join(workDir, 'archive-app');
+    const stagingRoot = join(workDir, 'runner-temp');
+    writeFixtureApp(archiveRoot);
+    mkdirSync(stagingRoot);
+    const archiveTarget = join(
+      archiveRoot,
+      '.eai-build/eai-generated-app-image.tar',
+    );
+    const archiveResult = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        'stage-image-artifact',
+        '--root',
+        archiveRoot,
+        '--staging-root',
+        stagingRoot,
+      ],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_SOURCE_REWRITE_PATH: archiveTarget,
+        },
+      },
+    );
+    assert.equal(archiveResult.status, 1);
+    assert.match(archiveResult.stderr, /changed before staging/);
+
+    const digestRoot = join(workDir, 'digest-app');
+    writeFixtureApp(digestRoot);
+    const digestTarget = join(
+      digestRoot,
+      '.eai-build/eai-generated-app-image.tar',
+    );
+    const digestResult = spawnSync(
+      process.execPath,
+      [evidenceScript, ...sourceUnknownCollectArgs(digestRoot)],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_SOURCE_REWRITE_PATH: digestTarget,
+        },
+      },
+    );
+    assert.equal(digestResult.status, 1);
+    assert.match(digestResult.stderr, /changed before its bounded digest/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('archive staging binds source timestamps from pre-open through final path', () => {
+  const implementation = readFileSync(evidenceScript, 'utf8');
+  const digestStart = implementation.indexOf('async function digestFile(');
+  const start = implementation.indexOf('function stageImageArtifact(');
+  const end = implementation.indexOf('\nfunction digestFiles(', start);
+  assert.ok(digestStart >= 0 && start > digestStart && end > start);
+  const digest = implementation.slice(digestStart, start);
+  const staging = implementation.slice(start, end);
+  for (const reader of [digest, staging]) {
+    assert.match(reader, /opened\.mtimeMs !== before\.mtimeMs/);
+    assert.match(reader, /opened\.ctimeMs !== before\.ctimeMs/);
+  }
+  assert.match(digest, /rebound\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(digest, /rebound\.ctimeMs !== opened\.ctimeMs/);
+  assert.match(digest, /finalPath\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(digest, /finalPath\.ctimeMs !== opened\.ctimeMs/);
+  assert.match(staging, /opened\.mtimeMs !== before\.mtimeMs/);
+  assert.match(staging, /opened\.ctimeMs !== before\.ctimeMs/);
+  assert.match(staging, /sourceRebound\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(staging, /sourceRebound\.ctimeMs !== opened\.ctimeMs/);
+  assert.match(staging, /sourcePathAfter\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(staging, /sourcePathAfter\.ctimeMs !== opened\.ctimeMs/);
 });
 
 test('image metadata digest is read through a bounded no-follow path', () => {
@@ -1333,6 +1486,35 @@ test('governed configuration reads enforce the explicit per-file cap', () => {
   }
 });
 
+test('governed configuration accepts 4-10 MiB files and enforces the shared total cap', () => {
+  const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-config-bounds-')));
+  try {
+    const acceptedRoot = join(workDir, 'accepted');
+    writeFixtureApp(acceptedRoot);
+    const accepted = join(acceptedRoot, 'src/eai.config/large.config.ts');
+    writeFileSync(accepted, 'x');
+    truncateSync(accepted, 5 * 1024 * 1024);
+    assert.match(configHash(acceptedRoot), digestPattern);
+
+    const oversizedRoot = join(workDir, 'oversized');
+    writeFixtureApp(oversizedRoot);
+    for (let index = 0; index < 4; index += 1) {
+      const path = join(oversizedRoot, `src/eai.config/large-${index}.ts`);
+      writeFileSync(path, 'x');
+      truncateSync(path, 9 * 1024 * 1024);
+    }
+    const result = spawnSync(
+      process.execPath,
+      [evidenceScript, 'config-hash', '--root', oversizedRoot],
+      { encoding: 'utf8' },
+    );
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /manifest exceeds its byte limit/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test('configuration hashing repeats inventory and binds each post-read path', () => {
   const implementation = readFileSync(evidenceScript, 'utf8');
   const hashStart = implementation.indexOf('function buildConfigHash(');
@@ -1358,6 +1540,11 @@ test('configuration hashing repeats inventory and binds each post-read path', ()
   assert.match(reader, /bytes\.length !== opened\.size/);
   assert.match(reader, /MAX_GOVERNED_CONFIG_FILE_BYTES/);
   assert.match(reader, /readExactBoundedDescriptor\(/);
+  assert.match(implementation, /paths\.length > MAX_GOVERNED_CONFIG_FILES/);
+  assert.match(
+    implementation,
+    /totalBytes > MAX_GOVERNED_CONFIG_TOTAL_BYTES/,
+  );
 });
 
 test('configuration hashing rejects an in-place rewrite before no-follow open', () => {
