@@ -46,6 +46,7 @@
 - [x] Replace every collector descriptor-wide read with a fixed-size capped loop that rejects post-open growth before allocating beyond the opened snapshot (DTE-018, DTE-025).
 - [x] Bind all generated-tree and archive-copy sources to pre-open size, mtime, and ctime through their final path checks (DTE-022, DTE-025).
 - [x] Align collector and handoff governed-manifest limits at 10 MiB per file, 32 MiB total, and 4,096 files, including a valid 4–10 MiB regression (DTE-018, DTE-025).
+- [ ] Replace the staged-archive digest EOF stream with a fixed-buffer opened-size loop and post-bound growth probe, then sweep all collector reads for an explicit bound (DTE-022, DTE-025).
 
 ## Exact-head evidence
 

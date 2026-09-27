@@ -15,3 +15,4 @@
 13. Replace whole-file archive hashing in the isolated handoff with a bounded fixed-buffer no-follow read that revalidates the opened file identity.
 14. Read collector metadata and governed configuration only through fixed-size descriptor loops capped by an explicit per-file limit, and reject growth beyond the opened snapshot before allocating more memory.
 15. Bind copied generated-tree and archive sources to pre-open size, modification time, and change time, and use the same 10 MiB per-file, 32 MiB total, and 4,096-file governed-manifest limits in collector and isolated handoff.
+16. Hash the collector's staged archive only through its opened size with a fixed buffer and one-byte growth probe; no collector stream or descriptor read may continue to EOF without an explicit bound.

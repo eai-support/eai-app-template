@@ -60,6 +60,8 @@ The source pre-open snapshot is authoritative for every generated-tree and archi
 
 The collector and isolated handoff use one governed-manifest budget: at most 10 MiB for one file, 32 MiB in total, and 4,096 included files after the two generated-output exclusions. A file between 4 MiB and 10 MiB remains valid in both implementations.
 
+The collector's archive digest reads exactly the opened snapshot through a fixed buffer and then probes one byte beyond that boundary. Growth after open fails immediately without hashing appended bytes or streaming toward an attacker-controlled EOF; premature EOF also fails before evidence is accepted.
+
 The upload action never reads the application-controlled build path directly. A trusted collector command creates a random directory beneath `RUNNER_TEMP`, copies the archive once through bounded no-follow source and exclusive destination descriptors, records its raw digest, and exposes only that staged path to upload and later evidence collection.
 
 The short-lived GitHub OIDC token remains inside one request-and-submit shell step. It is masked and sent directly to the allowlisted PublicAPI endpoint; it is never serialized through `$GITHUB_OUTPUT` or another mutable command file.
