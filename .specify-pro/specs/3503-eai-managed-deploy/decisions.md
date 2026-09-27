@@ -62,6 +62,8 @@ The collector and isolated handoff use one governed-manifest budget: at most 10 
 
 The collector's archive digest reads exactly the opened snapshot through a fixed buffer and then probes one byte beyond that boundary. Growth after open fails immediately without hashing appended bytes or streaming toward an attacker-controlled EOF; premature EOF also fails before evidence is accepted.
 
+The handoff response is bounded twice: `curl` stops after 1 MiB, and the acceptance command reopens the response without following the leaf and reads only the bound descriptor snapshot. Status parsing therefore cannot turn a large or linked response path into an unbounded allocation.
+
 The upload action never reads the application-controlled build path directly. A trusted collector command creates a random directory beneath `RUNNER_TEMP`, copies the archive once through bounded no-follow source and exclusive destination descriptors, records its raw digest, and exposes only that staged path to upload and later evidence collection.
 
 The short-lived GitHub OIDC token remains inside one request-and-submit shell step. It is masked and sent directly to the allowlisted PublicAPI endpoint; it is never serialized through `$GITHUB_OUTPUT` or another mutable command file.
