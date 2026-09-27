@@ -53,20 +53,21 @@
 - [x] Enforce both OIDC and handoff response limits against bytes actually read when `Content-Length` is absent or false, and create the handoff response through a new no-follow descriptor (DTE-025).
 - [x] Hash the exact bounded OCI manifest blob referenced by the Linux/amd64 archive index and bind it to evidence before OIDC (DTE-025).
 - [x] Replace every collector `O_NOFOLLOW` fallback with one shared fail-closed capability guard and add regression evidence (DTE-022, DTE-025).
-- [ ] Restore Windows `config-hash` through a command-scoped validated read fallback and prove deployment commands still fail closed (DTE-018, DTE-022).
-- [ ] Validate the OCI layout plus bounded configuration and layer descriptors, then stream every unique referenced blob through exact member/validator count, type, path, size, and digest checks with matching-digest malformed, missing, regular/nonregular duplicate, and substituted regressions; keep the compact 1,024-layer authority table below Linux's per-string execution bound (DTE-025).
+- [x] Restore Windows `config-hash` through a command-scoped validated read fallback and prove deployment commands still fail closed (DTE-018, DTE-022).
+- [x] Validate the OCI layout plus bounded configuration and layer descriptors, then stream every unique referenced blob through exact member/validator count, type, path, size, and digest checks with matching-digest malformed, missing, regular/nonregular duplicate, and substituted regressions; keep the compact 1,024-layer authority table below Linux's per-string execution bound (DTE-025).
+- [ ] Derive the OCI validator output cap from the full configuration-plus-1,024-layer record set and prove the accepted maximum cannot overflow it (DTE-025).
 
 ## Exact-head evidence
 
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (54 passed on Linux exact-head CI; 53 passed and the Linux-only inherited-descriptor case skipped on macOS)
+- `npm run test:source-unknown-evidence` (54 passed and the Linux-only OCI archive case skipped on macOS; Linux exact-head CI must pass all 55 before thread closure)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (330 passed)
 - `npm run typecheck`
 - `npm run build`
 - `actionlint .github/workflows/eai-app.yml`
-- Exact source evidence tests cover Git tree/blob configuration recomputation with aligned manifest and transfer bounds, actual-byte-capped OIDC and handoff response streams, fixed-buffer local reads and archive hashing with growth probes, one held archive descriptor for bounded OCI index and manifest extraction, exact manifest size/content-digest/schema/media-type verification, a shared fail-closed no-follow/nonblocking collector-open guard, pre-open size/time binding for every read and source copy, clean checkout-free inline handoff response parsing, exclusive generated-output creation, source/output ancestor binding including post-append command-file replacement, canonical handoff provenance validation, runner-temporary artifact staging, step-local OIDC submission, optional reusable-call configuration derivation, and pre-checkout reusable-caller gating without a legacy token; workflow digest `sha256:db7e133312408221d5fcaa93e965480ac686e04e76131507577ddac421a91a30`, workflow Git blob `59a96bc0547e3084da578f5d4ba96b2b3c9f309e`, collector digest `sha256:3d4134a56a5ea64615e1476ff0f35eb7e795f54738311c0d394ed6c23782d62e`.
+- Exact source evidence tests cover Git tree/blob configuration recomputation with aligned manifest and transfer bounds, actual-byte-capped OIDC and handoff response streams, fixed-buffer local reads and archive hashing with growth probes, one held archive descriptor for bounded OCI layout/index/manifest extraction and streaming verification of every referenced configuration/layer blob, exact manifest and descriptor size/content-digest/schema/media-family verification, mixed regular/nonregular duplicate rejection, a compact full-count authority table below Linux's per-string execution bound, a shared fail-closed no-follow/nonblocking deployment-open guard, the isolated Windows local configuration-hash fallback, pre-open size/time binding for every read and source copy, clean checkout-free inline handoff response parsing, exclusive generated-output creation, source/output ancestor binding including post-append command-file replacement, canonical handoff provenance validation, runner-temporary artifact staging, step-local OIDC submission, optional reusable-call configuration derivation, and pre-checkout reusable-caller gating without a legacy token; workflow digest `sha256:e5d98705d85214237e87687075e800a6f806cd46b92d3faf0639e52d1a32caec`, workflow Git blob `67fb0ab41d1d8df1e7597bab20b7800677f83360`, collector digest `sha256:f9efd12a79bb976ff1c76403c430cdc278c2d46b486761be7aba03b6c7d59fa5`.
 - Readiness-focused route/runtime/contract tests passed 24/24, including exact, missing, changed, blank, noncanonical, and unconfigured deployment identity cases.
