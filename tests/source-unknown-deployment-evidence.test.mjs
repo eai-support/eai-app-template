@@ -513,7 +513,22 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /src\/eai\.config\/object-types\.provisioning\.json/);
   assert.match(handoffJob, /canonicalConfigHash !== process\.env\.CONFIG_HASH/);
   assert.match(handoffJob, /canonicalConfigHash !== evidence\.configHash/);
-  assert.match(handoffJob, /runtime\.schemaProvenance/);
+  assert.match(handoffJob, /function validateSchemaProvenance\(provenance\)/);
+  assert.match(handoffJob, /Array\.isArray\(provenance\)/);
+  assert.match(handoffJob, /Object\.keys\(provenance\).*canonicalFields\.has\(key\)/);
+  assert.match(handoffJob, /\^sha256:\[a-f0-9\]\{64\}\$/);
+  assert.match(handoffJob, /\^\[a-f0-9\]\{40\}\$/);
+  assert.match(handoffJob, /provenance\.templateVersion\.trim\(\) !== provenance\.templateVersion/);
+  assert.match(handoffJob, /\[\\r\\n\]\/\.test\(value\)/);
+  assert.match(handoffJob, /anchors\.some\(\(\[, value\]\) => value !== undefined\)/);
+  assert.match(
+    handoffJob,
+    /const sourceProvenance = validateSchemaProvenance\(runtime\.schemaProvenance\)/,
+  );
+  assert.match(
+    handoffJob,
+    /isDeepStrictEqual\(evidence\.schemaProvenance, sourceProvenance\)/,
+  );
   assert.match(
     handoffJob,
     /actions\/artifacts\/\$\{evidence\.imageArtifact\.id\}/,
@@ -1014,6 +1029,61 @@ test('image preparation rejects preexisting isolated outputs without deleting th
   }
 });
 
+test('image preparation never truncates a hard-linked generated output', () => {
+  const workDir = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-hard-linked-image-output-')),
+  );
+  try {
+    const root = join(workDir, 'app');
+    const protectedPath = join(workDir, 'protected.txt');
+    const dockerfilePath = join(
+      root,
+      '.eai-build/image-context/Dockerfile',
+    );
+    const preload = join(workDir, 'hard-link-image-output.cjs');
+    writeFixtureApp(root);
+    writeFileSync(protectedPath, 'protected bytes\n');
+    writeFileSync(
+      preload,
+      String.raw`
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const originalOpenSync = fs.openSync;
+let linked = false;
+fs.openSync = function patchedOpenSync(path, ...args) {
+  const target = process.env.EAI_TEST_IMAGE_OUTPUT_PATH;
+  if (!linked && target && String(path) === target) {
+    linked = true;
+    fs.linkSync(process.env.EAI_TEST_PROTECTED_PATH, target);
+  }
+  return originalOpenSync.call(fs, path, ...args);
+};
+syncBuiltinESMExports();
+`,
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [evidenceScript, 'prepare-image-context', '--root', root],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_IMAGE_OUTPUT_PATH: dockerfilePath,
+          EAI_TEST_PROTECTED_PATH: protectedPath,
+        },
+      },
+    );
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /EEXIST|file already exists/);
+    assert.equal(readFileSync(protectedPath, 'utf8'), 'protected bytes\n');
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test('collector error paths do not unlink a copy destination after parent validation fails', () => {
   const implementation = readFileSync(evidenceScript, 'utf8');
   const copyStart = implementation.indexOf('function copyRegularTreeNoFollow(');
@@ -1108,9 +1178,78 @@ test('configuration hashing repeats inventory and binds each post-read path', ()
   assert.match(hash, /paths\.some\(\(path, index\) => path !== finalPaths\[index\]\)/);
   assert.match(reader, /assertRelativeDirectorySnapshot\(ancestors, relativePath\)/);
   assert.match(reader, /finalPath\.ino !== opened\.ino/);
+  assert.match(reader, /opened\.size !== before\.size/);
+  assert.match(reader, /opened\.mtimeMs !== before\.mtimeMs/);
+  assert.match(reader, /opened\.ctimeMs !== before\.ctimeMs/);
+  assert.match(reader, /rebound\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(reader, /rebound\.ctimeMs !== opened\.ctimeMs/);
   assert.match(reader, /after\.mtimeMs !== opened\.mtimeMs/);
   assert.match(reader, /after\.ctimeMs !== opened\.ctimeMs/);
+  assert.match(reader, /finalPath\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(reader, /finalPath\.ctimeMs !== opened\.ctimeMs/);
   assert.match(reader, /bytes\.length !== opened\.size/);
+});
+
+test('configuration hashing rejects an in-place rewrite before no-follow open', () => {
+  const workDir = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-config-pre-open-rewrite-')),
+  );
+  try {
+    const root = join(workDir, 'app');
+    const target = join(root, 'eai.runtime.json');
+    const preload = join(workDir, 'rewrite-config-before-open.cjs');
+    writeFixtureApp(root);
+    writeFileSync(
+      preload,
+      String.raw`
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const originalOpenSync = fs.openSync;
+const originalCloseSync = fs.closeSync;
+const originalWriteSync = fs.writeSync;
+let rewritten = false;
+fs.openSync = function patchedOpenSync(path, ...args) {
+  const target = process.env.EAI_TEST_CONFIG_REWRITE_PATH;
+  if (!rewritten && target && String(path) === target) {
+    rewritten = true;
+    const length = fs.readFileSync(target).length;
+    const writer = originalOpenSync.call(
+      fs,
+      target,
+      fs.constants.O_WRONLY | fs.constants.O_TRUNC,
+    );
+    try {
+      originalWriteSync.call(fs, writer, Buffer.alloc(length, 0x78));
+    } finally {
+      originalCloseSync.call(fs, writer);
+    }
+    const future = new Date(Date.now() + 60_000);
+    fs.utimesSync(target, future, future);
+  }
+  return originalOpenSync.call(fs, path, ...args);
+};
+syncBuiltinESMExports();
+`,
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [evidenceScript, 'config-hash', '--root', root],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_CONFIG_REWRITE_PATH: target,
+        },
+      },
+    );
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /changed before its no-follow read/);
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
 });
 
 test('schema provenance must be present in the governed runtime manifest', () => {
@@ -1393,6 +1532,75 @@ test('collect rejects a linked GitHub output command-file ancestor', () => {
     assert.equal(
       readFileSync(join(protectedDirectory, 'marker.txt'), 'utf8'),
       'protected\n',
+    );
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('collect rejects a GitHub output command file replaced after append', () => {
+  const workDir = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-replaced-github-output-after-append-')),
+  );
+  try {
+    const root = join(workDir, 'app');
+    const githubOutput = join(workDir, 'github-output.txt');
+    const preload = join(workDir, 'replace-command-file.cjs');
+    writeFixtureApp(root);
+    writeFileSync(githubOutput, 'trusted=before\n');
+    writeFileSync(
+      preload,
+      String.raw`
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const originalWriteSync = fs.writeSync;
+let replaced = false;
+fs.writeSync = function patchedWriteSync(descriptor, ...args) {
+  const result = originalWriteSync.call(fs, descriptor, ...args);
+  const target = process.env.EAI_TEST_GITHUB_OUTPUT_SWAP_PATH;
+  if (!replaced && target) {
+    try {
+      const opened = fs.fstatSync(descriptor);
+      const leaf = fs.lstatSync(target);
+      if (opened.dev === leaf.dev && opened.ino === leaf.ino) {
+        replaced = true;
+        fs.renameSync(target, target + '.bound');
+        fs.writeFileSync(target, 'attacker=value\n');
+      }
+    } catch (error) {
+      if (!error || error.code !== 'ENOENT') throw error;
+    }
+  }
+  return result;
+};
+syncBuiltinESMExports();
+`,
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        ...sourceUnknownCollectArgs(root),
+        '--github-output',
+        githubOutput,
+      ],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_GITHUB_OUTPUT_SWAP_PATH: githubOutput,
+        },
+      },
+    );
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /path changed during append/);
+    assert.equal(readFileSync(githubOutput, 'utf8'), 'attacker=value\n');
+    assert.match(
+      readFileSync(`${githubOutput}.bound`, 'utf8'),
+      /artifact_digest=sha256:/,
     );
   } finally {
     rmSync(workDir, { recursive: true, force: true });
