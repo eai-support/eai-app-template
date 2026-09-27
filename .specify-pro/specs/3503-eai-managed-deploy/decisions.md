@@ -49,3 +49,9 @@ Image-tree copying treats each source file's complete ancestor chain and contain
 The upload action never reads the application-controlled build path directly. A trusted collector command creates a random directory beneath `RUNNER_TEMP`, copies the archive once through bounded no-follow source and exclusive destination descriptors, records its raw digest, and exposes only that staged path to upload and later evidence collection.
 
 The short-lived GitHub OIDC token remains inside one request-and-submit shell step. It is masked and sent directly to the allowlisted PublicAPI endpoint; it is never serialized through `$GITHUB_OUTPUT` or another mutable command file.
+
+## Deployment-bound readiness
+
+TenantInfra injects the server-only `EAI_DEPLOYMENT_ID` for the active deployment and sends the same value in `X-EAI-Deployment-Id` on its authenticated readiness probe. The application readiness route treats a missing runtime value as incomplete configuration and rejects a missing or unequal header as `tenant_assignment_invalid`, alongside the existing tenant, app, environment, and configuration bindings.
+
+Keep the successful readiness payload unchanged. The application does not accept or report operation or source authority; TenantInfra creates the durable operation-bound doctor evidence only after the complete authenticated readiness tuple matches.

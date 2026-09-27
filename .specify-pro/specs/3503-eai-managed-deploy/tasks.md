@@ -36,6 +36,7 @@
 - [x] Bind every image-tree source ancestor and final path through the copy (DTE-022).
 - [x] Stage the OCI archive through bounded descriptors before artifact upload (DTE-022, DTE-025).
 - [x] Keep the minted OIDC token within the request-and-submit step (DTE-025).
+- [ ] Require the exact TenantInfra deployment identity in runtime configuration and every authenticated readiness probe (DTE-036, DTE-074).
 
 ## Exact-head evidence
 
