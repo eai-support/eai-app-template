@@ -60,6 +60,7 @@
 - [x] Bind copied, generated, and evidence destination files to exact final byte length and single-link descriptor/path identity (DTE-022, DTE-025).
 - [x] Reject empty or malformed direct-dispatch `commit_sha` before checkout while preserving reusable caller-SHA compatibility (DTE-026).
 - [x] Prove GitHub REST artifact digests remain canonical `sha256:<hex>` values and retain the exact comparison (DTE-025).
+- [ ] Validate and encode the canonical positive safe-integer artifact ID before any GitHub provenance request (DTE-025).
 
 ## Exact-head evidence
 
