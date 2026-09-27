@@ -53,6 +53,8 @@
 - [x] Enforce both OIDC and handoff response limits against bytes actually read when `Content-Length` is absent or false, and create the handoff response through a new no-follow descriptor (DTE-025).
 - [x] Hash the exact bounded OCI manifest blob referenced by the Linux/amd64 archive index and bind it to evidence before OIDC (DTE-025).
 - [x] Replace every collector `O_NOFOLLOW` fallback with one shared fail-closed capability guard and add regression evidence (DTE-022, DTE-025).
+- [ ] Restore Windows `config-hash` through a command-scoped validated read fallback and prove deployment commands still fail closed (DTE-018, DTE-022).
+- [ ] Validate the OCI layout plus bounded configuration and layer descriptors, then stream every unique referenced blob through exact type/path/size/digest checks with matching-digest malformed, missing, duplicate, and substituted regressions (DTE-025).
 
 ## Exact-head evidence
 

@@ -22,3 +22,5 @@
 20. Replace the OIDC token command-substitution response buffer with an actual-stream byte counter so unknown-length and chunked responses cannot bypass the 1 MiB cap.
 21. Verify the actual bounded OCI manifest blob bytes selected by the archive index before OIDC, and reject descriptor-only digest agreement.
 22. Route every collector no-follow open through one fail-closed capability helper and prove the flag cannot silently degrade to zero.
+23. Preserve local Windows configuration hashing through a command-scoped read-only fallback with the same complete path and descriptor binding, while keeping every deployment command fail closed when secure open flags are unavailable.
+24. Validate the OCI layout marker and the bound manifest's configuration and layer descriptor structure, family, count, and byte limits, then stream each unique referenced blob once and verify its regular member type, path, size, and digest before OIDC.

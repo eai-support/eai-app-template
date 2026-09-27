@@ -96,4 +96,14 @@ The archive index is routing metadata rather than digest proof. Require exactly 
 
 ## No-follow capability
 
-No collector operation may translate an unavailable `O_NOFOLLOW` constant to zero. A shared flag helper accepts only a nonzero integer capability and combines it with the requested open flags. Every collector read, copy, create, staging, evidence, configuration, and GitHub command-file open uses that helper and fails before path access when the runtime cannot provide no-follow semantics.
+No deployment collector operation may translate an unavailable `O_NOFOLLOW` constant to zero. A shared flag helper accepts only a nonzero integer capability and combines it with the requested open flags. Every deployment read, copy, create, staging, evidence, and GitHub command-file open uses that helper and fails before path access when the runtime cannot provide no-follow semantics. The local Windows configuration-hash exception is defined below.
+
+## Windows local configuration hashing
+
+Node does not expose `O_NOFOLLOW` or `O_NONBLOCK` on Windows. Keep deployment commands fail closed when either required capability is unavailable. For the local-only `config-hash` command, allow a Windows-scoped read-only open without those flags only after rejecting linked or nonregular ancestors and leaves. Bind the pre-open leaf, opened descriptor, contained real path, rebound leaf, post-read descriptor, final leaf, size, modification time, change time, and repeated governed inventory exactly as on Unix. No write, staging, evidence, dispatch-validation, or collection path can select this fallback.
+
+## Complete OCI manifest shape
+
+The manifest digest binds bytes, but a digest can name structurally invalid JSON. Before OIDC, require the OCI layout marker and parse the bound manifest as either one OCI image manifest or one Docker schema 2 image manifest. Its configuration descriptor and every layer descriptor must use the corresponding media-type family, canonical lowercase SHA-256 digest, safe bounded size, and a bounded layer count. A matching digest does not excuse a missing or malformed descriptor.
+
+The downloaded artifact must also contain each unique referenced configuration and layer blob. Make one archive pass over the exact digest-derived member names. A fixed child validator accepts only a regular member with the expected path and declared size, streams its bytes without retaining them, and requires the canonical SHA-256 digest. Require one result for every expected path so missing, duplicate, linked, or substituted members fail without a per-layer full-archive scan.
