@@ -23,6 +23,7 @@ const evidenceScript = join(
   'scripts/source-unknown-deployment-evidence.mjs',
 );
 const workflowPath = join(repoRoot, '.github/workflows/eai-app.yml');
+const readmePath = join(repoRoot, 'README.md');
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 
 function writeFixtureApp(root) {
@@ -578,6 +579,34 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   for (const action of workflow.matchAll(/^\s+uses:\s+([^\s#]+)/gm)) {
     assert.match(action[1], /@[a-f0-9]{40}$/);
   }
+});
+
+test('reusable workflow compatibility keeps manual same-repository OIDC authority', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const readme = readFileSync(readmePath, 'utf8');
+  const invocationGate = workflow.indexOf('name: Validate workflow invocation');
+  const checkout = workflow.indexOf('name: Check out repository');
+  const applicationInstall = workflow.indexOf(
+    'name: Install dependencies without running application-controlled scripts',
+  );
+
+  assert.match(workflow, /^  workflow_call:/m);
+  assert.match(
+    workflow,
+    /EAI_CALLER_EVENT_NAME: \$\{\{ github\.event_name \}\}/,
+  );
+  assert.match(
+    workflow,
+    /if \[\[ "\$EAI_CALLER_EVENT_NAME" != "workflow_dispatch" \]\]; then/,
+  );
+  assert.ok(invocationGate >= 0 && invocationGate < checkout);
+  assert.ok(checkout < applicationInstall);
+  assert.match(workflow, /workflow_ref/);
+  assert.match(workflow, /job_workflow_ref\/job_workflow_sha/);
+  assert.doesNotMatch(workflow, /secrets\.EAI_ACCESS_TOKEN|\$EAI_ACCESS_TOKEN/);
+  assert.match(readme, /same repository/);
+  assert.match(readme, /Cross-repository and cross-ref reusable calls fail/);
+  assert.match(readme, /`actions: read`, `attestations: write`, and `id-token: write`/);
 });
 
 test('dispatch accepts only trusted endpoints and the exact source and workflow identity', () => {
