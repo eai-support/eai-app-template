@@ -616,8 +616,29 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   );
   assert.match(
     handoffJob,
+    /const artifactId = evidence\.imageArtifact\?\.id/,
+  );
+  assert.match(
+    handoffJob,
+    /typeof artifactId === 'string' \? Number\(artifactId\) : NaN/,
+  );
+  assert.match(
+    handoffJob,
+    /typeof artifactId !== 'string'.*Number\.isSafeInteger\(artifactIdNumber\).*String\(artifactIdNumber\) !== artifactId/,
+  );
+  assert.match(
+    handoffJob,
+    /actions\/artifacts\/\$\{encodeURIComponent\(artifactId\)\}/,
+  );
+  assert.ok(
+    handoffJob.indexOf('const artifactId = evidence.imageArtifact?.id') <
+      handoffJob.indexOf('const [workflowBytes, collectorBytes'),
+  );
+  assert.doesNotMatch(
+    handoffJob,
     /actions\/artifacts\/\$\{evidence\.imageArtifact\.id\}/,
   );
+  assert.match(handoffJob, /Number\.isSafeInteger\(artifact\.id\)/);
   assert.match(
     handoffJob,
     /artifact\.digest !== evidence\.artifactDigest/,

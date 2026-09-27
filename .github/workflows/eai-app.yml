@@ -697,9 +697,12 @@ jobs:
           if (process.env.TARGET_TENANT_ID && evidence.targetTenantId !== process.env.TARGET_TENANT_ID) throw new Error('Build evidence target tenant does not match.');
           if (String(evidence.workflowRun?.id) !== process.env.GITHUB_RUN_ID || String(evidence.workflowRun?.attempt) !== process.env.GITHUB_RUN_ATTEMPT) throw new Error('Build evidence workflow run does not match.');
           if (evidence.validationSummary?.status !== 'passed') throw new Error('Build evidence validation did not pass.');
+          const artifactId = evidence.imageArtifact?.id;
+          const artifactIdNumber = typeof artifactId === 'string' ? Number(artifactId) : NaN;
+          if (typeof artifactId !== 'string' || !/^[1-9][0-9]*$/.test(artifactId) || !Number.isSafeInteger(artifactIdNumber) || String(artifactIdNumber) !== artifactId) throw new Error('Build evidence image artifact ID is invalid.');
+          if (evidence.imageArtifact?.name !== 'eai-generated-app-image') throw new Error('Build evidence image artifact name is invalid.');
           const archive = inspectOciArchive('.eai-build/eai-generated-app-image.tar', MAX_IMAGE_ARCHIVE_BYTES, evidence.imageDigest);
           if (evidence.imageArtifact?.archiveDigest !== archive.archiveDigest) throw new Error('Downloaded image archive does not match build evidence.');
-          if (evidence.imageArtifact?.name !== 'eai-generated-app-image' || !/^[1-9][0-9]*$/.test(String(evidence.imageArtifact?.id || ''))) throw new Error('Build evidence image artifact identity is invalid.');
           if (new Set([evidence.artifactDigest, evidence.imageArtifact.archiveDigest, evidence.imageDigest]).size !== 3) throw new Error('Build evidence digests must be independently bound.');
           if (archive.imageDigest !== evidence.imageDigest) throw new Error('Downloaded OCI image digest does not match build evidence.');
 
@@ -851,7 +854,7 @@ jobs:
               sourceBytes('scripts/source-unknown-deployment-evidence.mjs', MAX_PRODUCER_SOURCE_BYTES, 'Canonical collector source'),
               sourceBytes('eai.runtime.json', MAX_GOVERNED_CONFIG_FILE_BYTES, 'Governed runtime source'),
               sourceConfigHash(),
-              github(`/actions/artifacts/${evidence.imageArtifact.id}`),
+              github(`/actions/artifacts/${encodeURIComponent(artifactId)}`),
             ]);
             if (canonicalConfigHash !== process.env.CONFIG_HASH || canonicalConfigHash !== evidence.configHash) throw new Error('Exact source configuration does not match dispatch and build evidence.');
             const workflowBlobSha = createHash('sha1').update(`blob ${workflowBytes.length}\0`).update(workflowBytes).digest('hex');
@@ -865,7 +868,7 @@ jobs:
               MAX_GITHUB_METADATA_RESPONSE_BYTES,
               'GitHub artifact response',
             );
-            if (String(artifact.id) !== String(evidence.imageArtifact.id) || artifact.name !== evidence.imageArtifact.name || artifact.digest !== evidence.artifactDigest || String(artifact.workflow_run?.id) !== process.env.GITHUB_RUN_ID) throw new Error('GitHub artifact metadata does not match build evidence.');
+            if (!Number.isSafeInteger(artifact.id) || String(artifact.id) !== artifactId || artifact.name !== evidence.imageArtifact.name || artifact.digest !== evidence.artifactDigest || String(artifact.workflow_run?.id) !== process.env.GITHUB_RUN_ID) throw new Error('GitHub artifact metadata does not match build evidence.');
           })().catch((error) => {
             console.error(error instanceof Error ? error.message : String(error));
             process.exitCode = 1;
