@@ -107,6 +107,8 @@ The direct CLI dispatch supplies the server-approved `config_hash`. A reusable
 caller can omit that newer input: the called workflow derives the exact
 checked-out configuration digest before application work. If the reusable
 caller supplies `config_hash`, it must match that digest.
+The reusable schema's `eai_reusable_call` input is an internal trigger marker;
+leave its default value unchanged. Direct dispatch does not expose that input.
 
 The reusable caller must grant `contents: read`, `packages: read`,
 `actions: read`, `attestations: write`, and `id-token: write`. GitHub can reduce
