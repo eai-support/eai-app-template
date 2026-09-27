@@ -61,6 +61,7 @@
 - [x] Reject empty or malformed direct-dispatch `commit_sha` before checkout while preserving reusable caller-SHA compatibility (DTE-026).
 - [x] Prove GitHub REST artifact digests remain canonical `sha256:<hex>` values and retain the exact comparison (DTE-025).
 - [x] Validate and encode the canonical positive safe-integer artifact ID before any GitHub provenance request (DTE-025).
+- [ ] Remove persistent cache integration from the application-controlled source job and prove the deployment workflow cannot restore or save a cross-run cache (DTE-025).
 
 ## Exact-head evidence
 

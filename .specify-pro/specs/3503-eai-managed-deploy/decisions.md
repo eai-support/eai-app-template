@@ -22,6 +22,8 @@ The governed digest includes every regular file beneath `src/eai.config`, includ
 
 Application lifecycle code may create or replace `.eai-build` before image-context preparation. Re-establish every output directory beneath the checked-out root through no-follow directory checks after the build and before any recursive removal, copy, write, archive digest, or evidence write. Use the generated-runtime app-key grammar consistently and preserve the template deployment contract's `demo` environment.
 
+The build job executes the selected source commit and therefore does not restore or save a persistent dependency or build cache. Package installation still uses the checked-in lock file, but setup-node cache integration and any equivalent cross-run cache are absent so untrusted source cannot poison state later consumed by a privileged or default-branch run.
+
 Treat every entry in `.next/standalone`, `.next/static`, and `public` as untrusted build output. Copy regular files and directories entry by entry with no-follow opens and stable inode checks; reject nested links and other nonregular entries.
 
 Treat the runner-provided `$GITHUB_OUTPUT` leaf as mutable after application lifecycle code runs. Open it with no-follow, nonblocking append flags, prove the opened descriptor is a regular file, and write only through that descriptor.
