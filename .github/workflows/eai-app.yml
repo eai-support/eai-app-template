@@ -83,6 +83,11 @@ on:
         description: Exact source commit; defaults to the reusable workflow caller SHA.
         required: false
         type: string
+      eai_reusable_call:
+        description: Internal compatibility marker; keep the default value.
+        required: false
+        type: boolean
+        default: true
       public_api_url:
         required: false
         type: string
@@ -125,22 +130,37 @@ jobs:
   build:
     outputs:
       config_hash: ${{ steps.deployment-binding.outputs.config_hash }}
+      source_commit_sha: ${{ steps.invocation.outputs.source_commit_sha }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate workflow invocation
+        id: invocation
         env:
           EAI_CALLER_EVENT_NAME: ${{ github.event_name }}
+          EAI_REQUESTED_COMMIT_SHA: ${{ inputs.commit_sha }}
+          EAI_REUSABLE_CALL: ${{ inputs.eai_reusable_call }}
+          EAI_CALLER_COMMIT_SHA: ${{ github.sha }}
         shell: bash
         run: |
+          set -euo pipefail
           if [[ "$EAI_CALLER_EVENT_NAME" != "workflow_dispatch" ]]; then
             echo "Managed deployment requires a manually dispatched caller." >&2
             exit 1
           fi
+          source_commit_sha="$EAI_REQUESTED_COMMIT_SHA"
+          if [[ -z "$source_commit_sha" && "$EAI_REUSABLE_CALL" == "true" ]]; then
+            source_commit_sha="$EAI_CALLER_COMMIT_SHA"
+          fi
+          if [[ ! "$source_commit_sha" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "Managed deployment requires an exact lowercase source commit SHA before checkout." >&2
+            exit 1
+          fi
+          printf 'source_commit_sha=%s\n' "$source_commit_sha" >> "$GITHUB_OUTPUT"
 
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ inputs.commit_sha || github.sha }}
+          ref: ${{ steps.invocation.outputs.source_commit_sha }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -178,7 +198,7 @@ jobs:
           EAI_BOUND_PUBLIC_API_URL: ${{ inputs.public_api_url || inputs.publicapi_base_url }}
           LEGACY_PUBLIC_API_URL: ${{ inputs.publicapi_base_url }}
           PREFERRED_PUBLIC_API_URL: ${{ inputs.public_api_url }}
-          SOURCE_COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
+          SOURCE_COMMIT_SHA: ${{ steps.invocation.outputs.source_commit_sha }}
           SOURCE_MODE: ${{ inputs.source_mode || 'source-unknown' }}
         run: |
           node scripts/source-unknown-deployment-evidence.mjs validate-dispatch \
@@ -242,17 +262,24 @@ jobs:
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build OCI image archive
+        id: built-image
+        env:
+          IMAGE_STAGING_ROOT: ${{ runner.temp }}
+        shell: bash
         run: |
+          set -euo pipefail
           docker buildx build \
             --platform linux/amd64 \
             --file .eai-build/image-context/Dockerfile \
-            --metadata-file .eai-build/image-metadata.json \
-            --output type=oci,dest=.eai-build/eai-generated-app-image.tar \
-            .eai-build/image-context
+            --output type=oci,dest=- \
+            .eai-build/image-context \
+            | node scripts/source-unknown-deployment-evidence.mjs write-image-archive \
+                --staging-root "$IMAGE_STAGING_ROOT" \
+                --github-output "$GITHUB_OUTPUT"
 
       - name: Verify post-build source integrity
         env:
-          SOURCE_COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
+          SOURCE_COMMIT_SHA: ${{ steps.invocation.outputs.source_commit_sha }}
         shell: bash
         run: |
           test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT_SHA"
@@ -265,14 +292,6 @@ jobs:
             ':(exclude)src/eai.config/object-types.provisioning.json')"
           test -z "$untracked" || { printf '%s\n' "$untracked"; exit 1; }
 
-      - name: Stage verified image artifact
-        id: staged-image
-        run: |
-          node scripts/source-unknown-deployment-evidence.mjs stage-image-artifact \
-            --root "$GITHUB_WORKSPACE" \
-            --staging-root "$RUNNER_TEMP" \
-            --github-output "$GITHUB_OUTPUT"
-
       - name: Upload immutable image artifact
         id: image-artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -281,7 +300,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
           retention-days: 14
-          path: ${{ steps.staged-image.outputs.image_archive_path }}
+          path: ${{ steps.built-image.outputs.image_archive_path }}
 
       - name: Collect immutable build evidence
         id: evidence
@@ -295,13 +314,13 @@ jobs:
           DEPLOY_ENVIRONMENT: ${{ inputs.env || inputs.environment || 'preview' }}
           LEGACY_DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
           PREFERRED_DEPLOY_ENVIRONMENT: ${{ inputs.env }}
-          SOURCE_COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
+          SOURCE_COMMIT_SHA: ${{ steps.invocation.outputs.source_commit_sha }}
           SOURCE_MODE: ${{ inputs.source_mode || 'source-unknown' }}
-          STAGED_IMAGE_ARCHIVE: ${{ steps.staged-image.outputs.image_archive_path }}
-          STAGED_ARCHIVE_DIGEST: ${{ steps.staged-image.outputs.archive_digest }}
+          STAGED_IMAGE_ARCHIVE: ${{ steps.built-image.outputs.image_archive_path }}
+          STAGED_ARCHIVE_DIGEST: ${{ steps.built-image.outputs.archive_digest }}
+          IMAGE_DIGEST: ${{ steps.built-image.outputs.image_digest }}
           IMAGE_STAGING_ROOT: ${{ runner.temp }}
         run: |
-          image_digest="$(node scripts/source-unknown-deployment-evidence.mjs read-image-digest)"
           node scripts/source-unknown-deployment-evidence.mjs collect \
             --source-mode "$SOURCE_MODE" \
             --target-tenant-id "$TARGET_TENANT_ID" \
@@ -325,7 +344,7 @@ jobs:
             --expected-archive-digest "$STAGED_ARCHIVE_DIGEST" \
             --artifact-id "${{ steps.image-artifact.outputs.artifact-id }}" \
             --artifact-digest "${{ steps.image-artifact.outputs.artifact-digest }}" \
-            --image-digest "$image_digest"
+            --image-digest "$IMAGE_DIGEST"
 
       - name: Upload immutable build evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -368,7 +387,7 @@ jobs:
           CONFIG_HASH: ${{ needs.build.outputs.config_hash }}
           DEPLOY_ENVIRONMENT: ${{ inputs.env || inputs.environment || 'preview' }}
           EAI_BOUND_PUBLIC_API_URL: ${{ inputs.public_api_url || inputs.publicapi_base_url }}
-          SOURCE_COMMIT_SHA: ${{ inputs.commit_sha || github.sha }}
+          SOURCE_COMMIT_SHA: ${{ needs.build.outputs.source_commit_sha }}
           SOURCE_MODE: ${{ inputs.source_mode || 'source-unknown' }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}

@@ -5,6 +5,7 @@ import {
   cpSync,
   existsSync,
   linkSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -83,6 +84,69 @@ function runEvidenceScript(args, options = {}) {
 
 function configHash(root) {
   return runEvidenceScript(['config-hash', '--root', root]).trim();
+}
+
+function createMinimalOciArchive(workDir, name = 'image') {
+  const contentRoot = join(workDir, `${name}-oci-root`);
+  const configBytes = Buffer.from('{"architecture":"amd64","os":"linux"}');
+  const configDigest = `sha256:${createHash('sha256')
+    .update(configBytes)
+    .digest('hex')}`;
+  const manifestBytes = Buffer.from(
+    JSON.stringify({
+      schemaVersion: 2,
+      mediaType: 'application/vnd.oci.image.manifest.v1+json',
+      config: {
+        mediaType: 'application/vnd.oci.image.config.v1+json',
+        digest: configDigest,
+        size: configBytes.length,
+      },
+      layers: [],
+    }),
+  );
+  const imageDigest = `sha256:${createHash('sha256')
+    .update(manifestBytes)
+    .digest('hex')}`;
+  const manifestPath = join(
+    contentRoot,
+    'blobs/sha256',
+    imageDigest.slice('sha256:'.length),
+  );
+  mkdirSync(dirname(manifestPath), { recursive: true });
+  writeFileSync(manifestPath, manifestBytes);
+  writeFileSync(
+    join(contentRoot, 'blobs/sha256', configDigest.slice('sha256:'.length)),
+    configBytes,
+  );
+  writeFileSync(
+    join(contentRoot, 'oci-layout'),
+    JSON.stringify({ imageLayoutVersion: '1.0.0' }),
+  );
+  writeFileSync(
+    join(contentRoot, 'index.json'),
+    JSON.stringify({
+      schemaVersion: 2,
+      manifests: [
+        {
+          mediaType: 'application/vnd.oci.image.manifest.v1+json',
+          digest: imageDigest,
+          size: manifestBytes.length,
+          platform: { os: 'linux', architecture: 'amd64' },
+        },
+      ],
+    }),
+  );
+  const archivePath = join(workDir, `${name}.tar`);
+  execFileSync('tar', [
+    '-cf',
+    archivePath,
+    '-C',
+    contentRoot,
+    'oci-layout',
+    'index.json',
+    'blobs',
+  ]);
+  return { archivePath, imageDigest };
 }
 
 function sourceUnknownBindingArgs(root) {
@@ -483,7 +547,12 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   );
   assert.match(
     workflow,
-    /ref: \$\{\{ inputs\.commit_sha \|\| github\.sha \}\}/,
+    /ref: \$\{\{ steps\.invocation\.outputs\.source_commit_sha \}\}/,
+  );
+  assert.doesNotMatch(workflow, /inputs\.commit_sha \|\| github\.sha/);
+  assert.match(
+    handoffJob,
+    /SOURCE_COMMIT_SHA: \$\{\{ needs\.build\.outputs\.source_commit_sha \}\}/,
   );
   assert.match(workflow, /--commit "\$SOURCE_COMMIT_SHA"/);
   assert.match(workflow, /--workflow-sha "\$GITHUB_SHA"/);
@@ -549,6 +618,11 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
     handoffJob,
     /actions\/artifacts\/\$\{evidence\.imageArtifact\.id\}/,
   );
+  assert.match(
+    handoffJob,
+    /artifact\.digest !== evidence\.artifactDigest/,
+  );
+  assert.doesNotMatch(handoffJob, /sha256:\$\{artifact\.digest\}/);
   assert.match(handoffJob, /execFileSync\('tar', arguments_/);
   assert.doesNotMatch(workflow, /secrets\.EAI_ACCESS_TOKEN|\$EAI_ACCESS_TOKEN/);
   assert.doesNotMatch(buildJob, /GITHUB_TOKEN|NODE_AUTH_TOKEN|_authToken/);
@@ -687,6 +761,11 @@ test('reusable workflow compatibility keeps manual same-repository OIDC authorit
     /config_hash:\n\s+description:[^\n]+\n\s+required: false/,
   );
   assert.match(
+    reusableInputs,
+    /eai_reusable_call:\n\s+description:[^\n]+\n\s+required: false\n\s+type: boolean\n\s+default: true/,
+  );
+  assert.doesNotMatch(dispatchInputs, /eai_reusable_call:/);
+  assert.match(
     workflow,
     /config_hash="\$\(node scripts\/source-unknown-deployment-evidence\.mjs config-hash\)"/,
   );
@@ -708,6 +787,61 @@ test('reusable workflow compatibility keeps manual same-repository OIDC authorit
   assert.match(readme, /same repository/);
   assert.match(readme, /Cross-repository and cross-ref reusable calls fail/);
   assert.match(readme, /`actions: read`, `attestations: write`, and `id-token: write`/);
+});
+
+test('source commit is resolved before checkout for direct and reusable calls', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const stepStart = workflow.indexOf('      - name: Validate workflow invocation');
+  const scriptStart = workflow.indexOf('        run: |\n', stepStart);
+  const scriptEnd = workflow.indexOf('\n\n      - name: Check out repository', scriptStart);
+  assert.ok(stepStart >= 0 && scriptStart > stepStart && scriptEnd > scriptStart);
+  const script = workflow
+    .slice(scriptStart + '        run: |\n'.length, scriptEnd)
+    .replace(/^ {10}/gm, '');
+  const callerSha = 'a'.repeat(40);
+  const explicitSha = 'b'.repeat(40);
+  const runGate = ({ requested = '', reusable = 'false' } = {}) => {
+    const workDir = mkdtempSync(join(tmpdir(), 'eai-source-commit-gate-'));
+    const outputPath = join(workDir, 'github-output.txt');
+    writeFileSync(outputPath, '');
+    const result = spawnSync('bash', ['-c', script], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        EAI_CALLER_EVENT_NAME: 'workflow_dispatch',
+        EAI_REQUESTED_COMMIT_SHA: requested,
+        EAI_REUSABLE_CALL: reusable,
+        EAI_CALLER_COMMIT_SHA: callerSha,
+        GITHUB_OUTPUT: outputPath,
+      },
+    });
+    const output = readFileSync(outputPath, 'utf8');
+    rmSync(workDir, { recursive: true, force: true });
+    return { result, output };
+  };
+
+  const direct = runGate({ requested: explicitSha });
+  assert.equal(direct.result.status, 0, direct.result.stderr);
+  assert.equal(direct.output, `source_commit_sha=${explicitSha}\n`);
+
+  const missingDirect = runGate();
+  assert.notEqual(missingDirect.result.status, 0);
+  assert.match(missingDirect.result.stderr, /exact lowercase source commit SHA/);
+
+  const malformedDirect = runGate({ requested: 'ABC' });
+  assert.notEqual(malformedDirect.result.status, 0);
+  assert.match(malformedDirect.result.stderr, /exact lowercase source commit SHA/);
+
+  const reusable = runGate({ reusable: 'true' });
+  assert.equal(reusable.result.status, 0, reusable.result.stderr);
+  assert.equal(reusable.output, `source_commit_sha=${callerSha}\n`);
+
+  const reusableExplicit = runGate({
+    requested: explicitSha,
+    reusable: 'true',
+  });
+  assert.equal(reusableExplicit.result.status, 0, reusableExplicit.result.stderr);
+  assert.equal(reusableExplicit.output, `source_commit_sha=${explicitSha}\n`);
 });
 
 test('OIDC response parser bounds unknown-length input before token retention', () => {
@@ -1397,6 +1531,15 @@ test('CLI dispatch rejects an incomplete or malformed signed grant before the bu
 
 test('workflow runs independent validations concurrently and waits for both', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
+  const buildStepStart = workflow.indexOf(
+    '      - name: Build OCI image archive',
+  );
+  const buildStepEnd = workflow.indexOf(
+    '\n\n      - name: Verify post-build source integrity',
+    buildStepStart,
+  );
+  assert.ok(buildStepStart >= 0 && buildStepEnd > buildStepStart);
+  const buildStep = workflow.slice(buildStepStart, buildStepEnd);
 
   assert.match(workflow, /npm run typecheck &\n\s+typecheck_pid=\$!/);
   assert.match(workflow, /npm run test:unit:ci &\n\s+tests_pid=\$!/);
@@ -1408,14 +1551,20 @@ test('workflow runs independent validations concurrently and waits for both', ()
     /\[\[ "\$APP_KEY" =~ \^\[a-z\]\[a-z0-9-\]\{1,62\}\$ \]\]/,
   );
   assert.match(
-    workflow,
-    /source-unknown-deployment-evidence\.mjs read-image-digest/,
+    buildStep,
+    /--output type=oci,dest=-[\s\S]*\| node scripts\/source-unknown-deployment-evidence\.mjs write-image-archive/,
   );
+  assert.match(buildStep, /run: \|\n\s+set -euo pipefail/);
+  assert.doesNotMatch(buildStep, /--metadata-file/);
+  const pipefail = spawnSync('bash', ['-c', 'set -euo pipefail\nfalse | cat'], {
+    encoding: 'utf8',
+  });
+  assert.notEqual(pipefail.status, 0);
 });
 
 test('workflow uploads only the staged image archive and binds its digest', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
-  const stageOffset = workflow.indexOf('- name: Stage verified image artifact');
+  const buildOffset = workflow.indexOf('- name: Build OCI image archive');
   const uploadOffset = workflow.indexOf(
     '- name: Upload immutable image artifact',
   );
@@ -1423,22 +1572,142 @@ test('workflow uploads only the staged image archive and binds its digest', () =
     '- name: Collect immutable build evidence',
   );
 
-  assert.ok(stageOffset >= 0);
-  assert.ok(uploadOffset > stageOffset);
+  assert.ok(buildOffset >= 0);
+  assert.ok(uploadOffset > buildOffset);
   assert.ok(collectOffset > uploadOffset);
   assert.match(
     workflow,
-    /stage-image-artifact[\s\S]*--staging-root "\$RUNNER_TEMP"/,
+    /write-image-archive[\s\S]*--staging-root "\$IMAGE_STAGING_ROOT"[\s\S]*--github-output "\$GITHUB_OUTPUT"/,
   );
   assert.match(
     workflow,
-    /path: \$\{\{ steps\.staged-image\.outputs\.image_archive_path \}\}/,
+    /path: \$\{\{ steps\.built-image\.outputs\.image_archive_path \}\}/,
+  );
+  assert.match(
+    workflow,
+    /STAGED_ARCHIVE_DIGEST: \$\{\{ steps\.built-image\.outputs\.archive_digest \}\}/,
+  );
+  assert.match(
+    workflow,
+    /IMAGE_DIGEST: \$\{\{ steps\.built-image\.outputs\.image_digest \}\}/,
   );
   assert.match(
     workflow,
     /--image-archive "\$STAGED_IMAGE_ARCHIVE"[\s\S]*--image-staging-root "\$IMAGE_STAGING_ROOT"[\s\S]*--expected-archive-digest "\$STAGED_ARCHIVE_DIGEST"/,
   );
 });
+
+test(
+  'image archive writer binds Buildx stdout to a bounded exclusive file',
+  { skip: process.platform !== 'linux' },
+  () => {
+    const workDir = realpathSync(
+      mkdtempSync(join(tmpdir(), 'eai-image-stream-writer-')),
+    );
+    try {
+      const stagingRoot = join(workDir, 'runner-temp');
+      const outputPath = join(workDir, 'github-output.txt');
+      const protectedPath = join(workDir, 'protected.txt');
+      const preload = join(workDir, 'rebind-image-output.cjs');
+      mkdirSync(stagingRoot);
+      writeFileSync(outputPath, '');
+      writeFileSync(protectedPath, 'protected bytes\n');
+      const fixture = createMinimalOciArchive(workDir, 'stream-source');
+      const archiveBytes = readFileSync(fixture.archivePath);
+
+      const valid = spawnSync(
+        process.execPath,
+        [
+          evidenceScript,
+          'write-image-archive',
+          '--staging-root',
+          stagingRoot,
+          '--github-output',
+          outputPath,
+        ],
+        { input: archiveBytes, encoding: 'utf8' },
+      );
+      assert.equal(valid.status, 0, valid.stderr);
+      const result = JSON.parse(valid.stdout);
+      assert.equal(readFileSync(result.imageArchivePath).equals(archiveBytes), true);
+      assert.equal(lstatSync(result.imageArchivePath).nlink, 1);
+      assert.equal(result.imageDigest, fixture.imageDigest);
+      assert.equal(
+        result.archiveDigest,
+        `sha256:${createHash('sha256').update(archiveBytes).digest('hex')}`,
+      );
+      const outputs = readFileSync(outputPath, 'utf8');
+      assert.match(outputs, /^image_archive_path=/m);
+      assert.match(outputs, new RegExp(`^image_digest=${fixture.imageDigest}$`, 'm'));
+
+      const empty = spawnSync(
+        process.execPath,
+        [evidenceScript, 'write-image-archive', '--staging-root', stagingRoot],
+        { input: Buffer.alloc(0), encoding: 'utf8' },
+      );
+      assert.notEqual(empty.status, 0);
+      assert.match(empty.stderr, /changed during its bound write/);
+
+      writeFileSync(
+        preload,
+        String.raw`
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const originalOpenSync = fs.openSync;
+const originalWriteSync = fs.writeSync;
+let outputPath;
+let rebound = false;
+fs.openSync = function patchedOpenSync(path, ...args) {
+  const descriptor = originalOpenSync.call(fs, path, ...args);
+  if (!outputPath && String(path).endsWith('eai-generated-app-image.tar')) {
+    outputPath = String(path);
+  }
+  return descriptor;
+};
+fs.writeSync = function patchedWriteSync(descriptor, ...args) {
+  if (!rebound && outputPath) {
+    rebound = true;
+    fs.unlinkSync(outputPath);
+    fs.symlinkSync(process.env.EAI_TEST_PROTECTED_PATH, outputPath);
+  }
+  return originalWriteSync.call(fs, descriptor, ...args);
+};
+syncBuiltinESMExports();
+`,
+      );
+      const rebound = spawnSync(
+        process.execPath,
+        [evidenceScript, 'write-image-archive', '--staging-root', stagingRoot],
+        {
+          input: archiveBytes,
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            NODE_OPTIONS: `--require=${preload}`,
+            EAI_TEST_PROTECTED_PATH: protectedPath,
+          },
+        },
+      );
+      assert.notEqual(rebound.status, 0);
+      assert.match(rebound.stderr, /changed during its bound write/);
+      assert.equal(readFileSync(protectedPath, 'utf8'), 'protected bytes\n');
+
+      const implementation = readFileSync(evidenceScript, 'utf8');
+      const writerStart = implementation.indexOf('async function writeImageArchive(');
+      const writerEnd = implementation.indexOf(
+        '\nfunction assertCommandFileBinding(',
+        writerStart,
+      );
+      const writer = implementation.slice(writerStart, writerEnd);
+      assert.match(writer, /written \+ chunk\.length > MAX_IMAGE_ARCHIVE_BYTES/);
+      assert.match(writer, /constants\.O_RDWR \| constants\.O_CREAT \| constants\.O_EXCL/);
+      assert.match(writer, /current\.nlink !== 1/);
+      assert.doesNotMatch(writer, /rmSync|unlinkSync/);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  },
+);
 
 test('artifact staging creates a private bound copy used by evidence', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-image-staging-'));
@@ -1626,12 +1895,8 @@ test('image context rejects an application-controlled linked build-output root',
   }
 });
 
-test('image preparation rejects preexisting isolated outputs without deleting them', () => {
-  for (const relativePath of [
-    '.eai-build/image-context',
-    '.eai-build/eai-generated-app-image.tar',
-    '.eai-build/image-metadata.json',
-  ]) {
+test('image preparation rejects a preexisting context without deleting it', () => {
+  for (const relativePath of ['.eai-build/image-context']) {
     const workDir = mkdtempSync(join(tmpdir(), 'eai-preexisting-output-'));
     try {
       const root = join(workDir, 'app');
@@ -1748,7 +2013,119 @@ test('image-tree copies bind each source ancestor and final path through the rea
   assert.match(copy, /sourcePathAfter\.mtimeMs !== opened\.mtimeMs/);
   assert.match(copy, /sourcePathAfter\.ctimeMs !== opened\.ctimeMs/);
   assert.match(copy, /after\.mtimeMs !== opened\.mtimeMs/);
+  assert.match(copy, /destinationAfter\.nlink !== 1/);
+  assert.match(copy, /destinationAfter\.size !== copied/);
+  assert.match(copy, /destinationPathAfter\.nlink !== 1/);
+  assert.match(copy, /destinationPathAfter\.size !== copied/);
   assert.match(copy, /realpathSync\(sourcePath\)/);
+});
+
+test('generated and evidence writers bind exact size and single-link identity', () => {
+  const implementation = readFileSync(evidenceScript, 'utf8');
+  const generatedStart = implementation.indexOf(
+    'function writeRegularFileNoFollow(',
+  );
+  const evidenceStart = implementation.indexOf(
+    'function writeEvidenceFileNoFollow(',
+    generatedStart,
+  );
+  const evidenceEnd = implementation.indexOf(
+    '\nfunction assertExists(',
+    evidenceStart,
+  );
+  assert.ok(
+    generatedStart >= 0 &&
+      evidenceStart > generatedStart &&
+      evidenceEnd > evidenceStart,
+  );
+  const generated = implementation.slice(generatedStart, evidenceStart);
+  const evidence = implementation.slice(evidenceStart, evidenceEnd);
+  for (const writer of [generated, evidence]) {
+    assert.match(writer, /const bytes = Buffer\.from\(content, 'utf8'\)/);
+    assert.match(writer, /after\.isFile\(\)/);
+    assert.match(writer, /after\.nlink !== 1/);
+    assert.match(writer, /after\.size !== expectedBytes/);
+    assert.match(writer, /finalPath\.nlink !== 1/);
+    assert.match(writer, /finalPath\.size !== expectedBytes/);
+  }
+  assert.match(evidence, /bytes\.length > MAX_BUILD_EVIDENCE_BYTES/);
+
+  const stagingStart = implementation.indexOf('function stageImageArtifact(');
+  const stagingEnd = implementation.indexOf('\nfunction digestFiles(', stagingStart);
+  const staging = implementation.slice(stagingStart, stagingEnd);
+  assert.match(staging, /destinationAfter\.nlink !== 1/);
+  assert.match(staging, /destinationPathAfter\.nlink !== 1/);
+});
+
+test('image preparation rejects destination growth after bound writes', () => {
+  for (const targetKind of ['copy', 'generated']) {
+    const workDir = realpathSync(
+      mkdtempSync(join(tmpdir(), `eai-image-destination-${targetKind}-`)),
+    );
+    try {
+      const root = join(workDir, 'app');
+      const preload = join(workDir, 'grow-image-destination.cjs');
+      const target = join(
+        root,
+        targetKind === 'copy'
+          ? '.eai-build/image-context/server.js'
+          : '.eai-build/image-context/Dockerfile',
+      );
+      writeFixtureApp(root);
+      writeFileSync(
+        preload,
+        String.raw`
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const originalOpenSync = fs.openSync;
+const originalWriteSync = fs.writeSync;
+const originalWriteFileSync = fs.writeFileSync;
+let targetDescriptor;
+let mutated = false;
+fs.openSync = function patchedOpenSync(path, ...args) {
+  const descriptor = originalOpenSync.call(fs, path, ...args);
+  if (String(path) === process.env.EAI_TEST_DESTINATION_PATH) {
+    targetDescriptor = descriptor;
+  }
+  return descriptor;
+};
+function mutate(path) {
+  if (!mutated) {
+    mutated = true;
+    fs.appendFileSync(path, 'x');
+  }
+}
+fs.writeSync = function patchedWriteSync(descriptor, ...args) {
+  const result = originalWriteSync.call(fs, descriptor, ...args);
+  if (descriptor === targetDescriptor) mutate(process.env.EAI_TEST_DESTINATION_PATH);
+  return result;
+};
+fs.writeFileSync = function patchedWriteFileSync(path, ...args) {
+  const result = originalWriteFileSync.call(fs, path, ...args);
+  if (path === targetDescriptor) mutate(process.env.EAI_TEST_DESTINATION_PATH);
+  return result;
+};
+syncBuiltinESMExports();
+`,
+      );
+      const result = spawnSync(
+        process.execPath,
+        [evidenceScript, 'prepare-image-context', '--root', root],
+        {
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            NODE_OPTIONS: `--require=${preload}`,
+            EAI_TEST_DESTINATION_PATH: target,
+          },
+        },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /changed during its bound write/);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  }
 });
 
 test('image tree and archive staging reject same-size rewrites before open', () => {
@@ -1889,41 +2266,45 @@ test('archive staging binds source timestamps from pre-open through final path',
   assert.match(staging, /sourcePathAfter\.ctimeMs !== opened\.ctimeMs/);
 });
 
-test('image metadata digest is read through a bounded no-follow path', () => {
-  const workDir = mkdtempSync(join(tmpdir(), 'eai-image-metadata-'));
-  try {
-    const root = join(workDir, 'app');
-    const outside = join(workDir, 'outside');
-    writeFixtureApp(root);
-    rmSync(join(root, '.eai-build/eai-generated-app-image.tar'));
-    runEvidenceScript(['prepare-image-context', '--root', root]);
-    writeFileSync(
-      join(root, '.eai-build/image-metadata.json'),
-      JSON.stringify({ 'containerimage.digest': `sha256:${'a'.repeat(64)}` }),
-    );
-    assert.equal(
-      runEvidenceScript(['read-image-digest', '--root', root]).trim(),
-      `sha256:${'a'.repeat(64)}`,
-    );
+test(
+  'image digest is derived from a bounded no-follow OCI archive',
+  { skip: process.platform !== 'linux' },
+  () => {
+    const workDir = mkdtempSync(join(tmpdir(), 'eai-image-digest-'));
+    try {
+      const root = join(workDir, 'app');
+      const outside = join(workDir, 'outside');
+      writeFixtureApp(root);
+      const fixture = createMinimalOciArchive(workDir, 'digest-source');
+      cpSync(
+        fixture.archivePath,
+        join(root, '.eai-build/eai-generated-app-image.tar'),
+        { force: true },
+      );
+      assert.equal(
+        runEvidenceScript(['read-image-digest', '--root', root]).trim(),
+        fixture.imageDigest,
+      );
 
-    mkdirSync(outside);
-    writeFileSync(
-      join(outside, 'image-metadata.json'),
-      JSON.stringify({ 'containerimage.digest': `sha256:${'b'.repeat(64)}` }),
-    );
-    rmSync(join(root, '.eai-build'), { recursive: true });
-    symlinkSync(outside, join(root, '.eai-build'), 'dir');
-    const linked = spawnSync(
-      process.execPath,
-      [evidenceScript, 'read-image-digest', '--root', root],
-      { encoding: 'utf8' },
-    );
-    assert.equal(linked.status, 1);
-    assert.match(linked.stderr, /no-follow directory tree/);
-  } finally {
-    rmSync(workDir, { recursive: true, force: true });
-  }
-});
+      mkdirSync(outside);
+      cpSync(
+        fixture.archivePath,
+        join(outside, 'eai-generated-app-image.tar'),
+      );
+      rmSync(join(root, '.eai-build'), { recursive: true });
+      symlinkSync(outside, join(root, '.eai-build'), 'dir');
+      const linked = spawnSync(
+        process.execPath,
+        [evidenceScript, 'read-image-digest', '--root', root],
+        { encoding: 'utf8' },
+      );
+      assert.equal(linked.status, 1);
+      assert.match(linked.stderr, /no-follow directory tree/);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  },
+);
 
 test('bounded collector reads bind parent and leaf identity through the read', () => {
   const implementation = readFileSync(evidenceScript, 'utf8');
@@ -2173,26 +2554,6 @@ fs.readSync = function patchedReadSync(descriptor, ...args) {
 syncBuiltinESMExports();
 `,
     );
-
-    const metadataPath = join(root, '.eai-build/image-metadata.json');
-    writeFileSync(
-      metadataPath,
-      JSON.stringify({ 'containerimage.digest': `sha256:${'a'.repeat(64)}` }),
-    );
-    const metadata = spawnSync(
-      process.execPath,
-      [evidenceScript, 'read-image-digest', '--root', root],
-      {
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          NODE_OPTIONS: `--require=${preload}`,
-          EAI_TEST_MUTATE_PATH: metadataPath,
-        },
-      },
-    );
-    assert.equal(metadata.status, 1);
-    assert.match(metadata.stderr, /grew during its bounded read/);
 
     const configPath = join(root, 'eai.runtime.json');
     const config = spawnSync(
@@ -3214,6 +3575,68 @@ test('collect never replaces an existing or linked evidence file', () => {
       if (scenario === 'regular') {
         assert.equal(readFileSync(evidencePath, 'utf8'), 'existing evidence\n');
       }
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('collect rejects post-write evidence growth and hard links', () => {
+  for (const mutation of ['append', 'link']) {
+    const workDir = realpathSync(
+      mkdtempSync(join(tmpdir(), `eai-evidence-final-${mutation}-`)),
+    );
+    try {
+      const root = join(workDir, 'app');
+      const preload = join(workDir, 'mutate-evidence-output.cjs');
+      writeFixtureApp(root);
+      writeFileSync(
+        preload,
+        String.raw`
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const originalOpenSync = fs.openSync;
+const originalWriteFileSync = fs.writeFileSync;
+let evidenceDescriptor;
+let evidencePath;
+let mutated = false;
+fs.openSync = function patchedOpenSync(path, ...args) {
+  const descriptor = originalOpenSync.call(fs, path, ...args);
+  if (String(path).endsWith('source-unknown-deployment-evidence.json')) {
+    evidenceDescriptor = descriptor;
+    evidencePath = String(path);
+  }
+  return descriptor;
+};
+fs.writeFileSync = function patchedWriteFileSync(path, ...args) {
+  const result = originalWriteFileSync.call(fs, path, ...args);
+  if (!mutated && path === evidenceDescriptor) {
+    mutated = true;
+    if (process.env.EAI_TEST_EVIDENCE_MUTATION === 'append') {
+      fs.appendFileSync(evidencePath, 'x');
+    } else {
+      fs.linkSync(evidencePath, evidencePath + '.link');
+    }
+  }
+  return result;
+};
+syncBuiltinESMExports();
+`,
+      );
+      const result = spawnSync(
+        process.execPath,
+        [evidenceScript, ...sourceUnknownCollectArgs(root)],
+        {
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            NODE_OPTIONS: `--require=${preload}`,
+            EAI_TEST_EVIDENCE_MUTATION: mutation,
+          },
+        },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Evidence output changed during its bound write/);
     } finally {
       rmSync(workDir, { recursive: true, force: true });
     }
