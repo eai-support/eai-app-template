@@ -46,21 +46,21 @@
 - [x] Replace every collector descriptor-wide read with a fixed-size capped loop that rejects post-open growth before allocating beyond the opened snapshot (DTE-018, DTE-025).
 - [x] Bind all generated-tree and archive-copy sources to pre-open size, mtime, and ctime through their final path checks (DTE-022, DTE-025).
 - [x] Align collector and handoff governed-manifest limits at 10 MiB per file, 32 MiB total, and 4,096 files, including a valid 4–10 MiB regression (DTE-018, DTE-025).
-- [ ] Replace the staged-archive digest EOF stream with a fixed-buffer opened-size loop and post-bound growth probe, then sweep all collector reads for an explicit bound (DTE-022, DTE-025).
-- [ ] Bound the handoff response during transfer and parse it through trusted inline no-follow code without a handoff checkout, while applying the same constraints in the collector command; add oversized and linked response regressions (DTE-025).
-- [ ] Bound downloaded evidence, exact-source bytes, GitHub metadata bodies, and the OIDC token response before parsing or retention, without narrowing the governed-file contract (DTE-025).
+- [x] Replace the staged-archive digest EOF stream with a fixed-buffer opened-size loop and post-bound growth probe, then sweep all collector reads for an explicit bound (DTE-022, DTE-025).
+- [x] Bound the handoff response during transfer and parse it through trusted inline no-follow code without a handoff checkout, while applying the same constraints in the collector command; add oversized and linked response regressions (DTE-025).
+- [x] Bound downloaded evidence, exact-source bytes, GitHub metadata bodies, and the OIDC token response before parsing or retention, without narrowing the governed-file contract (DTE-025).
 
 ## Exact-head evidence
 
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (48 passed)
+- `npm run test:source-unknown-evidence` (50 passed)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (330 passed)
 - `npm run typecheck`
 - `npm run build`
 - `actionlint .github/workflows/eai-app.yml`
-- Exact source evidence tests cover Git tree/blob configuration recomputation with aligned manifest bounds, capped fixed-buffer reads, and pre-open size/time binding for every read and source copy, exclusive generated-output creation, source/output ancestor binding including post-append command-file replacement, canonical handoff provenance validation, runner-temporary artifact staging, fixed-buffer no-follow handoff archive hashing, step-local OIDC submission, and pre-checkout reusable-caller gating without a legacy token; workflow digest `sha256:5f27736e3ca76712cf5960eb533445fa7320dcb36e5af38910bd470af67ae841`, workflow Git blob `596655a84151e953fa80fb5835f0b46b9d1bed9e`, collector digest `sha256:66f069e800bc3da29ad81d842268261fb19376550a941645ea3e711a0a7a5396`.
+- Exact source evidence tests cover Git tree/blob configuration recomputation with aligned manifest and transfer bounds, capped response-body streams, fixed-buffer local reads and archive hashing with growth probes, pre-open size/time binding for every read and source copy, clean checkout-free inline handoff response parsing, exclusive generated-output creation, source/output ancestor binding including post-append command-file replacement, canonical handoff provenance validation, runner-temporary artifact staging, step-local OIDC submission, and pre-checkout reusable-caller gating without a legacy token; workflow digest `sha256:e42b8e2c4e3b5a2cee07abc50a666f35c52b0cb2296a3659b986e09108fc1097`, workflow Git blob `d60d3da094a395fb9f8eb927b16fb08f41b7a72c`, collector digest `sha256:ab4df11eb91cf7e53f241e93ca0f650b7f5036cdc886050ccf192b738ea41ef7`.
 - Readiness-focused route/runtime/contract tests passed 24/24, including exact, missing, changed, blank, noncanonical, and unconfigured deployment identity cases.
