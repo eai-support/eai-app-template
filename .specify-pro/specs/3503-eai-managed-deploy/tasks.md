@@ -56,7 +56,7 @@
 - [x] Restore Windows `config-hash` through a command-scoped validated read fallback and prove deployment commands still fail closed (DTE-018, DTE-022).
 - [x] Validate the OCI layout plus bounded configuration and layer descriptors, then stream every unique referenced blob through exact member/validator count, type, path, size, and digest checks with matching-digest malformed, missing, regular/nonregular duplicate, and substituted regressions; keep the compact 1,024-layer authority table below Linux's per-string execution bound (DTE-025).
 - [x] Derive the OCI validator output cap from the full configuration-plus-1,024-layer record set and prove the accepted maximum cannot overflow it (DTE-025).
-- [ ] Export Buildx OCI bytes through collector-owned stdout into an exclusive no-follow archive descriptor, derive metadata from that archive, and reject path substitution without unsafe cleanup (DTE-022, DTE-025).
+- [ ] Pipe Buildx OCI stdout into a live-bounded collector writer with an exclusive no-follow archive descriptor, derive the image digest directly from that archive, and reject path substitution without unsafe cleanup (DTE-022, DTE-025).
 - [ ] Bind copied, generated, and evidence destination files to exact final byte length and single-link descriptor/path identity (DTE-022, DTE-025).
 - [ ] Reject empty or malformed direct-dispatch `commit_sha` before checkout while preserving reusable caller-SHA compatibility (DTE-026).
 - [ ] Prove GitHub REST artifact digests remain canonical `sha256:<hex>` values and retain the exact comparison (DTE-025).

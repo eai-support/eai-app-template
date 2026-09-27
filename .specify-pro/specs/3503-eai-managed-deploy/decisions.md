@@ -114,7 +114,7 @@ Derive the validator stdout cap from the same accepted maximum: one archive-memb
 
 ## Bound Buildx output
 
-Do not give Buildx a mutable application-workspace destination path. The trusted collector exclusively creates the OCI archive through a no-follow descriptor and invokes the OCI exporter with `dest=-`, binding Buildx stdout directly to that descriptor. Derive the image digest from the resulting bounded archive and exclusively create the small metadata file afterward. Revalidate the archive descriptor, leaf, parent chain, link count, and size before it becomes evidence. A failed build leaves its disposable output in place and does not perform path-based cleanup.
+Do not give Buildx a mutable application-workspace destination path. Run the OCI exporter with `dest=-` and pipe its stdout, under `set -euo pipefail`, into a trusted collector command that exclusively creates the OCI archive through a no-follow descriptor. Bound bytes while streaming and revalidate the archive descriptor, leaf, parent chain, link count, and size before it becomes evidence. Derive the image digest directly from the resulting bounded archive instead of asking Buildx to open a metadata path. A failed build leaves its disposable output in place and does not perform path-based cleanup.
 
 Every collector destination write must bind the byte count as well as device, inode, regular-file type, and single-link identity at the descriptor and final path. Tree copies bind destination size to the copied source size. Generated text and evidence bind destination size to the exact serialized byte count.
 
