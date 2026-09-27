@@ -42,6 +42,7 @@ describe('readiness route', () => {
       EAI_PRODUCT_SLUG: 'contract-test',
       EAI_ENVIRONMENT: 'dev',
       EAI_CONFIG_HASH: 'cfg-123',
+      EAI_DEPLOYMENT_ID: 'deployment-123',
       TENANT_KEYS: TEST_TENANT_KEY,
       [`TENANT_${TEST_TENANT_ENV_KEY}_ID`]: 'tenant-template',
       [`WORKFLOW_${TEST_TENANT_ENV_KEY}_ID`]: 'workflow-template',
@@ -96,6 +97,7 @@ describe('readiness route', () => {
         'x-eai-app-key': 'contract-test',
         'x-eai-environment': 'dev',
         'x-eai-config-hash': 'cfg-123',
+        'x-eai-deployment-id': 'deployment-123',
         authorization: 'Bearer probe-token',
         ...headers,
       }),
@@ -188,6 +190,54 @@ describe('readiness route', () => {
 
     expect(response.status).toBe(200);
     expect(body.failureCategories).toEqual([]);
+  });
+
+  it('accepts the exact active deployment identity', async () => {
+    const response = await GET(
+      readinessRequest({ 'x-eai-deployment-id': 'deployment-123' }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.failureCategories).toEqual([]);
+  });
+
+  it('rejects a missing deployment identity header', async () => {
+    const request = readinessRequest();
+    request.headers.delete('x-eai-deployment-id');
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.failureCategories).toEqual(['tenant_assignment_invalid']);
+  });
+
+  it('rejects a changed deployment identity header', async () => {
+    const response = await GET(
+      readinessRequest({ 'x-eai-deployment-id': 'deployment-other' }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.failureCategories).toEqual(['tenant_assignment_invalid']);
+  });
+
+  it('fails readiness when runtime deployment identity is not configured', async () => {
+    delete process.env['EAI_DEPLOYMENT_ID'];
+
+    const response = await GET(readinessRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.failureCategories).toContain('config_missing');
+    expect(body.checks).toContainEqual(
+      expect.objectContaining({
+        name: 'runtime-env',
+        ok: false,
+        missing: expect.arrayContaining(['EAI_DEPLOYMENT_ID']),
+      }),
+    );
   });
 
   it('accepts TenantInfra runtime env names for scope binding', async () => {

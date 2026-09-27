@@ -86,12 +86,14 @@ smoke tests pass.
 The readiness smoke test remains authenticated. The deploy-doctor process and
 the deployed runtime must receive matching values for
 `EAI_READINESS_PROBE_TOKEN`, `NEXT_PUBLIC_EAI_TENANT_ID`, `EAI_PRODUCT_SLUG`,
-`EAI_ENVIRONMENT`, and `EAI_CONFIG_HASH`. Inject the probe token through the
-operator or CI secret environment; do not put it on the command line or commit
-it. The CLI resolves the contract's `${ENV_NAME}` header values only in memory,
-sends them to the declared endpoint, and does not include them in output. If a
-required value is absent, doctor does not send an unauthenticated request and
-reports missing probe configuration instead of PublicAPI authorization failure.
+`EAI_ENVIRONMENT`, `EAI_CONFIG_HASH`, and the server-only
+`EAI_DEPLOYMENT_ID`. TenantInfra sends the exact active deployment ID with its
+authenticated readiness probe. Inject the probe token through the operator or
+CI secret environment; do not put it on the command line or commit it. The CLI
+resolves the contract's `${ENV_NAME}` header values only in memory, sends them
+to the declared endpoint, and does not include them in output. If a required
+value is absent, doctor does not send an unauthenticated request and reports
+missing probe configuration instead of PublicAPI authorization failure.
 
 ## Tenant Data Access
 

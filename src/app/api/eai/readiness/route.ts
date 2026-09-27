@@ -49,6 +49,13 @@ function runtimeAppKey(): string | undefined {
   return process.env.EAI_PRODUCT_SLUG || process.env.EAI_APP_KEY;
 }
 
+function runtimeDeploymentId(): string | undefined {
+  const deploymentId = process.env.EAI_DEPLOYMENT_ID;
+  return deploymentId && deploymentId.trim() === deploymentId
+    ? deploymentId
+    : undefined;
+}
+
 function validateTenantInfraProbe(request: Request): Response | null {
   const headers = request.headers;
 
@@ -68,7 +75,8 @@ function validateTenantInfraProbe(request: Request): Response | null {
     requireHeader(headers, 'x-eai-tenant-id', runtimeTenantId()) &&
     requireHeader(headers, 'x-eai-app-key', runtimeAppKey()) &&
     requireHeader(headers, 'x-eai-environment', process.env.EAI_ENVIRONMENT) &&
-    requireHeader(headers, 'x-eai-config-hash', process.env.EAI_CONFIG_HASH);
+    requireHeader(headers, 'x-eai-config-hash', process.env.EAI_CONFIG_HASH) &&
+    requireHeader(headers, 'x-eai-deployment-id', runtimeDeploymentId());
 
   if (!scopeMatches) {
     return probeFailure('tenant_assignment_invalid', 403);

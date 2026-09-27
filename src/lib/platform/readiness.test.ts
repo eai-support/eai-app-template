@@ -16,6 +16,7 @@ function readyEnv(): NodeJS.ProcessEnv {
     EAI_PRODUCT_SLUG: 'contract-test',
     EAI_ENVIRONMENT: 'dev',
     EAI_CONFIG_HASH: 'cfg-123',
+    EAI_DEPLOYMENT_ID: 'deployment-123',
     TENANT_KEYS: TEST_TENANT_KEY,
     [`TENANT_${TEST_TENANT_ENV_KEY}_ID`]: 'tenant-template',
     [`WORKFLOW_${TEST_TENANT_ENV_KEY}_ID`]: 'workflow-template',
@@ -54,6 +55,23 @@ describe('runtime readiness contract', () => {
 
     expect(result.ok).toBe(true);
     expect(result.failureCategories).toEqual([]);
+  });
+
+  it('requires a nonempty runtime deployment identity', () => {
+    const env = readyEnv();
+    env.EAI_DEPLOYMENT_ID = '   ';
+
+    const result = evaluateRuntimeReadiness(env);
+
+    expect(result.ok).toBe(false);
+    expect(result.failureCategories).toContain('config_missing');
+    expect(result.checks).toContainEqual(
+      expect.objectContaining({
+        name: 'runtime-env',
+        ok: false,
+        missing: expect.arrayContaining(['EAI_DEPLOYMENT_ID']),
+      }),
+    );
   });
 
   it('reports sanitized failure categories without returning secret values', () => {

@@ -36,7 +36,7 @@
 - [x] Bind every image-tree source ancestor and final path through the copy (DTE-022).
 - [x] Stage the OCI archive through bounded descriptors before artifact upload (DTE-022, DTE-025).
 - [x] Keep the minted OIDC token within the request-and-submit step (DTE-025).
-- [ ] Require the exact TenantInfra deployment identity in runtime configuration and every authenticated readiness probe (DTE-036, DTE-074).
+- [x] Require the exact TenantInfra deployment identity in runtime configuration and every authenticated readiness probe (DTE-036, DTE-074).
 
 ## Exact-head evidence
 
@@ -46,8 +46,9 @@
 - `npm run test:source-unknown-evidence` (38 passed)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
-- `npm run test:unit:ci` (322 passed)
+- `npm run test:unit:ci` (327 passed)
 - `npm run typecheck`
 - `npm run build`
 - `actionlint .github/workflows/eai-app.yml`
 - Exact source evidence tests cover Git tree/blob configuration recomputation, source/output ancestor binding, runner-temporary artifact staging, and step-local OIDC submission; workflow digest `sha256:d7f14c0af056d836db2d50c70cf1205b0dc06a15c8c7144d360320ebcbfcbb64`, collector digest `sha256:d17c4d5e460dee967adb9a9b25c0b9aed73cc09ebd76c771e22ee796aff1d275`.
+- Readiness-focused route/runtime/contract tests passed 21/21, including exact, missing, changed, blank, and unconfigured deployment identity cases.
