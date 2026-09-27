@@ -46,6 +46,8 @@ Generated image-context files are new outputs. Create them with an exclusive no-
 
 Collector reads use the same complete-parent snapshot and opened-leaf binding through the end of each bounded read. The isolated handoff keeps the 4,096-entry manifest limit but fetches governed Git blobs through eight workers so a valid large manifest cannot create an unbounded GitHub API burst.
 
+Collector metadata and governed configuration reads use a reusable fixed-size descriptor loop. The loop reads no more than the opened size, probes one byte past that boundary to reject concurrent growth, and applies an explicit per-file cap before allocating returned bytes. This removes descriptor-wide `readFileSync` behavior while retaining the existing post-read identity and timestamp checks.
+
 The workflow uses a disposable checkout and creates isolated image outputs once. Image preparation rejects preexisting context, static, public, archive, or metadata outputs instead of removing them through a mutable path. If a bound copy fails, it leaves the partial output in that disposable workspace and fails the job; it does not resolve the failed destination path again for cleanup.
 
 The configuration digest is calculated only from a stable governed inventory. The collector repeats the sorted inventory after hashing and revalidates each opened descriptor, complete ancestor chain, final contained path, size, modification time, and change time after reading.

@@ -43,6 +43,7 @@
 - [x] Bind governed configuration size and timestamps between pre-open and opened descriptors (DTE-018).
 - [x] Bind retained `workflow_call` compatibility to a manually dispatched same-repository caller, a canonical signed callee identity, and caller-provided least privilege without restoring `EAI_ACCESS_TOKEN` (DTE-025, DTE-026).
 - [x] Hash the downloaded OCI archive through a bounded fixed-size no-follow reader in the isolated handoff (DTE-025).
+- [x] Replace every collector descriptor-wide read with a fixed-size capped loop that rejects post-open growth before allocating beyond the opened snapshot (DTE-018, DTE-025).
 
 ## Exact-head evidence
 
