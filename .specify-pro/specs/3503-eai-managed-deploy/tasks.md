@@ -49,6 +49,8 @@
 - [x] Replace the staged-archive digest EOF stream with a fixed-buffer opened-size loop and post-bound growth probe, then sweep all collector reads for an explicit bound (DTE-022, DTE-025).
 - [x] Bound the handoff response during transfer and parse it through trusted inline no-follow code without a handoff checkout, while applying the same constraints in the collector command; add oversized and linked response regressions (DTE-025).
 - [x] Bound downloaded evidence, exact-source bytes, GitHub metadata bodies, and the OIDC token response before parsing or retention, without narrowing the governed-file contract (DTE-025).
+- [ ] Keep `workflow_call.config_hash` optional, derive the exact checked-out digest when absent, and carry one validated value through build evidence and isolated handoff (DTE-026).
+- [ ] Enforce the OIDC token response limit against bytes actually read when `Content-Length` is absent or false (DTE-025).
 
 ## Exact-head evidence
 
