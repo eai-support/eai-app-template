@@ -44,6 +44,8 @@
 - [x] Bind retained `workflow_call` compatibility to a manually dispatched same-repository caller, a canonical signed callee identity, and caller-provided least privilege without restoring `EAI_ACCESS_TOKEN` (DTE-025, DTE-026).
 - [x] Hash the downloaded OCI archive through a bounded fixed-size no-follow reader in the isolated handoff (DTE-025).
 - [x] Replace every collector descriptor-wide read with a fixed-size capped loop that rejects post-open growth before allocating beyond the opened snapshot (DTE-018, DTE-025).
+- [ ] Bind all generated-tree and archive-copy sources to pre-open size, mtime, and ctime through their final path checks (DTE-022, DTE-025).
+- [ ] Align collector and handoff governed-manifest limits at 10 MiB per file, 32 MiB total, and 4,096 files, including a valid 4–10 MiB regression (DTE-018, DTE-025).
 
 ## Exact-head evidence
 

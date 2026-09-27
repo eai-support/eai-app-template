@@ -56,6 +56,10 @@ For each governed file, bind size, modification time, and change time as well as
 
 Image-tree copying treats each source file's complete ancestor chain and contained final path as part of the read authority. Snapshot before the no-follow open, bind the opened inode to the path, and repeat the ancestor, path, inode, size, modification-time, and change-time checks after the copy.
 
+The source pre-open snapshot is authoritative for every generated-tree and archive-staging copy. Compare size, modification time, and change time as well as device and inode before reading, on the rebound path, and again on the final source path so a same-size in-place rewrite between `lstat` and `open` fails.
+
+The collector and isolated handoff use one governed-manifest budget: at most 10 MiB for one file, 32 MiB in total, and 4,096 included files after the two generated-output exclusions. A file between 4 MiB and 10 MiB remains valid in both implementations.
+
 The upload action never reads the application-controlled build path directly. A trusted collector command creates a random directory beneath `RUNNER_TEMP`, copies the archive once through bounded no-follow source and exclusive destination descriptors, records its raw digest, and exposes only that staged path to upload and later evidence collection.
 
 The short-lived GitHub OIDC token remains inside one request-and-submit shell step. It is masked and sent directly to the allowlisted PublicAPI endpoint; it is never serialized through `$GITHUB_OUTPUT` or another mutable command file.
