@@ -609,6 +609,28 @@ test('reusable workflow compatibility keeps manual same-repository OIDC authorit
   assert.match(readme, /`actions: read`, `attestations: write`, and `id-token: write`/);
 });
 
+test('handoff hashes the bounded OCI archive without whole-file allocation', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const handoffJob = workflow.slice(workflow.indexOf('  handoff:'));
+  const archiveHasher = handoffJob.slice(
+    handoffJob.indexOf('function hashBoundedRegularFile('),
+    handoffJob.indexOf('const expected = {'),
+  );
+
+  assert.match(handoffJob, /MAX_IMAGE_ARCHIVE_BYTES = 10 \* 1024 \* 1024 \* 1024/);
+  assert.match(archiveHasher, /fs\.constants\.O_NOFOLLOW/);
+  assert.match(archiveHasher, /before\.size > maxBytes/);
+  assert.match(archiveHasher, /Buffer\.allocUnsafe\(1024 \* 1024\)/);
+  assert.match(archiveHasher, /while \(offset < opened\.size\)/);
+  assert.match(archiveHasher, /fs\.readSync\(descriptor, buffer/);
+  assert.match(archiveHasher, /afterDescriptor = fs\.fstatSync\(descriptor\)/);
+  assert.match(archiveHasher, /afterPath = fs\.lstatSync\(filePath\)/);
+  assert.doesNotMatch(
+    handoffJob,
+    /fs\.readFileSync\('\.eai-build\/eai-generated-app-image\.tar'/,
+  );
+});
+
 test('dispatch accepts only trusted endpoints and the exact source and workflow identity', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-dispatch-validation-'));
   try {

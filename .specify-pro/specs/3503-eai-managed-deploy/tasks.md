@@ -42,19 +42,19 @@
 - [x] Create generated image-context files exclusively before any destructive write (DTE-022).
 - [x] Bind governed configuration size and timestamps between pre-open and opened descriptors (DTE-018).
 - [x] Bind retained `workflow_call` compatibility to a manually dispatched same-repository caller, a canonical signed callee identity, and caller-provided least privilege without restoring `EAI_ACCESS_TOKEN` (DTE-025, DTE-026).
-- [ ] Hash the downloaded OCI archive through a bounded fixed-size no-follow reader in the isolated handoff (DTE-025).
+- [x] Hash the downloaded OCI archive through a bounded fixed-size no-follow reader in the isolated handoff (DTE-025).
 
 ## Exact-head evidence
 
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (42 passed)
+- `npm run test:source-unknown-evidence` (43 passed)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (330 passed)
 - `npm run typecheck`
 - `npm run build`
 - `actionlint .github/workflows/eai-app.yml`
-- Exact source evidence tests cover Git tree/blob configuration recomputation with pre-open size/time binding, exclusive generated-output creation, source/output ancestor binding including post-append command-file replacement, canonical handoff provenance validation, runner-temporary artifact staging, step-local OIDC submission, and pre-checkout reusable-caller gating without a legacy token; workflow digest `sha256:c8855acb63dcf67526dfe075280c3898c57b16d353f5c83421b0f70c088332ab`, workflow Git blob `48b745bd03c14771cb52c1b8eeb7d4eb069f29ca`, collector digest `sha256:b4bf40bd5a5ae4daa46a321fc1533190df231a87e6cb6ff6f2f3d25de58e5613`.
+- Exact source evidence tests cover Git tree/blob configuration recomputation with pre-open size/time binding, exclusive generated-output creation, source/output ancestor binding including post-append command-file replacement, canonical handoff provenance validation, runner-temporary artifact staging, fixed-buffer no-follow handoff archive hashing, step-local OIDC submission, and pre-checkout reusable-caller gating without a legacy token; workflow digest `sha256:1d6381e7ce9647592bdf6bbb6033ebce28332cfc1e7c784496eb3d5698ce4234`, workflow Git blob `a5997b841c81e39b689915bae672727a2e266e39`, collector digest `sha256:b4bf40bd5a5ae4daa46a321fc1533190df231a87e6cb6ff6f2f3d25de58e5613`.
 - Readiness-focused route/runtime/contract tests passed 24/24, including exact, missing, changed, blank, noncanonical, and unconfigured deployment identity cases.
