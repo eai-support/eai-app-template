@@ -54,7 +54,7 @@
 - [x] Hash the exact bounded OCI manifest blob referenced by the Linux/amd64 archive index and bind it to evidence before OIDC (DTE-025).
 - [x] Replace every collector `O_NOFOLLOW` fallback with one shared fail-closed capability guard and add regression evidence (DTE-022, DTE-025).
 - [ ] Restore Windows `config-hash` through a command-scoped validated read fallback and prove deployment commands still fail closed (DTE-018, DTE-022).
-- [ ] Validate the OCI layout plus bounded configuration and layer descriptors, then stream every unique referenced blob through exact type/path/size/digest checks with matching-digest malformed, missing, duplicate, and substituted regressions (DTE-025).
+- [ ] Validate the OCI layout plus bounded configuration and layer descriptors, then stream every unique referenced blob through exact member/validator count, type, path, size, and digest checks with matching-digest malformed, missing, regular/nonregular duplicate, and substituted regressions; keep the compact 1,024-layer authority table below Linux's per-string execution bound (DTE-025).
 
 ## Exact-head evidence
 
