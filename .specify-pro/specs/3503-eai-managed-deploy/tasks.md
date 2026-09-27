@@ -51,20 +51,20 @@
 - [x] Bound downloaded evidence, exact-source bytes, GitHub metadata bodies, and the OIDC token response before parsing or retention, without narrowing the governed-file contract (DTE-025).
 - [x] Keep `workflow_call.config_hash` optional, derive the exact checked-out digest when absent, and carry one validated value through build evidence and isolated handoff (DTE-026).
 - [x] Enforce both OIDC and handoff response limits against bytes actually read when `Content-Length` is absent or false, and create the handoff response through a new no-follow descriptor (DTE-025).
-- [ ] Hash the exact bounded OCI manifest blob referenced by the Linux/amd64 archive index and bind it to evidence before OIDC (DTE-025).
-- [ ] Replace every collector `O_NOFOLLOW` fallback with one shared fail-closed capability guard and add regression evidence (DTE-022, DTE-025).
+- [x] Hash the exact bounded OCI manifest blob referenced by the Linux/amd64 archive index and bind it to evidence before OIDC (DTE-025).
+- [x] Replace every collector `O_NOFOLLOW` fallback with one shared fail-closed capability guard and add regression evidence (DTE-022, DTE-025).
 
 ## Exact-head evidence
 
 - `actionlint .github/workflows/eai-app.yml`
 - `npm run test:object-types-generator`
 - `npm run test:release-version`
-- `npm run test:source-unknown-evidence` (52 passed)
+- `npm run test:source-unknown-evidence` (54 passed on Linux exact-head CI; 53 passed and the Linux-only inherited-descriptor case skipped on macOS)
 - `npm run test:ai-workspace-guidance`
 - `npm run test:cross-platform-lifecycle`
 - `npm run test:unit:ci` (330 passed)
 - `npm run typecheck`
 - `npm run build`
 - `actionlint .github/workflows/eai-app.yml`
-- Exact source evidence tests cover Git tree/blob configuration recomputation with aligned manifest and transfer bounds, actual-byte-capped OIDC and handoff response streams, fixed-buffer local reads and archive hashing with growth probes, pre-open size/time binding for every read and source copy, clean checkout-free inline handoff response parsing, exclusive generated-output creation, source/output ancestor binding including post-append command-file replacement, canonical handoff provenance validation, runner-temporary artifact staging, step-local OIDC submission, optional reusable-call configuration derivation, and pre-checkout reusable-caller gating without a legacy token; workflow digest `sha256:3bfc5a78db6809c48598159f170774d5fc6b29c51e9455a36c7c12f567004834`, workflow Git blob `9d625a3a5358c8fd6af2b520eeabe5399ba78a01`, collector digest `sha256:ab4df11eb91cf7e53f241e93ca0f650b7f5036cdc886050ccf192b738ea41ef7`.
+- Exact source evidence tests cover Git tree/blob configuration recomputation with aligned manifest and transfer bounds, actual-byte-capped OIDC and handoff response streams, fixed-buffer local reads and archive hashing with growth probes, one held archive descriptor for bounded OCI index and manifest extraction, exact manifest size/content-digest/schema/media-type verification, a shared fail-closed no-follow/nonblocking collector-open guard, pre-open size/time binding for every read and source copy, clean checkout-free inline handoff response parsing, exclusive generated-output creation, source/output ancestor binding including post-append command-file replacement, canonical handoff provenance validation, runner-temporary artifact staging, step-local OIDC submission, optional reusable-call configuration derivation, and pre-checkout reusable-caller gating without a legacy token; workflow digest `sha256:db7e133312408221d5fcaa93e965480ac686e04e76131507577ddac421a91a30`, workflow Git blob `59a96bc0547e3084da578f5d4ba96b2b3c9f309e`, collector digest `sha256:3d4134a56a5ea64615e1476ff0f35eb7e795f54738311c0d394ed6c23782d62e`.
 - Readiness-focused route/runtime/contract tests passed 24/24, including exact, missing, changed, blank, noncanonical, and unconfigured deployment identity cases.
