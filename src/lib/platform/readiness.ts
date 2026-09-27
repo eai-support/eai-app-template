@@ -76,10 +76,13 @@ function isHttpUrl(value: string | undefined): boolean {
 }
 
 function checkRuntimeEnv(env: NodeJS.ProcessEnv): ReadinessCheck {
+  const deploymentId = env.EAI_DEPLOYMENT_ID;
   const missing = Array.from(
     new Set([
       ...missingEnv(env, REQUIRED_RUNTIME_ENV),
-      ...(env.EAI_DEPLOYMENT_ID?.trim() ? [] : ['EAI_DEPLOYMENT_ID']),
+      ...(deploymentId && deploymentId.trim() === deploymentId
+        ? []
+        : ['EAI_DEPLOYMENT_ID']),
       ...missingAnyEnv(env, [
         ['NEXT_PUBLIC_EAI_TENANT_ID', 'EAI_TENANT_ID'],
         ['EAI_PRODUCT_SLUG', 'EAI_APP_KEY'],

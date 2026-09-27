@@ -57,21 +57,33 @@ describe('runtime readiness contract', () => {
     expect(result.failureCategories).toEqual([]);
   });
 
-  it('requires a nonempty runtime deployment identity', () => {
+  it.each(['   ', ' deployment-123 '])(
+    'rejects a noncanonical runtime deployment identity %j',
+    (deploymentId) => {
+      const env = readyEnv();
+      env.EAI_DEPLOYMENT_ID = deploymentId;
+
+      const result = evaluateRuntimeReadiness(env);
+
+      expect(result.ok).toBe(false);
+      expect(result.failureCategories).toContain('config_missing');
+      expect(result.checks).toContainEqual(
+        expect.objectContaining({
+          name: 'runtime-env',
+          ok: false,
+          missing: expect.arrayContaining(['EAI_DEPLOYMENT_ID']),
+        }),
+      );
+    },
+  );
+
+  it('accepts an exact nonempty runtime deployment identity', () => {
     const env = readyEnv();
-    env.EAI_DEPLOYMENT_ID = '   ';
 
     const result = evaluateRuntimeReadiness(env);
 
-    expect(result.ok).toBe(false);
-    expect(result.failureCategories).toContain('config_missing');
-    expect(result.checks).toContainEqual(
-      expect.objectContaining({
-        name: 'runtime-env',
-        ok: false,
-        missing: expect.arrayContaining(['EAI_DEPLOYMENT_ID']),
-      }),
-    );
+    expect(result.ok).toBe(true);
+    expect(result.failureCategories).toEqual([]);
   });
 
   it('reports sanitized failure categories without returning secret values', () => {

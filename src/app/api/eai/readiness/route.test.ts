@@ -240,6 +240,23 @@ describe('readiness route', () => {
     );
   });
 
+  it('fails readiness when runtime deployment identity is not canonical', async () => {
+    process.env['EAI_DEPLOYMENT_ID'] = ' deployment-123 ';
+
+    const response = await GET(readinessRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.failureCategories).toContain('config_missing');
+    expect(body.checks).toContainEqual(
+      expect.objectContaining({
+        name: 'runtime-env',
+        ok: false,
+        missing: expect.arrayContaining(['EAI_DEPLOYMENT_ID']),
+      }),
+    );
+  });
+
   it('accepts TenantInfra runtime env names for scope binding', async () => {
     delete process.env['NEXT_PUBLIC_EAI_TENANT_ID'];
     delete process.env['EAI_PRODUCT_SLUG'];
