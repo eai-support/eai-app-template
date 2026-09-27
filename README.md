@@ -95,6 +95,22 @@ to the declared endpoint, and does not include them in output. If a required
 value is absent, doctor does not send an unauthenticated request and reports
 missing probe configuration instead of PublicAPI authorization failure.
 
+### Managed deployment workflow invocation
+
+The EAI CLI starts `.github/workflows/eai-app.yml` with `workflow_dispatch`.
+Existing reusable callers can keep using `workflow_call` when the caller is in
+the same repository, was started manually with `workflow_dispatch`, and uses
+the same source ref as the canonical EAI workflow. PublicAPI verifies the
+signed GitHub caller and callee workflow claims, ref, and source SHA before it
+accepts the handoff. Cross-repository and cross-ref reusable calls fail.
+
+The reusable caller must grant `contents: read`, `packages: read`,
+`actions: read`, `attestations: write`, and `id-token: write`. GitHub can reduce
+permissions through a reusable workflow call, but the called workflow cannot
+add a permission that its caller did not grant. Deprecated
+`EAI_ACCESS_TOKEN` and `EAI_PUBLIC_API_URL` secrets are accepted as unused
+compatibility declarations; they do not authorize a deployment.
+
 ## Tenant Data Access
 
 Tenant app data access is user-delegated. Browser code calls the app BFF at

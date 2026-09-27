@@ -11,3 +11,4 @@
 9. Bind authenticated readiness to TenantInfra's exact active deployment ID, preserve the response schema, and cover exact, missing, and substituted deployment identities in owned route and runtime-contract tests.
 10. Revalidate the bound GitHub output descriptor, exact leaf path, and complete parent chain after each trusted append, with a deterministic replacement-race regression.
 11. Reapply canonical runtime provenance validation in the isolated OIDC handoff, create generated files exclusively, and bind governed-file size and timestamps before every read.
+12. Retain same-repository reusable workflow compatibility for manually dispatched callers, reject unsupported caller events before source checkout, and rely on PublicAPI's signed caller/callee OIDC claim binding without restoring a long-lived token.

@@ -63,3 +63,11 @@ The short-lived GitHub OIDC token remains inside one request-and-submit shell st
 TenantInfra injects the server-only `EAI_DEPLOYMENT_ID` for the active deployment and sends the same value in `X-EAI-Deployment-Id` on its authenticated readiness probe. The application readiness route treats a missing runtime value as incomplete configuration and rejects a missing or unequal header as `tenant_assignment_invalid`, alongside the existing tenant, app, environment, and configuration bindings.
 
 Keep the successful readiness payload unchanged. The application does not accept or report operation or source authority; TenantInfra creates the durable operation-bound doctor evidence only after the complete authenticated readiness tuple matches.
+
+## Same-repository reusable invocation
+
+Retain `workflow_call` for compatibility only when a same-repository caller was itself started by `workflow_dispatch` at the exact source ref. Reject other caller events before checkout or application-controlled work. Direct CLI `workflow_dispatch` remains the canonical path.
+
+The workflow cannot safely establish the reusable callee identity from ordinary runner environment variables. PublicAPI therefore verifies the signed GitHub OIDC claims. A direct dispatch must have no `job_workflow_ref` or `job_workflow_sha`. A reusable invocation must have both: the caller `workflow_ref` names a safe workflow path in the source repository and ref, while `job_workflow_ref` names that repository's canonical `.github/workflows/eai-app.yml` at the same ref. `job_workflow_sha`, the token `sha`, and the submitted source commit must be the same lowercase 40-hex value. Partial, malformed, cross-repository, and cross-ref claim sets fail.
+
+Do not restore `EAI_ACCESS_TOKEN` or `EAI_PUBLIC_API_URL` as runtime authorities. Their optional declarations remain only as input compatibility markers and are unused. A reusable caller must grant `contents: read`, `packages: read`, `actions: read`, `attestations: write`, and `id-token: write`; GitHub does not let a called workflow elevate the caller's permissions.

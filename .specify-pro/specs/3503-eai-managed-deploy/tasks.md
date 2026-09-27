@@ -41,6 +41,7 @@
 - [x] Validate canonical schema provenance inside the isolated OIDC-authorized handoff (DTE-025).
 - [x] Create generated image-context files exclusively before any destructive write (DTE-022).
 - [x] Bind governed configuration size and timestamps between pre-open and opened descriptors (DTE-018).
+- [ ] Bind retained `workflow_call` compatibility to a manually dispatched same-repository caller, a canonical signed callee identity, and caller-provided least privilege without restoring `EAI_ACCESS_TOKEN` (DTE-025, DTE-026).
 
 ## Exact-head evidence
 
