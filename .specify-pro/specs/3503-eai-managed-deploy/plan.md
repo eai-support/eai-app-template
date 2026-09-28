@@ -29,3 +29,7 @@
 27. Reject an empty or malformed direct-dispatch commit before checkout while preserving the signed same-repository reusable caller SHA fallback.
 28. Retain the canonical algorithm-qualified GitHub REST artifact digest comparison and record its live/API contract evidence.
 29. Bind the approved commit to signed `github.sha` before checkout, use only that signed event value as the checkout ref, and remove BSD-only tar extraction flags so Linux and local validation share the same bounded behavior.
+30. Reject an empty direct-dispatch configuration hash while keeping omission valid only for the marked reusable schema.
+31. Bind optional target-tenant evidence in both directions and bind artifact proof to direct upload outputs, exact source/repository metadata, and the current run attempt.
+32. Bound each GitHub output value and the aggregate serialized output before opening the command file.
+33. Prove on Linux that GNU tar emits one path record and one validator record per referenced member within the derived output cap.

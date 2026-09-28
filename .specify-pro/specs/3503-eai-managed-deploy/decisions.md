@@ -131,3 +131,17 @@ GitHub's required input declaration does not replace runtime validation. A direc
 ## GitHub artifact digest representation
 
 The upload action emits a bare SHA-256 hex value, which the collector converts to the canonical `sha256:<hex>` evidence form. GitHub's REST artifact `digest` is already algorithm-qualified. Compare that REST value directly to canonical evidence; do not add a second prefix.
+
+## Late handoff binding closure
+
+The direct dispatch declaration is not the runtime authority for `config_hash`. Require a nonempty value unless the workflow-call-only compatibility marker is exactly true, then retain the existing exact derived-hash comparison.
+
+Treat optional legacy target-tenant evidence as a two-way binding. When the trusted input is empty, the downloaded evidence must omit `targetTenantId`; when the input is present, evidence must carry the exact same value.
+
+Apply the same canonical presence rule to `sourceMode`. A present value must match the trusted dispatch exactly. Only historical `source-unknown` evidence may omit the field; empty strings, `null`, `false`, zero, and other falsey substitutes do not mean legacy omission.
+
+The artifact REST object does not expose `run_attempt`. Bind the current attempt through the upload action's direct artifact ID and digest job outputs, validate the artifact object's repository, run, and `head_sha`, and independently validate GitHub's exact run-attempt resource for the current run ID, attempt, and source SHA. Keep the REST artifact digest algorithm-qualified as documented.
+
+GitHub command-file safety includes resource bounds as well as injection and path binding. Reject a serialized value above 4 KiB or aggregate append above 64 KiB before opening `$GITHUB_OUTPUT`; normal canonical digests, paths, IDs, and provenance anchors remain far below those limits.
+
+GNU tar's extract-mode `--verbose --to-command` stdout contains one member path per selected entry, while the validator contributes one `verified:` line. The Linux OCI fixture is the execution proof for this two-record shape. Derive the cap from those exact path-only records; list-mode metadata is not part of this stream.

@@ -64,6 +64,11 @@
 - [x] Remove persistent cache integration from the application-controlled source job and prove the deployment workflow cannot restore or save a cross-run cache (DTE-025).
 - [x] Require the approved source commit to equal signed `github.sha` before checkout and pass only that signed event value to checkout (DTE-025, DTE-026).
 - [x] Use GNU/BSD-compatible bounded tar extraction flags in collector and isolated handoff, with Linux exact-head coverage (DTE-025).
+- [ ] Reject an empty direct `config_hash` while preserving omitted reusable configuration derivation (DTE-026).
+- [ ] Exact-bind a present evidence source mode, permit omission only for legacy `source-unknown`, and require absent optional target-tenant evidence when its legacy input is absent or exact equality when present (DTE-020, DTE-025).
+- [ ] Bind artifact ID/digest to current upload outputs and exact repository/run/source/attempt metadata (DTE-022, DTE-025).
+- [ ] Bound each GitHub output value to 4 KiB and aggregate serialized output to 64 KiB before command-file open (DTE-025).
+- [ ] Confirm GNU tar member-record stdout and the derived full-count output cap in Linux exact-head evidence (DTE-025).
 
 ## Exact-head evidence
 
