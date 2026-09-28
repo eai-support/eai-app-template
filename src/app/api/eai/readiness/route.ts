@@ -56,6 +56,35 @@ function runtimeDeploymentId(): string | undefined {
     : undefined;
 }
 
+function runtimeDeploymentBinding() {
+  const binding = {
+    tenantId: runtimeTenantId(),
+    appKey: runtimeAppKey(),
+    environment: process.env.EAI_ENVIRONMENT,
+    configHash: process.env.EAI_CONFIG_HASH,
+    deploymentId: runtimeDeploymentId(),
+    runtimeIdentity: {
+      clientId: process.env.AZURE_CLIENT_ID,
+      principalId: process.env.EAI_RUNTIME_PRINCIPAL_ID,
+    },
+  };
+  const identifiers = [
+    binding.tenantId,
+    binding.appKey,
+    binding.environment,
+    binding.configHash,
+    binding.deploymentId,
+    binding.runtimeIdentity.clientId,
+    binding.runtimeIdentity.principalId,
+  ];
+  return identifiers.every(
+    (value) =>
+      typeof value === 'string' && value.length > 0 && value.trim() === value,
+  )
+    ? binding
+    : undefined;
+}
+
 function validateTenantInfraProbe(request: Request): Response | null {
   const headers = request.headers;
 
@@ -149,17 +178,7 @@ export async function GET(request: Request): Promise<Response> {
   ).sort();
   const platformReadiness = {
     ...readiness,
-    deploymentBinding: {
-      tenantId: runtimeTenantId(),
-      appKey: runtimeAppKey(),
-      environment: process.env.EAI_ENVIRONMENT,
-      configHash: process.env.EAI_CONFIG_HASH,
-      deploymentId: runtimeDeploymentId(),
-      runtimeIdentity: {
-        clientId: process.env.AZURE_CLIENT_ID,
-        principalId: process.env.EAI_RUNTIME_PRINCIPAL_ID,
-      },
-    },
+    deploymentBinding: runtimeDeploymentBinding(),
     ok: checks.every((check) => check.ok),
     checks,
     failureCategories,

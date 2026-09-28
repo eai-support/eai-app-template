@@ -234,16 +234,10 @@ describe('readiness route', () => {
       );
       const body = await response.json();
       const serialized = JSON.stringify(body);
-      const binding = JSON.parse(serialized).deploymentBinding;
-
       expect(response.status).toBe(200);
       expect(serialized).not.toContain('caller-client');
       expect(serialized).not.toContain('caller-principal');
-      expect(binding.runtimeIdentity).toEqual(
-        envKey === 'AZURE_CLIENT_ID'
-          ? { principalId: 'runtime-principal-123' }
-          : { clientId: 'runtime-client-123' },
-      );
+      expect(body.deploymentBinding).toBeUndefined();
     },
   );
 
@@ -309,6 +303,7 @@ describe('readiness route', () => {
 
     expect(response.status).toBe(503);
     expect(body.failureCategories).toContain('config_missing');
+    expect(body.deploymentBinding).toBeUndefined();
     expect(body.checks).toContainEqual(
       expect.objectContaining({
         name: 'runtime-env',
@@ -326,6 +321,7 @@ describe('readiness route', () => {
 
     expect(response.status).toBe(503);
     expect(body.failureCategories).toContain('config_missing');
+    expect(body.deploymentBinding).toBeUndefined();
     expect(body.checks).toContainEqual(
       expect.objectContaining({
         name: 'runtime-env',
@@ -334,6 +330,81 @@ describe('readiness route', () => {
       }),
     );
   });
+
+  it.each([undefined, '', ' ', ' deployment-123 '])(
+    'does not expose a binding for runtime deployment identity %p with an omitted probe header',
+    async (deploymentId) => {
+      if (deploymentId === undefined) {
+        delete process.env.EAI_DEPLOYMENT_ID;
+      } else {
+        process.env.EAI_DEPLOYMENT_ID = deploymentId;
+      }
+      const request = readinessRequest();
+      request.headers.delete('x-eai-deployment-id');
+
+      const response = await GET(request);
+      const body = await response.json();
+
+      expect(response.status).toBe(503);
+      expect(body.failureCategories).toContain('config_missing');
+      expect(body.deploymentBinding).toBeUndefined();
+    },
+  );
+
+  it.each(['AZURE_CLIENT_ID', 'EAI_RUNTIME_PRINCIPAL_ID'])(
+    'does not expose partial binding for a blank or padded runtime %s',
+    async (envKey) => {
+      for (const identity of ['', ' ', ' runtime-id ']) {
+        process.env[envKey] = identity;
+
+        const response = await GET(readinessRequest());
+        const body = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(body.failureCategories).toEqual([]);
+        expect(body.deploymentBinding).toBeUndefined();
+      }
+    },
+  );
+
+  it.each([
+    {
+      name: 'tenant',
+      envKeys: ['NEXT_PUBLIC_EAI_TENANT_ID', 'EAI_TENANT_ID'],
+      header: 'x-eai-tenant-id',
+    },
+    {
+      name: 'app',
+      envKeys: ['EAI_PRODUCT_SLUG', 'EAI_APP_KEY'],
+      header: 'x-eai-app-key',
+    },
+    {
+      name: 'environment',
+      envKeys: ['EAI_ENVIRONMENT'],
+      header: 'x-eai-environment',
+    },
+    {
+      name: 'config',
+      envKeys: ['EAI_CONFIG_HASH'],
+      header: 'x-eai-config-hash',
+    },
+  ])(
+    'does not expose partial binding when runtime $name is missing',
+    async ({ envKeys, header }) => {
+      for (const envKey of envKeys) {
+        delete process.env[envKey];
+      }
+      const request = readinessRequest();
+      request.headers.delete(header);
+
+      const response = await GET(request);
+      const body = await response.json();
+
+      expect(response.status).toBe(503);
+      expect(body.failureCategories).toContain('config_missing');
+      expect(body.deploymentBinding).toBeUndefined();
+    },
+  );
 
   it('accepts TenantInfra runtime env names for scope binding', async () => {
     delete process.env['NEXT_PUBLIC_EAI_TENANT_ID'];

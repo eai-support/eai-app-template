@@ -1122,6 +1122,15 @@ test('handoff exact-binds optional target tenant and the current artifact attemp
       {},
       /run attempt/,
     ],
+    [
+      'wrong caller event',
+      {
+        ...valid,
+        runAttempt: { ...valid.runAttempt, event: 'workflow_call' },
+      },
+      {},
+      /run attempt/,
+    ],
   ]) {
     const rejected = runBinding(payload, environment);
     assert.notEqual(rejected.status, 0, name);
