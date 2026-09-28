@@ -31,9 +31,9 @@ cd task-tracker
 
 This clones the EAI App Template and sets up the project structure.
 
-## Step 2: Create Your Tenant
+## Step 2: Configure Your Workspace
 
-Create a tenant configuration at `src/eai.config/tenants/tracker.config.ts`:
+The app template keeps the `tenants` folder, `tenantId` field, and `tenantConfigs` export as stable configuration names. They identify the workspace in this tutorial. The role value `tenant-viewer` is also a platform role ID; describe it to users as workspace viewer access. Add the workspace configuration at `src/eai.config/tenants/tracker.config.ts`:
 
 ```typescript
 import { defineConfig } from '@enterpriseaigroup/core/config/server';
@@ -152,27 +152,29 @@ export const objectTypes = {
 };
 ```
 
-`appSqlStorage('tasks')` is the template helper that produces the current
-tenant-app storage contract: `tenant-postgres` plus an app-owned table name. Do
-not replace it with `resourceapi-postgres` or a generic table name. After
+`appSqlStorage('tasks')` is the template helper for the workspace app storage
+contract. It uses the technical `tenant-postgres` alias and an app-owned table
+name. Do not replace it with `resourceapi-postgres` or a generic table name. After
 `eai app provision`, the helper uses the generated `.eai/storage-bindings.json`
 contract and local prefix env values written by the CLI.
+
+The CLI keeps `--tenant-id` for a workspace ID and `--tenant-key` for an Object Type scope key. These option names are part of the current platform contract.
 
 Validate, publish, and verify:
 
 ```bash
 eai login
-eai tenant list --format json
-eai tenant select <tenant-slug>
+eai workspace list --format json
+eai workspace select <workspace-slug>
 eai whoami
-eai app provision task-tracker --tenant-id <tenant-id> --select --format json
-eai types validate --tenant-key task-tracker --tenant-id <tenant-id>
-eai types seed --tenant-key task-tracker --tenant-id <tenant-id> --format json
-eai types diff --tenant-key task-tracker --tenant-id <tenant-id>
-eai resources schema --tenant-id <tenant-id> --format json
+eai app provision task-tracker --tenant-id <workspace-id> --select --format json
+eai types validate --tenant-key task-tracker --tenant-id <workspace-id>
+eai types seed --tenant-key task-tracker --tenant-id <workspace-id> --format json
+eai types diff --tenant-key task-tracker --tenant-id <workspace-id>
+eai resources schema --tenant-id <workspace-id> --format json
 ```
 
-Do not continue until `eai types diff` shows that the remote tenant matches the local source.
+Do not continue until `eai types diff` shows that the selected workspace matches the local source.
 
 ## Step 4: Create the Task List Page
 
@@ -384,11 +386,11 @@ function DescriptionHelper({
 
 - **Object Types**: How to define your data model in TypeScript and seed it to the platform
 - **useResources Hook**: CRUD operations against ResourceAPI from React components
-- **Config-Driven Architecture**: Tenant config, layout, and store setup
+- **Config-Driven Architecture**: Workspace config, layout, and store setup
 - **eai CLI**: Scaffold, validate, seed, and develop workflows
 
 ## Next Steps
 
 - [Add AI Chat to Your Vertical](/docs/tutorials/add-ai-chat) — Full AI integration guide
 - [Deploy to Azure](/docs/tutorials/deploy-to-azure) — Ship your app to production
-- [Configuration Deep Dive](/docs/configuration/overview) — Advanced tenant configuration
+- [Configuration Deep Dive](/docs/configuration/overview) — Advanced workspace configuration

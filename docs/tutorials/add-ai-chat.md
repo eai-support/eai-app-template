@@ -19,8 +19,8 @@ it should not call model providers or downstream platform services directly.
 
 - A working app project. See [Build a Task Tracker](/docs/tutorials/build-a-task-tracker).
 - Authenticated with `eai login`.
-- A selected tenant with Object Types seeded to the platform.
-- A platform workflow ID supplied by onboarding, tenant configuration, or
+- A selected workspace with Object Types seeded to the platform.
+- A platform workflow ID supplied by onboarding, workspace configuration, or
   `eai workflow status`.
 
 ## Step 1: Understand The Public Boundary
@@ -29,14 +29,14 @@ it should not call model providers or downstream platform services directly.
 Browser
   -> useChat hook
   -> /api/eai/stream/...
-  -> app BFF attaches auth and tenant context
+  -> app BFF attaches auth and workspace context
   -> PublicAPI chat route
   -> SSE events stream back to the browser
 ```
 
 Key concepts:
 
-- **Workflow**: A named AI workflow available to the tenant.
+- **Workflow**: A named AI workflow available to the selected workspace.
 - **Stage**: A step within that workflow, such as `chat`.
 - **Conversation**: A stable `conversation_id` used for multi-turn context.
 
@@ -45,8 +45,8 @@ Key concepts:
 Use the CLI before wiring UI to the workflow:
 
 ```bash
-eai workflow status <workflow-key> --tenant <tenant-id>
-eai chat send "What can you help me with?" --workflow <workflow-id> --tenant <tenant-id>
+eai workflow status <workflow-key> --workspace <workspace-id>
+eai chat send "What can you help me with?" --workflow <workflow-id> --workspace <workspace-id>
 ```
 
 Store runtime IDs in local or deployment environment configuration, not in

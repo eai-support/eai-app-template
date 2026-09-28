@@ -1,8 +1,14 @@
 # EAI App Template
 
-A production-ready Next.js template for building tenant-scoped applications on the Enterprise AI platform.
+A production-ready Next.js template for building workspace-based applications on the Enterprise AI platform.
 
 **[Documentation](https://eai-support.github.io/eai-app-docs/)** | **[Package Registry](https://enterpriseaigroup.github.io/enterpriseai-packages/)** | **[Mirror Repo](https://github.com/eai-support/eai-app-template)**
+
+Customer-facing guidance calls this an EAI workspace. Some stable contract
+fields, routes, and CLI flags keep the historical word `tenant` in their names.
+For example, `tenantId` and `--tenant-id` carry an EAI workspace ID. The CLI
+accepts `eai workspace` as the preferred command and keeps `eai tenant` as an
+alias.
 
 ## What This Template Assumes
 
@@ -11,8 +17,8 @@ A production-ready Next.js template for building tenant-scoped applications on t
   when the CLI is released; this template does not need a separate template
   release tag.
 - Object types declare a logical storage backend such as `postgresql`, `documentdb`, `blob`, or `search`.
-- Tenant connections resolve the physical store for that tenant at runtime.
-- PublicAPI and ResourceAPI enforce tenant access. Frontends do not receive raw Blob, DocumentDB, PostgreSQL, or AI Search credentials.
+- Workspace connections resolve the physical store for that workspace at runtime.
+- PublicAPI and ResourceAPI enforce workspace access. Frontends do not receive raw Blob, DocumentDB, PostgreSQL, or AI Search credentials.
 
 ## Quick Start
 
@@ -35,21 +41,21 @@ already listens on the chosen port, and restarts the development server on that
 same port. AI agents should use this runner instead of calling `npm run dev`
 directly.
 
-Then connect the project to a real tenant:
+Then connect the project to an EAI workspace:
 
 ```bash
 npm config set @enterpriseai:registry https://eai-support.github.io/eai/registry/ --location=user
 npm install -g @enterpriseai/cli
 eai update --check
 eai login
-eai tenant list --format json
-eai tenant select <tenant-slug>
+eai workspace list --format json
+eai workspace select <workspace-slug>
 eai whoami
-eai app provision <app-key> --tenant-id <tenant-id> --format json
+eai app provision <app-key> --tenant-id <workspace-id> --format json
 eai types validate
-eai types diff --tenant-key template --tenant-id <tenant-id>
-eai types seed --tenant-key template --tenant-id <tenant-id> --format json
-eai resources schema --tenant-id <tenant-id> --format json
+eai types diff --tenant-key template --tenant-id <workspace-id>
+eai types seed --tenant-key template --tenant-id <workspace-id> --format json
+eai resources schema --tenant-id <workspace-id> --format json
 ```
 
 Review the pre-seed `types diff`, then seed the intended definitions. Re-run
@@ -67,9 +73,9 @@ The default contract requires:
 
 - Auth.js with Microsoft Entra sign-in
 - PublicAPI access through the app BFF at `/api/eai`
-- tenant/workflow runtime configuration through `/api/eai/config`
+- workspace/workflow runtime configuration through `/api/eai/config`
 - `/health` for host-level liveness
-- user-delegated access for tenant data-plane calls
+- user-delegated access for workspace data calls
 
 Validate the local contract and a deployed app with:
 
@@ -80,7 +86,7 @@ eai deploy doctor --url https://your-deployed-app.example.com
 ```
 
 `/health` returning 200 is only the first check. A deployment is not considered
-healthy until Auth.js, runtime config, tenant/workflow values, and declared
+healthy until Auth.js, runtime config, workspace/workflow values, and declared
 smoke tests pass.
 
 The readiness smoke test remains authenticated. The deploy-doctor process and
@@ -93,25 +99,25 @@ sends them to the declared endpoint, and does not include them in output. If a
 required value is absent, doctor does not send an unauthenticated request and
 reports missing probe configuration instead of PublicAPI authorization failure.
 
-## Tenant Data Access
+## Workspace Data Access
 
-Tenant app data access is user-delegated. Browser code calls the app BFF at
+Workspace data access is user-delegated. Browser code calls the app BFF at
 `/api/eai/...`, and the BFF forwards to PublicAPI with the signed-in user's
 session token. PublicAPI, OPA/Authz, and ResourceAPI then evaluate the user,
-app, and tenant together.
+app, and workspace together.
 
 Do not add app-only `client_credentials` access for normal ResourceAPI reads,
 writes, files, or search. If work must continue after the user leaves the page,
-have the user request a platform workflow/job and pass tenant, app, and user
+have the user request a platform workflow/job and pass workspace, app, and user
 context into that workflow.
 
 These credentials and identities have different purposes:
 
 - Auth.js uses the app registration's confidential-client secret to complete
   interactive sign-in and establish the user's server-side session.
-- The BFF uses the signed-in user's delegated token for tenant-scoped PublicAPI
-  calls; PublicAPI evaluates the user, app client, and tenant together.
-- An app-only/service identity is optional and separate. Generic tenant apps do
+- The BFF uses the signed-in user's delegated token for workspace-scoped PublicAPI
+  calls; PublicAPI evaluates the user, app client, and workspace together.
+- An app-only/service identity is optional and separate. Generic workspace apps do
   not need one for normal data-plane access, and `eai app provision` must not
   create one merely to repair an interactive login.
 
@@ -192,19 +198,19 @@ required for app tokens", explain that error before changing state:
 eai errors explain app_token_tenant_context_required --format json
 ```
 
-Then confirm the tenant with `eai whoami` and `eai tenant list --format json`
-and use tenant-scoped platform routes such as
-`/v4/platform/tenants/<tenant-id>/users/by-email?email=<email>`,
-`/v4/platform/tenants/<tenant-id>/users/<oid>/memberships`,
-`/v4/platform/tenants/<tenant-id>/members`, and
-`/v4/platform/tenants/<tenant-id>/role-definitions`. Do not change
-tenant members, Entra configuration, role definitions, databases, or cloud
+Then confirm the workspace with `eai whoami` and `eai workspace list --format json`
+and use workspace-scoped platform routes. Existing platform routes retain the `tenants` path name, such as
+`/v4/platform/tenants/<workspace-id>/users/by-email?email=<email>`,
+`/v4/platform/tenants/<workspace-id>/users/<oid>/memberships`,
+`/v4/platform/tenants/<workspace-id>/members`, and
+`/v4/platform/tenants/<workspace-id>/role-definitions`. Do not change
+workspace members, Entra configuration, role definitions, databases, or cloud
 portals.
 
-## Tenant Data Plane Model
+## Workspace Data Plane Model
 
 - `postgresql`: canonical structured resource storage for most app data.
-- `documentdb`: tenant-scoped document storage when a resource type genuinely needs a document model.
+- `documentdb`: workspace-scoped document storage when a resource type genuinely needs a document model.
 - `blob`: file and large object storage behind API-mediated access.
 - `search`: derived search/vector projection only, never the system of record.
 
@@ -219,18 +225,18 @@ create standalone browser-visible blob upload paths for new apps. See
 ## Common Local Workflow
 
 ```bash
-# 1. Edit tenant config and object types
+# 1. Edit workspace config and object types
 
 # 2. Validate locally
 eai types validate
 
-# 3. Publish to the selected tenant
-eai types seed --tenant-key template --tenant-id <tenant-id> --format json
+# 3. Publish to the selected workspace
+eai types seed --tenant-key template --tenant-id <workspace-id> --format json
 
 # 4. Confirm the remote platform matches local source
-eai types diff --tenant-key template --tenant-id <tenant-id>
-eai resources schema --tenant-id <tenant-id> --format json
-eai verify calls --tenant-id <tenant-id> --resource-type application
+eai types diff --tenant-key template --tenant-id <workspace-id>
+eai resources schema --tenant-id <workspace-id> --format json
+eai verify calls --tenant-id <workspace-id> --resource-type application
 ```
 
 ## Object Type Naming
@@ -275,8 +281,8 @@ The `@enterpriseaigroup/*` packages are served from a public registry. The inclu
 Full documentation is available at **https://eai-support.github.io/eai-app-docs/**, covering:
 
 - Getting started and onboarding
-- CLI usage and tenant workflows
-- Architecture and tenant data-plane patterns
+- CLI usage and workspace workflows
+- Architecture and workspace data patterns
 - Platform service usage patterns for resources, storage, documents, search, and chat
 - Config-driven UI composition with store bindings and component registries
 - App configuration and extension points

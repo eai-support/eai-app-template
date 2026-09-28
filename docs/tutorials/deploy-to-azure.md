@@ -16,18 +16,18 @@ subscriptions, and environment-specific settings.
 - A GitHub repository for the app.
 - Access to your organization's deployment environment.
 - Required deployment secrets configured in the hosting provider or CI system.
-- A tenant that has been connected and verified through the `eai` CLI.
+- An EAI workspace that is connected and verified through the `eai` CLI.
 
-Before deploying, confirm the app and tenant contract:
+Before deploying, confirm the app and workspace configuration:
 
 ```bash
 eai login
-eai tenant select <tenant-slug>
+eai workspace select <workspace-slug>
 eai types validate
-eai types seed --tenant-key <tenant-key> --tenant-id <tenant-id> --format json
-eai types diff --tenant-key <tenant-key> --tenant-id <tenant-id>
-eai resources schema --tenant-id <tenant-id> --format json
-eai verify calls --tenant-id <tenant-id> --resource-type <resource-type>
+eai types seed --tenant-key <scope-key> --tenant-id <workspace-id> --format json
+eai types diff --tenant-key <scope-key> --tenant-id <workspace-id>
+eai resources schema --tenant-id <workspace-id> --format json
+eai verify calls --tenant-id <workspace-id> --resource-type <resource-type>
 ```
 
 The platform remains the storage and AI boundary. Browser code should call the
@@ -37,15 +37,17 @@ model-provider, or PublicAPI credentials.
 ## Step 1: Prepare Runtime Settings
 
 Set runtime values through your deployment provider's secret or app settings
-store. Do not commit tenant IDs, endpoint URLs, client secrets, or generated
+store. Do not commit workspace IDs, endpoint URLs, client secrets, or generated
 credentials to source control.
+
+The CLI keeps `--tenant-id` as the option name for a workspace ID. `TENANT_<KEY>_ID` is also a stable app runtime setting. `ENTRA_TENANT_ID` identifies the Entra directory, not an EAI workspace.
 
 Common runtime values include:
 
 | Setting                                   | Purpose                                                                |
 | ----------------------------------------- | ---------------------------------------------------------------------- |
 | `BASE_URL_PUBLIC_API`                     | PublicAPI base URL supplied by onboarding or your environment profile. |
-| `TENANT_<KEY>_ID`                         | Tenant ID for the app runtime boundary.                                |
+| `TENANT_<KEY>_ID`                         | Workspace ID for the app runtime boundary.                                |
 | `WORKFLOW_<KEY>_ID`                       | Workflow ID used by chat or AI-assisted screens.                       |
 | `ENTRA_TENANT_NAME` / `ENTRA_TENANT_ID`   | Entra CIAM authority used by the app.                                  |
 | `ENTRA_CLIENT_ID` / `ENTRA_CLIENT_SECRET` | App registration values stored only in secret storage.                 |
@@ -91,10 +93,10 @@ Check the deployment workflow:
 eai deploy status
 ```
 
-Then run platform checks against the tenant:
+Then run platform checks against the selected workspace:
 
 ```bash
-eai verify calls --tenant-id <tenant-id> --resource-type <resource-type>
+eai verify calls --tenant-id <workspace-id> --resource-type <resource-type>
 ```
 
 After the app is reachable, verify:
@@ -129,7 +131,7 @@ secret values in logs; confirm only that required keys exist.
 
 ## What You Learned
 
-- How to verify tenant contracts before deployment.
+- How to verify workspace contracts before deployment.
 - How to keep deployment secrets outside source control.
 - How to use `eai deploy` without exposing private hosting details.
 - How to validate the app through PublicAPI-backed CLI checks after deployment.
@@ -138,5 +140,5 @@ secret values in logs; confirm only that required keys exist.
 
 - [EAI Service Patterns](/docs/platform/eai-service-patterns) — Choose the right
   resource, document, chat, and PublicAPI pattern.
-- [Configuration](/docs/cli/authentication) — Confirm sign-in and tenant
+- [Configuration](/docs/cli/authentication) — Confirm sign-in and workspace
   context.

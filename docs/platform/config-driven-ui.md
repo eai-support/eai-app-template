@@ -5,15 +5,17 @@ slug: /platform/config-driven-ui
 
 # Config-Driven UI Pattern
 
-Use this pattern when an app needs tenant-specific layout, copy, feature flags,
-store state, or service wiring without forking page code for every tenant.
+Use this pattern when an app needs workspace-specific layout, copy, feature flags,
+store state, or service wiring without forking page code for every workspace.
+
+The template keeps the `tenants` directory and tenant-named runtime fields for compatibility. They identify workspace configuration in the app.
 
 ## Source Files
 
 | File                        | Purpose                                                                         |
 | --------------------------- | ------------------------------------------------------------------------------- |
-| `src/eai.config/default.ts` | Default tenant config, store slices, API paths, storage keys, and layout slots. |
-| `src/eai.config/index.ts`   | Maps tenant keys to config objects. Add new tenant configs here.                |
+| `src/eai.config/default.ts` | Default workspace config, store slices, API paths, storage keys, and layout slots. |
+| `src/eai.config/index.ts`   | Maps workspace keys to config objects. Add new workspace configs here.                |
 | `src/eai.blocks.tsx`        | Registers app-local or package components that config can reference by name.    |
 | `src/app/providers.tsx`     | Provides auth/session context and the EAI config runtime.                       |
 | `src/hooks/useResources.ts` | ResourceAPI-backed business data access.                                        |
@@ -22,7 +24,7 @@ store state, or service wiring without forking page code for every tenant.
 
 ## Construction Pattern
 
-1. Put tenant-specific data in config: branding, feature flags, API endpoints,
+1. Put workspace-specific data in config: branding, feature flags, API endpoints,
    storage keys, initial store state, and layout slots.
 2. Register renderable components in `src/eai.blocks.tsx`.
 3. Reference components from config by their registered string name.
@@ -55,7 +57,7 @@ Rules:
 
 - `component` must match a registered component name.
 - Lower `priority` renders first.
-- `props` are static, tenant-configurable values.
+- `props` are static, workspace-configurable values.
 - `storeBindings` map global store paths to component prop paths. Dot notation is
   supported for both sides.
 - `showWhen` supports simple `equals`, `notEquals`, `exists`, plus compound
@@ -116,7 +118,7 @@ store: {
 }
 ```
 
-Persist only tenant-safe UI or workflow state. Keep access tokens, direct
+Persist only workspace-safe UI or workflow state. Keep access tokens, direct
 service credentials, and raw downstream connection details out of the store.
 
 ## Runtime Overrides

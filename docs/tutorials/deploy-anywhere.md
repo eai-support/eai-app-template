@@ -9,9 +9,9 @@ specific host.
 
 - Auth.js with Microsoft Entra sign-in
 - PublicAPI access through the app BFF at `/api/eai`
-- tenant and workflow configuration from `/api/eai/config`
+- workspace and workflow configuration from `/api/eai/config`
 - `/health` for host liveness
-- user-delegated access for tenant data-plane calls
+- user-delegated access for workspace data-plane calls
 - declared smoke tests that prove the app is usable, not only running
 
 ## Validate Locally
@@ -22,7 +22,7 @@ eai deploy env --provider generic
 ```
 
 `eai runtime validate` checks that required env names and secrets are declared,
-tenant/workflow keys are consistent, Auth.js callback paths are valid, public
+workspace/workflow keys are consistent, Auth.js callback paths are valid, public
 endpoints are listed, and public endpoints do not claim anonymous server-side
 platform access.
 
@@ -36,11 +36,11 @@ The deploy doctor checks `/health`, `/api/auth/providers`,
 `/api/eai/config`, declared public endpoints, declared smoke tests, and the
 app's BFF/runtime reachability. It classifies failures as host/infrastructure,
 app not running, Auth.js config, Entra callback config, PublicAPI config,
-tenant/workflow config, missing authenticated-probe configuration, local BFF
+workspace/workflow config, missing authenticated-probe configuration, local BFF
 authorization, PublicAPI authorization, or app runtime errors.
 
 The `/api/eai/readiness` smoke test is intentionally protected. Configure the
-same `EAI_READINESS_PROBE_TOKEN`, tenant ID, app key, environment, and config
+same `EAI_READINESS_PROBE_TOKEN`, workspace ID, app key, environment, and config
 hash in the deployed runtime and in the environment of the operator or CI job
 running deploy doctor. The runtime contract maps these values to request
 headers. The CLI resolves `${ENV_NAME}` references in memory and never writes
@@ -48,7 +48,7 @@ resolved values to deploy-doctor output or artifacts.
 
 If a required probe value is unavailable, deploy doctor does not make a
 predictably unauthenticated request. It reports `authenticated_probe_not_available`
-or `config_missing`; a missing probe credential is not evidence of a tenant or
+or `config_missing`; a missing probe credential is not evidence of a workspace or
 PublicAPI authorization failure. Supply secrets through a CI secret store or
 the invoking process environment, not as command-line arguments.
 
@@ -66,7 +66,7 @@ the invoking process environment, not as command-line arguments.
 - VM or internal demo host: provide the same environment contract through the
   host process manager and run the same doctor command.
 
-Tenant apps do not use app-only PublicAPI credentials for ordinary ResourceAPI
+Workspace apps do not use app-only PublicAPI credentials for ordinary ResourceAPI
 or data-plane work. Require sign-in and use the `/api/eai` BFF path. For
 long-running or scheduled work, create a user-authorized platform workflow/job
 instead of giving the app a broad service identity.
