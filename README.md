@@ -4,9 +4,11 @@ A production-ready Next.js template for building workspace-based applications on
 
 **[Documentation](https://eai-support.github.io/eai-app-docs/)** | **[Package Registry](https://enterpriseaigroup.github.io/enterpriseai-packages/)** | **[Mirror Repo](https://github.com/eai-support/eai-app-template)**
 
-Customer-facing guidance calls this an EAI workspace. Existing platform routes,
-configuration keys, and CLI flags can still use `tenant` for compatibility. The
-CLI accepts `eai workspace` as the preferred command.
+Customer-facing guidance calls this an EAI workspace. Some stable contract
+fields, routes, and CLI flags keep the historical word `tenant` in their names.
+For example, `tenantId` and `--tenant-id` carry an EAI workspace ID. The CLI
+accepts `eai workspace` as the preferred command and keeps `eai tenant` as an
+alias.
 
 ## What This Template Assumes
 

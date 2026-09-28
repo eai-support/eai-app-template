@@ -187,6 +187,8 @@ Validates:
   types must use `tenant-postgres`, not `resourceapi-postgres`, and table names
   must use the app-owned prefix.
 
+`--tenant-id` is the CLI option for an EAI workspace ID. `--tenant-key` is the CLI option for the Object Type scope key in `object-types.ts`; keep the workspace ID and scope key separate.
+
 ### `eai types seed`
 
 Push Object Types from `src/eai.config/object-types.ts` to the platform.
@@ -198,7 +200,7 @@ eai types seed [options]
 | Flag                  | Description                               | Default       |
 | --------------------- | ----------------------------------------- | ------------- |
 | `--env <environment>` | Target environment                        | `dev`         |
-| `--tenant-key <key>`  | Specific workspace key                       | All workspaces   |
+| `--tenant-key <key>`  | Specific Object Type scope key                       | All workspaces   |
 | `--tenant-id <id>`    | Explicit workspace ID to publish to | Active workspace |
 | `--dry-run`           | Preview without changes                   | `false`       |
 | `--format <format>`   | Output format (`text` or `json`)          | `text`        |
@@ -211,10 +213,10 @@ eai types seed [options]
 eai types seed
 
 # Seed only one workspace
-eai types seed --tenant-key my-tenant
+eai types seed --tenant-key my-workspace
 
 # Seed a specific workspace and emit machine-readable output
-eai types seed --tenant-key my-tenant --tenant-id 50808ce0-f31b-4fd0-9861-74b83b8c112a --format json
+eai types seed --tenant-key my-workspace --tenant-id 50808ce0-f31b-4fd0-9861-74b83b8c112a --format json
 
 # Preview what would be seeded
 eai types seed --dry-run
@@ -247,7 +249,7 @@ Shows additions, removals, and modifications for each object type and property.
 Example:
 
 ```bash
-eai types diff --tenant-key my-tenant --tenant-id 50808ce0-f31b-4fd0-9861-74b83b8c112a
+eai types diff --tenant-key my-workspace --tenant-id 50808ce0-f31b-4fd0-9861-74b83b8c112a
 ```
 
 ### `eai types pull`

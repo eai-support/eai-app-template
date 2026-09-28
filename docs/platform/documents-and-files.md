@@ -3,6 +3,8 @@
 This guide explains how an app should handle uploaded files, documents, and AI
 workflows on the PublicAPI v4 surface.
 
+`tenantId` and `--tenant-id` are stable platform contract names; their values identify the EAI workspace for these app operations.
+
 ## Choose The Right Model
 
 | User goal                                                                   | Use this model                        | App API                                         | CLI                                                      |
@@ -84,7 +86,7 @@ POST /v4/data/documents/upload
 
 The SDK always sends `storage_target=resourceapi`. It sends `processing_mode=full`
 for `upload` and `processing_mode=classification` for `classify`. The app and
-workflow keys are required so PublicAPI can resolve the tenant's published
+workflow keys are required so PublicAPI can resolve the workspace's published
 classifier.
 
 Use `eai publicapi get /v4/data/documents/jobs/<job-id>` for job status until a
@@ -129,11 +131,11 @@ CLI equivalent:
 
 ```bash
 eai resources create ApplicationDocument \
-  --tenant-id <tenant-id> \
+  --tenant-id <workspace-id> \
   --data '{"title":"supporting-document.pdf","applicationId":"app-123"}'
 
 eai resources file upload ApplicationDocument <resource-id> file ./supporting-document.pdf \
-  --tenant-id <tenant-id>
+  --tenant-id <workspace-id>
 ```
 
 The PublicAPI route behind this workflow is:
@@ -187,7 +189,7 @@ questions before choosing an API:
 ```text
 1. Is the uploaded file a document to process with AI, or an attachment to a business record?
 2. Should AI answer from the file content, classify it, or just keep it as evidence?
-3. Which tenant, workflow, and workflow stage should use the document?
+3. Which workspace, workflow, and workflow stage should use the document?
 4. If this is an attachment, which Object Type, resource ID, and file property owns it?
 5. What should happen when the user deletes the resource or document?
 ```
@@ -222,10 +224,10 @@ Use these checks while developing:
 
 ```bash
 eai whoami
-eai resources schema --tenant-id <tenant-id> --format json
+eai resources schema --tenant-id <workspace-id> --format json
 eai docs upload ./sample.pdf
 eai docs index <document-id>
-eai resources file upload <ObjectType> <resource-id> <property> ./sample.pdf --tenant-id <tenant-id>
+eai resources file upload <ObjectType> <resource-id> <property> ./sample.pdf --tenant-id <workspace-id>
 ```
 
 Use named commands first. Use `eai publicapi <method> /v4/...` only when an

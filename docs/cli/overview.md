@@ -95,10 +95,10 @@ eai whoami
 eai types validate
 
 # 3. Publish to the target workspace explicitly
-eai types seed --tenant-key <tenant-key> --tenant-id <workspace-id> --format json
+eai types seed --tenant-key <scope-key> --tenant-id <workspace-id> --format json
 
 # 4. Verify remote convergence before you build on top
-eai types diff --tenant-key <tenant-key> --tenant-id <workspace-id>
+eai types diff --tenant-key <scope-key> --tenant-id <workspace-id>
 eai resources schema --tenant-id <workspace-id> --format json
 eai verify calls --tenant-id <workspace-id> --resource-type <resource-type>
 
@@ -114,8 +114,8 @@ If `eai types diff` still shows local-only types or mismatched properties, treat
 
 ```bash
 eai types validate
-eai types seed --tenant-key <tenant-key> --tenant-id <workspace-id> --format json
-eai types diff --tenant-key <tenant-key> --tenant-id <workspace-id>
+eai types seed --tenant-key <scope-key> --tenant-id <workspace-id> --format json
+eai types diff --tenant-key <scope-key> --tenant-id <workspace-id>
 eai resources schema --tenant-id <workspace-id> --format json
 ```
 

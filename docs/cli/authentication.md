@@ -20,13 +20,13 @@ This opens a browser window for Entra CIAM authentication. After signing in, the
 | Flag                   | Description                | Default                               |
 | ---------------------- | -------------------------- | ------------------------------------- |
 | `--tenant-name <name>` | CIAM tenant name           | `example-ciam-tenant`                 |
-| `--tenant-id <id>`     | CIAM tenant GUID           | Platform default                      |
+| `--tenant-id <id>`     | Entra CIAM tenant GUID      | Platform default                      |
 | `--client-id <id>`     | App registration client ID | From `.env.local`                     |
 | `--scope <scope>`      | OAuth scopes               | `openid profile email offline_access` |
 
-### Custom Tenant Authentication
+### Custom Entra Tenant Authentication
 
-For apps with their own Entra ID tenant:
+For apps with their own Entra ID tenant. This identity-provider tenant is separate from an EAI workspace:
 
 ```bash
 eai login --tenant-name my-ciam-tenant --client-id 12dcbf85-xxxx-xxxx-xxxx
@@ -41,7 +41,7 @@ eai workspace list --format json
 eai workspace select <workspace-slug>
 ```
 
-Most platform commands use the active workspace unless you explicitly pass `--tenant-id`.
+Most platform commands use the active workspace unless you explicitly pass `--tenant-id`. This stable option takes a workspace ID.
 
 ## Check Auth Status
 
