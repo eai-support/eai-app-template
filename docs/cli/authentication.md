@@ -32,16 +32,16 @@ For apps with their own Entra ID tenant:
 eai login --tenant-name my-ciam-tenant --client-id 12dcbf85-xxxx-xxxx-xxxx
 ```
 
-## Select the Working Tenant
+## Select the Working Workspace
 
-Authentication and active tenant selection are separate:
+Authentication and active workspace selection are separate:
 
 ```bash
-eai tenant list --format json
-eai tenant select <tenant-slug>
+eai workspace list --format json
+eai workspace select <workspace-slug>
 ```
 
-Most platform commands use the active tenant unless you explicitly pass `--tenant-id`.
+Most platform commands use the active workspace unless you explicitly pass `--tenant-id`.
 
 ## Check Auth Status
 
@@ -52,7 +52,7 @@ eai whoami
 Displays:
 
 - authenticated user email
-- authority tenant and active tenant
+- Entra authority and active workspace
 - token expiry status
 - current project context when run inside an app repo
 
@@ -101,19 +101,19 @@ eai logout && eai login
 
 ### "Unauthorized" on API calls
 
-Check that your user is working in the correct tenant context:
+Check that your user is working in the correct workspace:
 
 ```bash
-eai tenant list --format json
-eai tenant select <tenant-slug>
+eai workspace list --format json
+eai workspace select <workspace-slug>
 eai whoami
 ```
 
-For read-only troubleshooting, you can also bypass active selection and target a tenant explicitly:
+For read-only troubleshooting, you can also bypass active selection and target a workspace explicitly:
 
 ```bash
-eai resources schema --tenant-id <tenant-id> --format json
-eai verify calls --tenant-id <tenant-id> --resource-type <resource-type>
+eai resources schema --tenant-id <workspace-id> --format json
+eai verify calls --tenant-id <workspace-id> --resource-type <resource-type>
 ```
 
 ### Browser doesn't open
