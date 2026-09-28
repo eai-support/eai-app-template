@@ -2182,6 +2182,38 @@ test('image context rejects an application-controlled linked build-output root',
   }
 });
 
+test('image context rejects outside hard links in each captured source tree', () => {
+  for (const [sourceRelative, destinationRelative] of [
+    ['.next/standalone/linked.js', '.eai-build/image-context/linked.js'],
+    ['.next/static/linked.js', '.eai-build/image-context/.next/static/linked.js'],
+    ['public/linked.txt', '.eai-build/image-context/public/linked.txt'],
+  ]) {
+    const workDir = mkdtempSync(join(tmpdir(), 'eai-hard-linked-image-source-'));
+    try {
+      const root = join(workDir, 'app');
+      const outside = join(workDir, 'outside.txt');
+      const source = join(root, sourceRelative);
+      writeFixtureApp(root);
+      writeFileSync(outside, 'outside must not enter the image\n');
+      mkdirSync(dirname(source), { recursive: true });
+      linkSync(outside, source);
+
+      const result = spawnSync(
+        process.execPath,
+        [evidenceScript, 'prepare-image-context', '--root', root],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1, sourceRelative);
+      assert.match(result.stderr, /single-link regular files/);
+      assert.equal(existsSync(join(root, destinationRelative)), false);
+      assert.equal(readFileSync(outside, 'utf8'), 'outside must not enter the image\n');
+      assert.equal(result.stdout, '');
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  }
+});
+
 test('image preparation rejects a preexisting context without deleting it', () => {
   for (const relativePath of ['.eai-build/image-context']) {
     const workDir = mkdtempSync(join(tmpdir(), 'eai-preexisting-output-'));
@@ -2292,11 +2324,16 @@ test('image-tree copies bind each source ancestor and final path through the rea
     2,
   );
   assert.match(copy, /sourceRebound\.ino !== opened\.ino/);
+  assert.match(copy, /before\.nlink !== 1/);
+  assert.match(copy, /opened\.nlink !== 1/);
+  assert.match(copy, /sourceRebound\.nlink !== 1/);
   assert.match(copy, /opened\.mtimeMs !== before\.mtimeMs/);
   assert.match(copy, /opened\.ctimeMs !== before\.ctimeMs/);
   assert.match(copy, /sourceRebound\.mtimeMs !== opened\.mtimeMs/);
   assert.match(copy, /sourceRebound\.ctimeMs !== opened\.ctimeMs/);
   assert.match(copy, /sourcePathAfter\.ino !== opened\.ino/);
+  assert.match(copy, /sourcePathAfter\.nlink !== 1/);
+  assert.match(copy, /after\.nlink !== 1/);
   assert.match(copy, /sourcePathAfter\.mtimeMs !== opened\.mtimeMs/);
   assert.match(copy, /sourcePathAfter\.ctimeMs !== opened\.ctimeMs/);
   assert.match(copy, /after\.mtimeMs !== opened\.mtimeMs/);
@@ -3710,6 +3747,38 @@ test('configuration digest binds nested tenants, deployment contract, and reject
     assert.match(result.stderr, /cannot be a symlink/);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+test('configuration hashing rejects outside hard links in governed source files', () => {
+  for (const relativePath of [
+    'eai.runtime.json',
+    'eai.config.ts',
+    'src/eai.config/policy.ts',
+  ]) {
+    const workDir = mkdtempSync(join(tmpdir(), 'eai-hard-linked-config-'));
+    try {
+      const root = join(workDir, 'app');
+      const outside = join(workDir, 'outside.txt');
+      const source = join(root, relativePath);
+      writeFixtureApp(root);
+      const content = existsSync(source) ? readFileSync(source) : Buffer.from('export const policy = true;\n');
+      writeFileSync(outside, content);
+      rmSync(source, { force: true });
+      linkSync(outside, source);
+
+      const result = spawnSync(
+        process.execPath,
+        [evidenceScript, 'config-hash', '--root', root],
+        { encoding: 'utf8' },
+      );
+      assert.equal(result.status, 1, relativePath);
+      assert.match(result.stderr, /bounded regular file with a single link/);
+      assert.equal(readFileSync(outside).equals(content), true);
+      assert.equal(result.stdout, '');
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
   }
 });
 
