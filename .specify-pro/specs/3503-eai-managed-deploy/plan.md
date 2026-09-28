@@ -28,3 +28,4 @@
 26. Bind every copied, generated, and evidence destination to its exact expected byte length and single-link identity after writing.
 27. Reject an empty or malformed direct-dispatch commit before checkout while preserving the signed same-repository reusable caller SHA fallback.
 28. Retain the canonical algorithm-qualified GitHub REST artifact digest comparison and record its live/API contract evidence.
+29. Bind the approved commit to signed `github.sha` before checkout, use only that signed event value as the checkout ref, and remove BSD-only tar extraction flags so Linux and local validation share the same bounded behavior.

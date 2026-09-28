@@ -62,6 +62,8 @@
 - [x] Prove GitHub REST artifact digests remain canonical `sha256:<hex>` values and retain the exact comparison (DTE-025).
 - [x] Validate and encode the canonical positive safe-integer artifact ID before any GitHub provenance request (DTE-025).
 - [x] Remove persistent cache integration from the application-controlled source job and prove the deployment workflow cannot restore or save a cross-run cache (DTE-025).
+- [ ] Require the approved source commit to equal signed `github.sha` before checkout and pass only that signed event value to checkout (DTE-025, DTE-026).
+- [ ] Use GNU/BSD-compatible bounded tar extraction flags in collector and isolated handoff, with Linux exact-head coverage (DTE-025).
 
 ## Exact-head evidence
 
