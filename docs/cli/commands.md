@@ -79,7 +79,7 @@ user lookup or membership prerequisite calls, use:
 eai errors explain app_token_tenant_context_required --format json
 ```
 
-Then retry through tenant-scoped V4 platform routes before changing tenant
+Then retry through workspace-scoped V4 platform routes before changing workspace
 members, role definitions, Entra configuration, databases, or cloud portals.
 
 ---
@@ -148,7 +148,7 @@ eai dev --skip-checks
 Audit the exact read-only platform contracts the template now depends on.
 
 ```bash
-eai verify calls --tenant-id <tenant-id> --resource-type application --format json
+eai verify calls --tenant-id <workspace-id> --resource-type application --format json
 ```
 
 For post-012 apps this should confirm:
@@ -160,7 +160,7 @@ For post-012 apps this should confirm:
 - resource query contract
 - optional resource get contract when `--resource-id` is supplied
 
-Use this after `eai types seed` and before wiring dashboards or sync jobs onto large tenant datasets.
+Use this after `eai types seed` and before wiring dashboards or sync jobs onto large workspace datasets.
 
 ---
 
@@ -183,9 +183,11 @@ Validates:
 - Property type correctness
 - Select type has `options` array
 - LinkType references valid target types
-- App-owned storage bindings for published Object Types. PostgreSQL tenant app
+- App-owned storage bindings for published Object Types. PostgreSQL workspace app
   types must use `tenant-postgres`, not `resourceapi-postgres`, and table names
   must use the app-owned prefix.
+
+`--tenant-id` is the CLI option for an EAI workspace ID. `--tenant-key` is the CLI option for the Object Type scope key in `object-types.ts`; keep the workspace ID and scope key separate.
 
 ### `eai types seed`
 
@@ -198,8 +200,8 @@ eai types seed [options]
 | Flag                  | Description                               | Default       |
 | --------------------- | ----------------------------------------- | ------------- |
 | `--env <environment>` | Target environment                        | `dev`         |
-| `--tenant-key <key>`  | Specific tenant key                       | All tenants   |
-| `--tenant-id <id>`    | Explicit platform tenant ID to publish to | Active tenant |
+| `--tenant-key <key>`  | Specific Object Type scope key                       | All workspaces   |
+| `--tenant-id <id>`    | Explicit workspace ID to publish to | Active workspace |
 | `--dry-run`           | Preview without changes                   | `false`       |
 | `--format <format>`   | Output format (`text` or `json`)          | `text`        |
 | `--json`              | Deprecated alias for `--format json`      | `false`       |
@@ -207,14 +209,14 @@ eai types seed [options]
 ### Examples
 
 ```bash
-# Seed using the active tenant
+# Seed using the active workspace
 eai types seed
 
-# Seed only one tenant
-eai types seed --tenant-key my-tenant
+# Seed only one workspace
+eai types seed --tenant-key my-workspace
 
-# Seed a specific tenant and emit machine-readable output
-eai types seed --tenant-key my-tenant --tenant-id 50808ce0-f31b-4fd0-9861-74b83b8c112a --format json
+# Seed a specific workspace and emit machine-readable output
+eai types seed --tenant-key my-workspace --tenant-id 50808ce0-f31b-4fd0-9861-74b83b8c112a --format json
 
 # Preview what would be seeded
 eai types seed --dry-run
@@ -223,7 +225,7 @@ eai types seed --dry-run
 eai types seed --env staging
 ```
 
-For tenant apps, run `eai app provision <key> --tenant-id <tenant-id> --select
+For workspace apps, run `eai app provision <key> --tenant-id <workspace-id> --select
 --format json` before `types seed`. Provisioning establishes the allowed storage
 aliases and app-owned naming prefix that Object Type publishing validates, and
 writes the local `.eai/storage-bindings.json` contract used by the starter
@@ -241,13 +243,13 @@ Shows additions, removals, and modifications for each object type and property.
 
 | Flag                 | Description                                          |
 | -------------------- | ---------------------------------------------------- |
-| `--tenant-key <key>` | Compare only one tenant scope from `object-types.ts` |
-| `--tenant-id <id>`   | Compare against an explicit remote tenant            |
+| `--tenant-key <key>` | Compare only one workspace scope from `object-types.ts` |
+| `--tenant-id <id>`   | Compare against an explicit remote workspace            |
 
 Example:
 
 ```bash
-eai types diff --tenant-key my-tenant --tenant-id 50808ce0-f31b-4fd0-9861-74b83b8c112a
+eai types diff --tenant-key my-workspace --tenant-id 50808ce0-f31b-4fd0-9861-74b83b8c112a
 ```
 
 ### `eai types pull`
@@ -262,14 +264,14 @@ Useful for syncing with changes made through an approved platform admin UI.
 
 ---
 
-## `eai tenant`
+## `eai workspace` (compatibility alias: `eai tenant`)
 
-Manage tenants on the platform.
+Manage EAI workspaces. Existing `eai tenant` commands remain supported.
 
-### `eai tenant list`
+### `eai workspace list`
 
 ```bash
-eai tenant list [options]
+eai workspace list [options]
 ```
 
 | Flag                | Description                          | Default |
@@ -277,51 +279,51 @@ eai tenant list [options]
 | `--format <format>` | Output format (`text` or `json`)     | `text`  |
 | `--json`            | Deprecated alias for `--format json` | `false` |
 
-### `eai tenant info`
+### `eai workspace info`
 
 ```bash
-eai tenant info <id> [options]
+eai workspace info <id> [options]
 ```
 
-Shows tenant details: name, slug, parent, domains, created date.
+Shows workspace details: name, slug, parent, domains, created date.
 
 Example:
 
 ```bash
-eai tenant info 50808ce0-f31b-4fd0-9861-74b83b8c112a --format json
+eai workspace info 50808ce0-f31b-4fd0-9861-74b83b8c112a --format json
 ```
 
-### `eai tenant select`
+### `eai workspace select`
 
 ```bash
-eai tenant select <slug>
+eai workspace select <slug>
 ```
 
-Select the active tenant for subsequent CLI commands. Use `eai whoami` to confirm the active tenant after selection.
+Select the active workspace for later CLI commands. Use `eai whoami` to confirm it after selection.
 
-### `eai tenant create`
+### `eai workspace create`
 
 ```bash
-eai tenant create [options]
+eai workspace create [options]
 ```
 
 | Flag                 | Description                             |
 | -------------------- | --------------------------------------- |
-| `--name <name>`      | Tenant display name                     |
-| `--slug <slug>`      | URL-safe tenant identifier (kebab-case) |
-| `--parent <id>`      | Parent tenant ID                        |
+| `--name <name>`      | Workspace display name                     |
+| `--slug <slug>`      | URL-safe workspace identifier (kebab-case) |
+| `--parent <id>`      | Parent workspace ID                        |
 | `--domain <domains>` | Comma-separated domain list             |
 
 ### Example
 
 ```bash
-eai tenant create \
+eai workspace create \
   --name "My Application" \
   --slug my-app \
   --domain "myapp.com,app.example.com"
 ```
 
-For child-tenant workflows, `eai tenant create --parent <id>` performs a create-and-verify flow. If the resulting tenant is not actually usable, the CLI reports that explicitly instead of implying the workspace is ready.
+For child-workspace workflows, `eai workspace create --parent <id>` performs a create-and-verify flow. If the resulting workspace is not ready, the CLI reports that explicitly instead of implying the workspace is ready.
 
 ---
 
@@ -354,7 +356,7 @@ eai resources list <type> [options]
 | `--page <n>`        | Page number                                       | `1`           |
 | `--limit <n>`       | Items per page                                    | `20`          |
 | `--sort <field>`    | Sort field (`-` prefix for descending)            | `-created_at` |
-| `--tenant-id <id>`  | Run the read-only query against a specific tenant | Active tenant |
+| `--tenant-id <id>`  | Run the read-only query against a specific workspace | Active workspace |
 | `--format <format>` | Output format (`text` or `json`)                  | `text`        |
 | `--json`            | Deprecated alias for `--format json`              | `false`       |
 
@@ -376,7 +378,7 @@ eai resources create <type> [options]
 | ------------------- | ------------------------------------------ |
 | `--data <json>`     | Resource data as JSON string               |
 | `--file <path>`     | Read data from a JSON file                 |
-| `--tenant-id <id>`  | Run the mutation against a specific tenant |
+| `--tenant-id <id>`  | Run the mutation against a specific workspace |
 | `--format <format>` | Output format (`text` or `json`)           |
 
 ### `eai resources update`
@@ -407,7 +409,7 @@ Supports `--tenant-id`, `--where <json>`, `--limit <n>`, `--format json`, and `-
 
 ### `eai resources schema`
 
-Show published Object Types for the current tenant.
+Show published Object Types for the current workspace.
 
 ```bash
 eai resources schema [options]
@@ -418,10 +420,10 @@ Supports `--tenant-id`, `--format json`, and `--json`.
 ### Examples
 
 ```bash
-# List all Applications in the active tenant
+# List all Applications in the active workspace
 eai resources list Application
 
-# List against an explicit tenant
+# List against an explicit workspace
 eai resources list Application --tenant-id 50808ce0-f31b-4fd0-9861-74b83b8c112a --format json
 
 # Get a specific resource
@@ -619,7 +621,7 @@ Checks:
 
 - PublicAPI reachability
 - Authentication validity
-- Tenant access
+- Workspace access
 - Resource schema availability
 - Chat endpoint availability, when configured
 
