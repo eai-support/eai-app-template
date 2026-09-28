@@ -3482,6 +3482,75 @@ syncBuiltinESMExports();
   }
 });
 
+test('collect rejects a command-file hard link added after the descriptor snapshot', () => {
+  const workDir = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-linked-github-output-after-snapshot-')),
+  );
+  try {
+    const root = join(workDir, 'app');
+    const githubOutput = join(workDir, 'github-output.txt');
+    const preload = join(workDir, 'link-command-file.cjs');
+    writeFixtureApp(root);
+    writeFileSync(githubOutput, 'trusted=before\n');
+    writeFileSync(
+      preload,
+      String.raw`
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const originalWriteSync = fs.writeSync;
+const originalFstatSync = fs.fstatSync;
+let appended = false;
+let linked = false;
+fs.writeSync = function patchedWriteSync(descriptor, ...args) {
+  const result = originalWriteSync.call(fs, descriptor, ...args);
+  const target = process.env.EAI_TEST_GITHUB_OUTPUT_LINK_PATH;
+  const opened = originalFstatSync.call(fs, descriptor);
+  const leaf = fs.lstatSync(target);
+  if (opened.dev === leaf.dev && opened.ino === leaf.ino) appended = true;
+  return result;
+};
+fs.fstatSync = function patchedFstatSync(descriptor, ...args) {
+  const status = originalFstatSync.call(fs, descriptor, ...args);
+  const target = process.env.EAI_TEST_GITHUB_OUTPUT_LINK_PATH;
+  const leaf = fs.lstatSync(target);
+  if (appended && !linked && status.dev === leaf.dev && status.ino === leaf.ino) {
+    linked = true;
+    fs.linkSync(target, target + '.alias');
+  }
+  return status;
+};
+syncBuiltinESMExports();
+`,
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        evidenceScript,
+        ...sourceUnknownCollectArgs(root),
+        '--github-output',
+        githubOutput,
+      ],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_GITHUB_OUTPUT_LINK_PATH: githubOutput,
+        },
+      },
+    );
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /path changed during append/);
+    assert.equal(lstatSync(githubOutput).nlink, 2);
+    assert.equal(lstatSync(`${githubOutput}.alias`).ino, lstatSync(githubOutput).ino);
+    assert.equal(result.stdout, '');
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
 test('collect rejects a config hash that does not bind the checked-out files', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-tamper-'));
   try {
