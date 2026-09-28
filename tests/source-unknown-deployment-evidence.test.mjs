@@ -547,6 +547,10 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   );
   assert.match(
     workflow,
+    /ref: \$\{\{ github\.sha \}\}/,
+  );
+  assert.doesNotMatch(
+    workflow,
     /ref: \$\{\{ steps\.invocation\.outputs\.source_commit_sha \}\}/,
   );
   assert.doesNotMatch(workflow, /inputs\.commit_sha \|\| github\.sha/);
@@ -845,9 +849,13 @@ test('source commit is resolved before checkout for direct and reusable calls', 
     return { result, output };
   };
 
-  const direct = runGate({ requested: explicitSha });
+  const direct = runGate({ requested: callerSha });
   assert.equal(direct.result.status, 0, direct.result.stderr);
-  assert.equal(direct.output, `source_commit_sha=${explicitSha}\n`);
+  assert.equal(direct.output, `source_commit_sha=${callerSha}\n`);
+
+  const mismatchedDirect = runGate({ requested: explicitSha });
+  assert.notEqual(mismatchedDirect.result.status, 0);
+  assert.match(mismatchedDirect.result.stderr, /signed workflow event SHA/);
 
   const missingDirect = runGate();
   assert.notEqual(missingDirect.result.status, 0);
@@ -862,11 +870,21 @@ test('source commit is resolved before checkout for direct and reusable calls', 
   assert.equal(reusable.output, `source_commit_sha=${callerSha}\n`);
 
   const reusableExplicit = runGate({
-    requested: explicitSha,
+    requested: callerSha,
     reusable: 'true',
   });
   assert.equal(reusableExplicit.result.status, 0, reusableExplicit.result.stderr);
-  assert.equal(reusableExplicit.output, `source_commit_sha=${explicitSha}\n`);
+  assert.equal(reusableExplicit.output, `source_commit_sha=${callerSha}\n`);
+
+  const mismatchedReusableExplicit = runGate({
+    requested: explicitSha,
+    reusable: 'true',
+  });
+  assert.notEqual(mismatchedReusableExplicit.result.status, 0);
+  assert.match(
+    mismatchedReusableExplicit.result.stderr,
+    /signed workflow event SHA/,
+  );
 });
 
 test('OIDC response parser bounds unknown-length input before token retention', () => {
@@ -984,7 +1002,8 @@ test('handoff binds the bounded OCI archive and referenced manifest bytes', () =
   assert.match(handoffJob, /TAR_TIMEOUT_MS = 10 \* 60 \* 1000/);
   assert.match(archiveInspector, /maxBuffer: outputLimit \+ 1/);
   assert.match(archiveInspector, /entries\.length !== 1/);
-  assert.match(archiveInspector, /'--occurrence=1', '--fast-read'/);
+  assert.match(archiveInspector, /'--occurrence=1', '--file'/);
+  assert.doesNotMatch(workflow, /--fast-read/);
   assert.match(archiveInspector, /extractBoundedRegularEntry\('oci-layout'/);
   assert.match(
     archiveInspector,

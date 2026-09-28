@@ -852,7 +852,6 @@ function readOciImageDigestFromArchive(root, archivePath) {
           '--extract',
           '--to-stdout',
           '--occurrence=1',
-          '--fast-read',
           '--file',
           archivePathByDescriptor,
           '--',

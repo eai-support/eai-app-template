@@ -155,12 +155,16 @@ jobs:
             echo "Managed deployment requires an exact lowercase source commit SHA before checkout." >&2
             exit 1
           fi
+          if [[ "$source_commit_sha" != "$EAI_CALLER_COMMIT_SHA" ]]; then
+            echo "Managed deployment source commit must match the signed workflow event SHA." >&2
+            exit 1
+          fi
           printf 'source_commit_sha=%s\n' "$source_commit_sha" >> "$GITHUB_OUTPUT"
 
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ steps.invocation.outputs.source_commit_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Set up Node.js
@@ -561,7 +565,7 @@ jobs:
                 const entries = listing.split(/\r?\n/).filter(Boolean);
                 if (entries.length !== 1 || !entries[0].startsWith('-') || !entries[0].endsWith(` ${memberPath}`)) throw new Error(`${label} must be one regular archive entry.`);
                 return runBoundedTar(
-                  ['--extract', '--to-stdout', '--occurrence=1', '--fast-read', '--file', archivePath, '--', memberPath],
+                  ['--extract', '--to-stdout', '--occurrence=1', '--file', archivePath, '--', memberPath],
                   outputLimit,
                   label,
                 );
