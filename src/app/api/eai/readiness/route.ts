@@ -126,7 +126,7 @@ async function generatedWorkflowPlatformCheck(
   }
 }
 
-/** Returns authenticated deployment checks plus bound workflow proof when configured. */
+/** Returns runtime-owned deployment binding only to authenticated, exact-scope probes. */
 export async function GET(request: Request): Promise<Response> {
   const probeFailureResponse = validateTenantInfraProbe(request);
   if (probeFailureResponse) {
@@ -149,6 +149,17 @@ export async function GET(request: Request): Promise<Response> {
   ).sort();
   const platformReadiness = {
     ...readiness,
+    deploymentBinding: {
+      tenantId: runtimeTenantId(),
+      appKey: runtimeAppKey(),
+      environment: process.env.EAI_ENVIRONMENT,
+      configHash: process.env.EAI_CONFIG_HASH,
+      deploymentId: runtimeDeploymentId(),
+      runtimeIdentity: {
+        clientId: process.env.AZURE_CLIENT_ID,
+        principalId: process.env.EAI_RUNTIME_PRINCIPAL_ID,
+      },
+    },
     ok: checks.every((check) => check.ok),
     checks,
     failureCategories,

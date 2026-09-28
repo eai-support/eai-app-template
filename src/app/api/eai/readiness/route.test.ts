@@ -43,6 +43,8 @@ describe('readiness route', () => {
       EAI_ENVIRONMENT: 'dev',
       EAI_CONFIG_HASH: 'cfg-123',
       EAI_DEPLOYMENT_ID: 'deployment-123',
+      AZURE_CLIENT_ID: 'runtime-client-123',
+      EAI_RUNTIME_PRINCIPAL_ID: 'runtime-principal-123',
       TENANT_KEYS: TEST_TENANT_KEY,
       [`TENANT_${TEST_TENANT_ENV_KEY}_ID`]: 'tenant-template',
       [`WORKFLOW_${TEST_TENANT_ENV_KEY}_ID`]: 'workflow-template',
@@ -113,6 +115,17 @@ describe('readiness route', () => {
     expect(body).toMatchObject({
       ok: true,
       service: 'contract-test',
+      deploymentBinding: {
+        tenantId: 'tenant-template',
+        appKey: 'contract-test',
+        environment: 'dev',
+        configHash: 'cfg-123',
+        deploymentId: 'deployment-123',
+        runtimeIdentity: {
+          clientId: 'runtime-client-123',
+          principalId: 'runtime-principal-123',
+        },
+      },
       failureCategories: [],
     });
   });
@@ -131,6 +144,7 @@ describe('readiness route', () => {
     expect(serialized).toContain('AUTH_SECRET');
     expect(serialized).not.toContain('test-entra-secret');
     expect(serialized).not.toContain('test-auth-secret');
+    expect(serialized).not.toContain('probe-token');
   });
 
   it('proves generic runtime readiness without an NCB workflow assignment', async () => {
@@ -154,17 +168,34 @@ describe('readiness route', () => {
     expect(body.checks).toEqual([
       { name: 'tenantinfra-probe', ok: false, category: 'auth_misconfigured' },
     ]);
+    expect(body.deploymentBinding).toBeUndefined();
   });
 
-  it('rejects readiness probes with mismatched tenant scope', async () => {
-    const response = await GET(
-      readinessRequest({ 'x-eai-tenant-id': 'tenant-other' }),
-    );
-    const body = await response.json();
+  it.each([
+    'x-eai-tenant-id',
+    'x-eai-app-key',
+    'x-eai-environment',
+    'x-eai-config-hash',
+    'x-eai-deployment-id',
+  ])(
+    'rejects missing or mismatched %s without revealing runtime binding',
+    async (header) => {
+      for (const value of [undefined, 'different-scope']) {
+        const request = readinessRequest();
+        if (value === undefined) {
+          request.headers.delete(header);
+        } else {
+          request.headers.set(header, value);
+        }
+        const response = await GET(request);
+        const body = await response.json();
 
-    expect(response.status).toBe(403);
-    expect(body.failureCategories).toEqual(['tenant_assignment_invalid']);
-  });
+        expect(response.status).toBe(403);
+        expect(body.failureCategories).toEqual(['tenant_assignment_invalid']);
+        expect(body.deploymentBinding).toBeUndefined();
+      }
+    },
+  );
 
   it('rejects probes without the configured bearer token', async () => {
     const response = await GET(readinessRequest({ authorization: '' }));
@@ -172,7 +203,49 @@ describe('readiness route', () => {
 
     expect(response.status).toBe(401);
     expect(body.failureCategories).toEqual(['auth_misconfigured']);
+    expect(body.deploymentBinding).toBeUndefined();
   });
+
+  it('reports the runtime identity rather than identity claims in request headers', async () => {
+    const response = await GET(
+      readinessRequest({
+        'x-eai-runtime-client-id': 'caller-client',
+        'x-eai-runtime-principal-id': 'caller-principal',
+      }),
+    );
+    const body = await response.json();
+
+    expect(body.deploymentBinding.runtimeIdentity).toEqual({
+      clientId: 'runtime-client-123',
+      principalId: 'runtime-principal-123',
+    });
+  });
+
+  it.each(['AZURE_CLIENT_ID', 'EAI_RUNTIME_PRINCIPAL_ID'])(
+    'does not substitute caller claims when runtime %s is absent',
+    async (envKey) => {
+      delete process.env[envKey];
+
+      const response = await GET(
+        readinessRequest({
+          'x-eai-runtime-client-id': 'caller-client',
+          'x-eai-runtime-principal-id': 'caller-principal',
+        }),
+      );
+      const body = await response.json();
+      const serialized = JSON.stringify(body);
+      const binding = JSON.parse(serialized).deploymentBinding;
+
+      expect(response.status).toBe(200);
+      expect(serialized).not.toContain('caller-client');
+      expect(serialized).not.toContain('caller-principal');
+      expect(binding.runtimeIdentity).toEqual(
+        envKey === 'AZURE_CLIENT_ID'
+          ? { principalId: 'runtime-principal-123' }
+          : { clientId: 'runtime-client-123' },
+      );
+    },
+  );
 
   it('rejects probes when the bearer token is not configured', async () => {
     delete process.env[READINESS_PROBE_TOKEN_ENV];
@@ -182,6 +255,7 @@ describe('readiness route', () => {
 
     expect(response.status).toBe(503);
     expect(body.failureCategories).toEqual(['auth_misconfigured']);
+    expect(body.deploymentBinding).toBeUndefined();
   });
 
   it('accepts probes with the configured bearer token', async () => {
@@ -190,6 +264,10 @@ describe('readiness route', () => {
 
     expect(response.status).toBe(200);
     expect(body.failureCategories).toEqual([]);
+    expect(body.deploymentBinding).toMatchObject({
+      tenantId: 'tenant-template',
+      appKey: 'contract-test',
+    });
   });
 
   it('accepts the exact active deployment identity', async () => {
@@ -268,6 +346,10 @@ describe('readiness route', () => {
 
     expect(response.status).toBe(200);
     expect(body.failureCategories).toEqual([]);
+    expect(body.deploymentBinding).toMatchObject({
+      tenantId: 'tenant-template',
+      appKey: 'contract-test',
+    });
   });
 
   it('includes the bound workflow digest and title for TenantInfra promotion', async () => {
