@@ -1357,6 +1357,7 @@ test(
       mkdirSync(dirname(mixedDuplicatePath), { recursive: true });
       const mixedDuplicateTarget = join(mixedDuplicateRoot, 'target');
       writeFileSync(mixedDuplicateTarget, configBytes);
+      rmSync(mixedDuplicatePath);
       symlinkSync(mixedDuplicateTarget, mixedDuplicatePath);
       execFileSync('tar', [
         '-rf',
