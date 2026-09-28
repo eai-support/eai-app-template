@@ -47,6 +47,8 @@ const MAX_GOVERNED_CONFIG_TOTAL_BYTES = 32 * 1024 * 1024;
 const MAX_GOVERNED_CONFIG_FILES = 4096;
 const MAX_BUILD_EVIDENCE_BYTES = 1024 * 1024;
 const MAX_HANDOFF_RESPONSE_BYTES = 1024 * 1024;
+const MAX_GITHUB_OUTPUT_VALUE_BYTES = 4 * 1024;
+const MAX_GITHUB_OUTPUT_TOTAL_BYTES = 64 * 1024;
 const MAX_OCI_INDEX_BYTES = 1024 * 1024;
 const MAX_OCI_MANIFEST_BYTES = 4 * 1024 * 1024;
 const MAX_TAR_LISTING_BYTES = 64 * 1024;
@@ -1786,9 +1788,19 @@ function appendOutputs(path, outputs) {
       if (/[\r\n\0]/.test(serialized)) {
         throw new Error(`GitHub output ${key} must be a single safe line.`);
       }
+      if (
+        Buffer.byteLength(serialized, 'utf8') >
+        MAX_GITHUB_OUTPUT_VALUE_BYTES
+      ) {
+        throw new Error(`GitHub output ${key} exceeds its byte limit.`);
+      }
       return `${key}=${serialized}\n`;
     })
     .join('');
+  const bytes = Buffer.from(lines, 'utf8');
+  if (bytes.length > MAX_GITHUB_OUTPUT_TOTAL_BYTES) {
+    throw new Error('GitHub outputs exceed their aggregate byte limit.');
+  }
   const boundPath = resolve(path);
   const ancestors = snapshotAbsoluteDirectoryPath(
     dirname(boundPath),
@@ -1809,7 +1821,6 @@ function appendOutputs(path, outputs) {
     }
     assertAbsoluteDirectorySnapshot(ancestors, 'GitHub output command file');
     assertCommandFileBinding(boundPath, descriptor, status, 'before append');
-    const bytes = Buffer.from(lines, 'utf8');
     let offset = 0;
     while (offset < bytes.length) {
       const written = writeSync(

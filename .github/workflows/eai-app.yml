@@ -131,6 +131,8 @@ jobs:
     outputs:
       config_hash: ${{ steps.deployment-binding.outputs.config_hash }}
       source_commit_sha: ${{ steps.invocation.outputs.source_commit_sha }}
+      image_artifact_id: ${{ steps.image-artifact.outputs.artifact-id }}
+      image_artifact_digest: ${{ steps.image-artifact.outputs.artifact-digest }}
     runs-on: ubuntu-latest
     steps:
       - name: Validate workflow invocation
@@ -176,9 +178,14 @@ jobs:
         id: deployment-binding
         env:
           REQUESTED_CONFIG_HASH: ${{ inputs.config_hash }}
+          EAI_REUSABLE_CALL: ${{ inputs.eai_reusable_call }}
         shell: bash
         run: |
           set -euo pipefail
+          if [[ -z "$REQUESTED_CONFIG_HASH" && "$EAI_REUSABLE_CALL" != "true" ]]; then
+            echo "Direct managed deployment requires its server-approved config_hash." >&2
+            exit 1
+          fi
           config_hash="$(node scripts/source-unknown-deployment-evidence.mjs config-hash)"
           [[ "$config_hash" =~ ^sha256:[a-f0-9]{64}$ ]]
           if [[ -n "$REQUESTED_CONFIG_HASH" && "$REQUESTED_CONFIG_HASH" != "$config_hash" ]]; then
@@ -398,6 +405,9 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+          BUILD_IMAGE_ARTIFACT_ID: ${{ needs.build.outputs.image_artifact_id }}
+          BUILD_IMAGE_ARTIFACT_DIGEST: ${{ needs.build.outputs.image_artifact_digest }}
         shell: bash
         run: |
           [[ "$EAI_BOUND_PUBLIC_API_URL" =~ ^https://(dev-api\.au|(test-api|api)\.(au|ca|eu))\.myenterprise\.ai/public/?$ ]]
@@ -463,6 +473,39 @@ jobs:
           ]);
           function sameFileIdentity(left, right) {
             return left.dev === right.dev && left.ino === right.ino;
+          }
+          function assertTargetTenantBinding(evidence, targetTenantId) {
+            const present = Object.prototype.hasOwnProperty.call(evidence, 'targetTenantId');
+            if (targetTenantId ? (!present || evidence.targetTenantId !== targetTenantId) : present) {
+              throw new Error('Build evidence target tenant does not match.');
+            }
+          }
+          function assertSourceModeBinding(evidence, sourceMode) {
+            const present = Object.prototype.hasOwnProperty.call(evidence, 'sourceMode');
+            if (present ? evidence.sourceMode !== sourceMode : sourceMode !== 'source-unknown') {
+              throw new Error('Build evidence source mode does not match.');
+            }
+          }
+          function canonicalUploadArtifactDigest(value) {
+            if (typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)) return `sha256:${value}`;
+            if (typeof value === 'string' && SHA256_DIGEST.test(value)) return value;
+            throw new Error('Current upload artifact digest is invalid.');
+          }
+          function assertCurrentUploadBinding(evidence, artifactId) {
+            if (artifactId !== process.env.BUILD_IMAGE_ARTIFACT_ID || evidence.artifactDigest !== canonicalUploadArtifactDigest(process.env.BUILD_IMAGE_ARTIFACT_DIGEST)) {
+              throw new Error('Build evidence artifact does not match the current upload step.');
+            }
+          }
+          function assertGitHubArtifactBinding(evidence, artifact, runAttempt, artifactId) {
+            const repositoryIdText = process.env.GITHUB_REPOSITORY_ID || '';
+            const runIdText = process.env.GITHUB_RUN_ID || '';
+            const runAttemptText = process.env.GITHUB_RUN_ATTEMPT || '';
+            const repositoryId = Number(repositoryIdText);
+            const runId = Number(runIdText);
+            const attempt = Number(runAttemptText);
+            if (!/^[1-9][0-9]*$/.test(repositoryIdText) || !Number.isSafeInteger(repositoryId) || String(repositoryId) !== repositoryIdText || !/^[1-9][0-9]*$/.test(runIdText) || !Number.isSafeInteger(runId) || String(runId) !== runIdText || !/^[1-9][0-9]*$/.test(runAttemptText) || !Number.isSafeInteger(attempt) || String(attempt) !== runAttemptText) throw new Error('GitHub run identity is invalid.');
+            if (artifact.id !== Number(artifactId) || artifact.name !== evidence.imageArtifact.name || artifact.digest !== evidence.artifactDigest || artifact.workflow_run?.id !== runId || artifact.workflow_run.repository_id !== repositoryId || artifact.workflow_run.head_repository_id !== repositoryId || artifact.workflow_run.head_sha !== process.env.SOURCE_COMMIT_SHA) throw new Error('GitHub artifact metadata does not match build evidence.');
+            if (runAttempt.id !== runId || runAttempt.run_attempt !== attempt || runAttempt.head_sha !== process.env.SOURCE_COMMIT_SHA || runAttempt.event !== 'workflow_dispatch' || runAttempt.repository?.id !== repositoryId) throw new Error('GitHub workflow run attempt does not match build evidence.');
           }
           function snapshotDirectoryPath(filePath, label) {
             const target = path.resolve(path.dirname(filePath));
@@ -696,14 +739,15 @@ jobs:
           for (const [key, value] of Object.entries(expected)) {
             if (evidence[key] !== value) throw new Error(`Build evidence ${key} does not match the exact dispatch.`);
           }
-          if ((evidence.sourceMode || 'source-unknown') !== process.env.SOURCE_MODE) throw new Error('Build evidence source mode does not match.');
-          if (process.env.TARGET_TENANT_ID && evidence.targetTenantId !== process.env.TARGET_TENANT_ID) throw new Error('Build evidence target tenant does not match.');
+          assertSourceModeBinding(evidence, process.env.SOURCE_MODE);
+          assertTargetTenantBinding(evidence, process.env.TARGET_TENANT_ID);
           if (String(evidence.workflowRun?.id) !== process.env.GITHUB_RUN_ID || String(evidence.workflowRun?.attempt) !== process.env.GITHUB_RUN_ATTEMPT) throw new Error('Build evidence workflow run does not match.');
           if (evidence.validationSummary?.status !== 'passed') throw new Error('Build evidence validation did not pass.');
           const artifactId = evidence.imageArtifact?.id;
           const artifactIdNumber = typeof artifactId === 'string' ? Number(artifactId) : NaN;
           if (typeof artifactId !== 'string' || !/^[1-9][0-9]*$/.test(artifactId) || !Number.isSafeInteger(artifactIdNumber) || String(artifactIdNumber) !== artifactId) throw new Error('Build evidence image artifact ID is invalid.');
           if (evidence.imageArtifact?.name !== 'eai-generated-app-image') throw new Error('Build evidence image artifact name is invalid.');
+          assertCurrentUploadBinding(evidence, artifactId);
           const archive = inspectOciArchive('.eai-build/eai-generated-app-image.tar', MAX_IMAGE_ARCHIVE_BYTES, evidence.imageDigest);
           if (evidence.imageArtifact?.archiveDigest !== archive.archiveDigest) throw new Error('Downloaded image archive does not match build evidence.');
           if (new Set([evidence.artifactDigest, evidence.imageArtifact.archiveDigest, evidence.imageDigest]).size !== 3) throw new Error('Build evidence digests must be independently bound.');
@@ -852,12 +896,13 @@ jobs:
             return `sha256:${hash.digest('hex')}`;
           }
           (async () => {
-            const [workflowBytes, collectorBytes, runtimeBytes, canonicalConfigHash, artifactResponse] = await Promise.all([
+            const [workflowBytes, collectorBytes, runtimeBytes, canonicalConfigHash, artifactResponse, runAttemptResponse] = await Promise.all([
               sourceBytes(process.env.EAI_WORKFLOW_PATH, MAX_PRODUCER_SOURCE_BYTES, 'Canonical workflow source'),
               sourceBytes('scripts/source-unknown-deployment-evidence.mjs', MAX_PRODUCER_SOURCE_BYTES, 'Canonical collector source'),
               sourceBytes('eai.runtime.json', MAX_GOVERNED_CONFIG_FILE_BYTES, 'Governed runtime source'),
               sourceConfigHash(),
               github(`/actions/artifacts/${encodeURIComponent(artifactId)}`),
+              github(`/actions/runs/${encodeURIComponent(process.env.GITHUB_RUN_ID)}/attempts/${encodeURIComponent(process.env.GITHUB_RUN_ATTEMPT)}`),
             ]);
             if (canonicalConfigHash !== process.env.CONFIG_HASH || canonicalConfigHash !== evidence.configHash) throw new Error('Exact source configuration does not match dispatch and build evidence.');
             const workflowBlobSha = createHash('sha1').update(`blob ${workflowBytes.length}\0`).update(workflowBytes).digest('hex');
@@ -866,12 +911,19 @@ jobs:
             const runtime = JSON.parse(runtimeBytes.toString('utf8'));
             const sourceProvenance = validateSchemaProvenance(runtime.schemaProvenance);
             if (!isDeepStrictEqual(evidence.schemaProvenance, sourceProvenance)) throw new Error('Source runtime provenance does not match build evidence.');
-            const artifact = await readBoundedResponseJson(
-              artifactResponse,
-              MAX_GITHUB_METADATA_RESPONSE_BYTES,
-              'GitHub artifact response',
-            );
-            if (!Number.isSafeInteger(artifact.id) || String(artifact.id) !== artifactId || artifact.name !== evidence.imageArtifact.name || artifact.digest !== evidence.artifactDigest || String(artifact.workflow_run?.id) !== process.env.GITHUB_RUN_ID) throw new Error('GitHub artifact metadata does not match build evidence.');
+            const [artifact, runAttempt] = await Promise.all([
+              readBoundedResponseJson(
+                artifactResponse,
+                MAX_GITHUB_METADATA_RESPONSE_BYTES,
+                'GitHub artifact response',
+              ),
+              readBoundedResponseJson(
+                runAttemptResponse,
+                MAX_GITHUB_METADATA_RESPONSE_BYTES,
+                'GitHub workflow run-attempt response',
+              ),
+            ]);
+            assertGitHubArtifactBinding(evidence, artifact, runAttempt, artifactId);
           })().catch((error) => {
             console.error(error instanceof Error ? error.message : String(error));
             process.exitCode = 1;

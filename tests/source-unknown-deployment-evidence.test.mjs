@@ -535,6 +535,14 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
       workflow.indexOf('  handoff:'),
   );
   assert.match(workflow, /name: eai-generated-app-image/);
+  assert.match(
+    workflow,
+    /image_artifact_id: \$\{\{ steps\.image-artifact\.outputs\.artifact-id \}\}/,
+  );
+  assert.match(
+    workflow,
+    /image_artifact_digest: \$\{\{ steps\.image-artifact\.outputs\.artifact-digest \}\}/,
+  );
   assert.match(workflow, /--platform linux\/amd64/);
   assert.match(workflow, /inputs\.public_api_url/);
   assert.match(workflow, /inputs\.publicapi_base_url/);
@@ -560,6 +568,35 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   );
   assert.match(workflow, /--commit "\$SOURCE_COMMIT_SHA"/);
   assert.match(workflow, /--workflow-sha "\$GITHUB_SHA"/);
+  assert.match(
+    handoffJob,
+    /BUILD_IMAGE_ARTIFACT_ID: \$\{\{ needs\.build\.outputs\.image_artifact_id \}\}/,
+  );
+  assert.match(
+    handoffJob,
+    /BUILD_IMAGE_ARTIFACT_DIGEST: \$\{\{ needs\.build\.outputs\.image_artifact_digest \}\}/,
+  );
+  assert.match(
+    handoffJob,
+    /GITHUB_REPOSITORY_ID: \$\{\{ github\.repository_id \}\}/,
+  );
+  assert.match(
+    handoffJob,
+    /assertTargetTenantBinding\(evidence, process\.env\.TARGET_TENANT_ID\)/,
+  );
+  assert.match(
+    handoffJob,
+    /assertCurrentUploadBinding\(evidence, artifactId\)/,
+  );
+  assert.match(
+    handoffJob,
+    /actions\/runs\/\$\{encodeURIComponent\(process\.env\.GITHUB_RUN_ID\)\}\/attempts\/\$\{encodeURIComponent\(process\.env\.GITHUB_RUN_ATTEMPT\)\}/,
+  );
+  assert.match(
+    handoffJob,
+    /artifact\.workflow_run\.head_sha !== process\.env\.SOURCE_COMMIT_SHA/,
+  );
+  assert.match(handoffJob, /runAttempt\.run_attempt !== attempt/);
   assert.ok(
     workflow.indexOf('validate-dispatch') <
       workflow.indexOf('Install dependencies'),
@@ -642,7 +679,10 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
     handoffJob,
     /actions\/artifacts\/\$\{evidence\.imageArtifact\.id\}/,
   );
-  assert.match(handoffJob, /Number\.isSafeInteger\(artifact\.id\)/);
+  assert.match(
+    handoffJob,
+    /artifact\.id !== Number\(artifactId\)/,
+  );
   assert.match(
     handoffJob,
     /artifact\.digest !== evidence\.artifactDigest/,
@@ -796,6 +836,14 @@ test('reusable workflow compatibility keeps manual same-repository OIDC authorit
   assert.doesNotMatch(dispatchInputs, /eai_reusable_call:/);
   assert.match(
     workflow,
+    /EAI_REUSABLE_CALL: \$\{\{ inputs\.eai_reusable_call \}\}/,
+  );
+  assert.match(
+    workflow,
+    /-z "\$REQUESTED_CONFIG_HASH" && "\$EAI_REUSABLE_CALL" != "true"/,
+  );
+  assert.match(
+    workflow,
     /config_hash="\$\(node scripts\/source-unknown-deployment-evidence\.mjs config-hash\)"/,
   );
   assert.match(
@@ -885,6 +933,200 @@ test('source commit is resolved before checkout for direct and reusable calls', 
     mismatchedReusableExplicit.result.stderr,
     /signed workflow event SHA/,
   );
+});
+
+test('direct dispatch requires a configuration hash while reusable calls may derive it', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const stepStart = workflow.indexOf(
+    '      - name: Resolve immutable configuration hash',
+  );
+  const scriptStart = workflow.indexOf('        run: |\n', stepStart);
+  const scriptEnd = workflow.indexOf(
+    '\n\n      - name: Validate immutable dispatch',
+    scriptStart,
+  );
+  assert.ok(stepStart >= 0 && scriptStart > stepStart && scriptEnd > scriptStart);
+  const script = workflow
+    .slice(scriptStart + '        run: |\n'.length, scriptEnd)
+    .replace(/^ {10}/gm, '');
+  const exactHash = runEvidenceScript(['config-hash', '--root', repoRoot]).trim();
+  const runGate = ({ requested = '', reusable = '' } = {}) => {
+    const workDir = mkdtempSync(join(tmpdir(), 'eai-config-hash-gate-'));
+    const outputPath = join(workDir, 'github-output.txt');
+    writeFileSync(outputPath, '');
+    try {
+      const result = spawnSync('bash', ['-c', script], {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          REQUESTED_CONFIG_HASH: requested,
+          EAI_REUSABLE_CALL: reusable,
+          GITHUB_OUTPUT: outputPath,
+        },
+      });
+      return { result, output: readFileSync(outputPath, 'utf8') };
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  };
+
+  const direct = runGate({ requested: exactHash });
+  assert.equal(direct.result.status, 0, direct.result.stderr);
+  assert.equal(direct.output, `config_hash=${exactHash}\n`);
+
+  const missingDirect = runGate();
+  assert.notEqual(missingDirect.result.status, 0);
+  assert.match(missingDirect.result.stderr, /server-approved config_hash/);
+
+  const reusable = runGate({ reusable: 'true' });
+  assert.equal(reusable.result.status, 0, reusable.result.stderr);
+  assert.equal(reusable.output, `config_hash=${exactHash}\n`);
+
+  const mismatched = runGate({ requested: `sha256:${'f'.repeat(64)}` });
+  assert.notEqual(mismatched.result.status, 0);
+  assert.match(mismatched.result.stderr, /does not match/);
+});
+
+test('handoff exact-binds optional target tenant and the current artifact attempt', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const scriptStart = workflow.indexOf(
+    "          const { createHash } = require('node:crypto');",
+  );
+  const scriptEnd = workflow.indexOf(
+    '          const evidence = JSON.parse(',
+    scriptStart,
+  );
+  assert.ok(scriptStart >= 0 && scriptEnd > scriptStart);
+  const definitions = workflow
+    .slice(scriptStart, scriptEnd)
+    .replace(/^ {10}/gm, '');
+  const bindingScript = `${definitions}\nconst payload = JSON.parse(process.env.EAI_TEST_PAYLOAD);\nassertSourceModeBinding(payload.evidence, payload.sourceMode);\nassertTargetTenantBinding(payload.evidence, payload.targetTenantId);\nassertCurrentUploadBinding(payload.evidence, payload.artifactId);\nassertGitHubArtifactBinding(payload.evidence, payload.artifact, payload.runAttempt, payload.artifactId);\n`;
+  const sourceCommit = 'a'.repeat(40);
+  const artifactDigest = `sha256:${'d'.repeat(64)}`;
+  const valid = {
+    sourceMode: 'eai-cli-generated',
+    targetTenantId: 'hosting-tenant-1',
+    artifactId: '123',
+    evidence: {
+      sourceMode: 'eai-cli-generated',
+      targetTenantId: 'hosting-tenant-1',
+      artifactDigest,
+      imageArtifact: { name: 'eai-generated-app-image' },
+    },
+    artifact: {
+      id: 123,
+      name: 'eai-generated-app-image',
+      digest: artifactDigest,
+      workflow_run: {
+        id: 456,
+        repository_id: 789,
+        head_repository_id: 789,
+        head_sha: sourceCommit,
+      },
+    },
+    runAttempt: {
+      id: 456,
+      run_attempt: 2,
+      head_sha: sourceCommit,
+      event: 'workflow_dispatch',
+      repository: { id: 789 },
+    },
+  };
+  const runBinding = (payload, environment = {}) =>
+    spawnSync(process.execPath, ['-e', bindingScript], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        EAI_TEST_PAYLOAD: JSON.stringify(payload),
+        BUILD_IMAGE_ARTIFACT_ID: '123',
+        BUILD_IMAGE_ARTIFACT_DIGEST: 'd'.repeat(64),
+        GITHUB_REPOSITORY_ID: '789',
+        GITHUB_RUN_ID: '456',
+        GITHUB_RUN_ATTEMPT: '2',
+        SOURCE_COMMIT_SHA: sourceCommit,
+        ...environment,
+      },
+    });
+
+  const accepted = runBinding(valid);
+  assert.equal(accepted.status, 0, accepted.stderr);
+  const acceptedAbsentTarget = runBinding({
+    ...valid,
+    sourceMode: 'source-unknown',
+    targetTenantId: '',
+    evidence: {
+      ...valid.evidence,
+      sourceMode: undefined,
+      targetTenantId: undefined,
+    },
+  });
+  assert.equal(acceptedAbsentTarget.status, 0, acceptedAbsentTarget.stderr);
+
+  for (const [name, payload, environment, pattern] of [
+    [
+      'unexpected target tenant',
+      { ...valid, targetTenantId: '' },
+      {},
+      /target tenant/,
+    ],
+    [
+      'missing target tenant',
+      {
+        ...valid,
+        evidence: { ...valid.evidence, targetTenantId: undefined },
+      },
+      {},
+      /target tenant/,
+    ],
+    [
+      'falsey noncanonical source mode',
+      {
+        ...valid,
+        sourceMode: 'source-unknown',
+        evidence: { ...valid.evidence, sourceMode: '' },
+      },
+      {},
+      /source mode/,
+    ],
+    [
+      'missing generated source mode',
+      { ...valid, evidence: { ...valid.evidence, sourceMode: undefined } },
+      {},
+      /source mode/,
+    ],
+    [
+      'prior artifact output',
+      valid,
+      { BUILD_IMAGE_ARTIFACT_ID: '122' },
+      /current upload step/,
+    ],
+    [
+      'wrong artifact source',
+      {
+        ...valid,
+        artifact: {
+          ...valid.artifact,
+          workflow_run: {
+            ...valid.artifact.workflow_run,
+            head_sha: 'b'.repeat(40),
+          },
+        },
+      },
+      {},
+      /artifact metadata/,
+    ],
+    [
+      'wrong run attempt',
+      { ...valid, runAttempt: { ...valid.runAttempt, run_attempt: 1 } },
+      {},
+      /run attempt/,
+    ],
+  ]) {
+    const rejected = runBinding(payload, environment);
+    assert.notEqual(rejected.status, 0, name);
+    assert.match(rejected.stderr, pattern, name);
+  }
 });
 
 test('OIDC response parser bounds unknown-length input before token retention', () => {
@@ -3013,6 +3255,94 @@ test('collect rejects multiline provenance before writing evidence or GitHub out
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
+});
+
+test('GitHub output serialization enforces UTF-8 value and aggregate byte limits before open', () => {
+  const source = readFileSync(evidenceScript, 'utf8');
+  const functionStart = source.indexOf('function appendOutputs(');
+  const functionEnd = source.indexOf('\n\nasync function collectEvidence', functionStart);
+  assert.ok(functionStart >= 0 && functionEnd > functionStart);
+  const functionSource = source.slice(functionStart, functionEnd);
+  let openCount = 0;
+  let appended = Buffer.alloc(0);
+  const status = {
+    isFile: () => true,
+    nlink: 1,
+    dev: 1,
+    ino: 1,
+  };
+  const appendOutputs = Function(
+    'MAX_GITHUB_OUTPUT_VALUE_BYTES',
+    'MAX_GITHUB_OUTPUT_TOTAL_BYTES',
+    'resolve',
+    'snapshotAbsoluteDirectoryPath',
+    'dirname',
+    'openSync',
+    'noFollowOpenFlags',
+    'constants',
+    'fstatSync',
+    'assertAbsoluteDirectorySnapshot',
+    'assertCommandFileBinding',
+    'writeSync',
+    'closeSync',
+    `${functionSource}; return appendOutputs;`,
+  )(
+    4 * 1024,
+    64 * 1024,
+    (value) => value,
+    () => [],
+    () => '/',
+    () => {
+      openCount += 1;
+      return 3;
+    },
+    (flags) => flags,
+    { O_WRONLY: 1, O_APPEND: 2, O_CREAT: 4 },
+    () => status,
+    () => {},
+    () => {},
+    (_descriptor, bytes, offset, length) => {
+      appended = Buffer.concat([
+        appended,
+        Buffer.from(bytes.subarray(offset, offset + length)),
+      ]);
+      return length;
+    },
+    () => {},
+  );
+
+  appendOutputs('/bounded-output', { exact: 'a'.repeat(4 * 1024) });
+  assert.match(appended.toString('utf8'), /^exact=a+\n$/);
+
+  let opensBefore = openCount;
+  assert.throws(
+    () => appendOutputs('/bounded-output', { oversized: 'a'.repeat(4 * 1024 + 1) }),
+    /oversized exceeds its byte limit/,
+  );
+  assert.equal(openCount, opensBefore);
+  assert.throws(
+    () => appendOutputs('/bounded-output', { multibyte: 'é'.repeat(2049) }),
+    /multibyte exceeds its byte limit/,
+  );
+  assert.equal(openCount, opensBefore);
+
+  const full = Object.fromEntries(
+    Array.from({ length: 16 }, (_, index) => [
+      `k${String(index).padStart(2, '0')}`,
+      'b'.repeat(4091),
+    ]),
+  );
+  appended = Buffer.alloc(0);
+  appendOutputs('/bounded-output', full);
+  assert.equal(appended.length, 64 * 1024);
+
+  const overflowing = { ...full, k00: 'b'.repeat(4092) };
+  opensBefore = openCount;
+  assert.throws(
+    () => appendOutputs('/bounded-output', overflowing),
+    /aggregate byte limit/,
+  );
+  assert.equal(openCount, opensBefore);
 });
 
 test('collect never follows a replaced GitHub output command file', () => {
