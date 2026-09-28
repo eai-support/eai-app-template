@@ -2934,6 +2934,125 @@ syncBuiltinESMExports();
   }
 });
 
+for (const [operation, phase] of [
+  'response-read',
+  'archive-digest',
+  'archive-stage',
+].flatMap((operation) =>
+  ['during-read', 'between-final-snapshots'].map((phase) => [operation, phase]),
+)) {
+  test(`${operation} rejects ${phase} hard links even with unchanged timestamp snapshots`, () => {
+    const workDir = realpathSync(
+      mkdtempSync(join(tmpdir(), 'eai-post-open-source-link-')),
+    );
+    try {
+      const root = join(workDir, 'app');
+      const preload = join(workDir, 'link-after-read.cjs');
+      const alias = join(workDir, 'external-alias');
+      writeFixtureApp(root);
+      const target =
+        operation === 'response-read'
+          ? join(workDir, 'response.json')
+          : join(root, '.eai-build/eai-generated-app-image.tar');
+      if (operation === 'response-read') {
+        writeFileSync(
+          target,
+          JSON.stringify({
+            status: 'accepted',
+            deploymentRequestId: 'source-unknown-deploy-1',
+            requiresTenantInfra: false,
+          }),
+        );
+      }
+      writeFileSync(
+        preload,
+        String.raw`
+const fs = require('node:fs');
+const { syncBuiltinESMExports } = require('node:module');
+const originalOpenSync = fs.openSync;
+const originalReadSync = fs.readSync;
+const originalFstatSync = fs.fstatSync;
+const originalLstatSync = fs.lstatSync;
+const target = process.env.EAI_TEST_SOURCE_LINK_PATH;
+const before = originalLstatSync.call(fs, target);
+let descriptorToLink;
+let linked = false;
+let hasRead = false;
+function unchangedTimestamp(status) {
+  if (status.dev === before.dev && status.ino === before.ino) {
+    // Model coarse filesystem timestamp snapshots; the real link count remains visible.
+    status.ctimeMs = before.ctimeMs;
+  }
+  return status;
+}
+fs.openSync = function patchedOpenSync(path, ...args) {
+  const descriptor = originalOpenSync.call(fs, path, ...args);
+  if (String(path) === target) descriptorToLink = descriptor;
+  return descriptor;
+};
+fs.readSync = function patchedReadSync(descriptor, ...args) {
+  const result = originalReadSync.call(fs, descriptor, ...args);
+  if (descriptor === descriptorToLink && result > 0) {
+    hasRead = true;
+    if (!linked && process.env.EAI_TEST_SOURCE_LINK_PHASE === 'during-read') {
+      linked = true;
+      fs.linkSync(target, process.env.EAI_TEST_SOURCE_LINK_ALIAS);
+    }
+  }
+  return result;
+};
+fs.fstatSync = function patchedFstatSync(descriptor, ...args) {
+  const status = originalFstatSync.call(fs, descriptor, ...args);
+  if (
+    !linked && hasRead && descriptor === descriptorToLink &&
+    process.env.EAI_TEST_SOURCE_LINK_PHASE === 'between-final-snapshots'
+  ) {
+    linked = true;
+    fs.linkSync(target, process.env.EAI_TEST_SOURCE_LINK_ALIAS);
+  }
+  return unchangedTimestamp(status);
+};
+fs.lstatSync = function patchedLstatSync(path, ...args) {
+  return unchangedTimestamp(originalLstatSync.call(fs, path, ...args));
+};
+syncBuiltinESMExports();
+`,
+      );
+      const args =
+        operation === 'response-read'
+          ? ['assert-evidence-accepted', '--response', target]
+          : operation === 'archive-digest'
+            ? sourceUnknownCollectArgs(root)
+            : [
+                'stage-image-artifact',
+                '--root',
+                root,
+                '--staging-root',
+                workDir,
+              ];
+      const result = spawnSync(process.execPath, [evidenceScript, ...args], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--require=${preload}`,
+          EAI_TEST_SOURCE_LINK_PATH: target,
+          EAI_TEST_SOURCE_LINK_ALIAS: alias,
+          EAI_TEST_SOURCE_LINK_PHASE: phase,
+        },
+      });
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /changed during its (?:bounded|bound)/);
+      assert.equal(result.stdout, '');
+      assert.equal(lstatSync(target).nlink, 2);
+      assert.equal(lstatSync(alias).ino, lstatSync(target).ino);
+      assert.equal(existsSync(join(root, '.eai-build/evidence')), false);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
+  });
+}
+
 test('governed configuration reads enforce the explicit per-file cap', () => {
   const workDir = realpathSync(mkdtempSync(join(tmpdir(), 'eai-config-cap-')));
   try {

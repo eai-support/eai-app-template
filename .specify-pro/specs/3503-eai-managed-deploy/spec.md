@@ -59,3 +59,5 @@ Canonical amendment: https://github.com/enterpriseaigroup/Issues2025/issues/3503
 30. A present evidence `sourceMode` must equal the dispatch exactly; only legacy `source-unknown` may omit it. A missing legacy target-tenant input requires the build evidence to omit `targetTenantId`; a present input requires exact equality.
 31. Artifact proof binds the evidence ID and digest to the current upload action outputs, the REST artifact to the exact repository/run/source commit, and the workflow run-attempt endpoint to the exact current attempt.
 32. GitHub command-file serialization rejects any output value above 4 KiB or aggregate output above 64 KiB before opening the command file.
+
+33. Bounded response reads, archive digests, and staged archive source copies require one link in every rebound and post-read descriptor/path snapshot. A real hard link added during reading or between final snapshots must fail even when filesystem timestamp snapshots remain unchanged.
