@@ -647,6 +647,10 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.match(handoffJob, /execFileSync\('tar', arguments_/);
   assert.doesNotMatch(workflow, /secrets\.EAI_ACCESS_TOKEN|\$EAI_ACCESS_TOKEN/);
   assert.doesNotMatch(buildJob, /GITHUB_TOKEN|NODE_AUTH_TOKEN|_authToken/);
+  assert.doesNotMatch(
+    buildJob,
+    /actions\/cache@|^\s+cache(?:-from|-to)?:\s/m,
+  );
   assert.match(handoffJob, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/);
   assert.match(handoffJob, /^      actions: read$/m);
   assert.match(workflow, /npm ci --ignore-scripts/);
