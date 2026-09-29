@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "applicationPackage": {
+    "source": "eai.application.json",
+    "generated": "eai.application.generated.json",
+    "schemaLock": "eai.application.schema-lock.json",
+    "validator": "@enterpriseaigroup/application-package@0.1.0"
+  },
+  "runtime": {
+    "interactiveIdentity": "delegated-user",
+    "workloadIdentity": "short-lived-installation-binding",
+    "platformIngress": "regional-public-api",
+    "supportedHosting": ["eai-hosted", "buyer-hosted"]
+  }
+}

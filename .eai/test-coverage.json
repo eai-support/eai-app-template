@@ -37,7 +37,9 @@
             "src/hooks/useDocuments.test.tsx",
             "src/lib/platform/publicapi-route-family.test.ts"
           ],
-          "required_ci_checks": ["validate"],
+          "required_ci_checks": [
+            "validate"
+          ],
           "required_cross_service_surfaces": []
         },
         {
@@ -60,8 +62,12 @@
             "tests/generate-object-types-json.test.mjs",
             "src/lib/platform/verify-platform.test.ts"
           ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["backend"]
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "backend"
+          ]
         },
         {
           "id": "generated-app-object-type-seeding",
@@ -70,9 +76,15 @@
             "src/eai.config/object-types.ts",
             "src/lib/platform/seed-object-types.ts"
           ],
-          "required_repo_tests": ["src/lib/platform/seed-object-types.test.ts"],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["admin-portal"]
+          "required_repo_tests": [
+            "src/lib/platform/seed-object-types.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "admin-portal"
+          ]
         },
         {
           "id": "generated-app-platform-sdk-resource-count-policy",
@@ -84,8 +96,12 @@
           "required_repo_tests": [
             "packages/platform-sdk/__tests__/resources.test.ts"
           ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["backend"],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "backend"
+          ],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",
@@ -134,8 +150,13 @@
             "src/lib/generated-workflow/field-validation.test.ts",
             "src/app/page.test.tsx"
           ],
-          "required_ci_checks": ["validate"],
-          "required_cross_service_surfaces": ["admin-portal", "ncb-sugar-hit"],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "admin-portal",
+            "ncb-sugar-hit"
+          ],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",
@@ -157,7 +178,39 @@
             "package-lock.json"
           ],
           "required_repo_tests": [],
-          "required_ci_checks": ["validate"],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [],
+          "required_deployed_contracts": []
+        },
+        {
+          "id": "application-package-and-installed-access-defaults",
+          "description": "Reusable package generation, delegated installed-app BFF access, short-lived workload callbacks and lifecycle documentation.",
+          "owned_paths": [
+            "eai.application.json",
+            "eai.application.generated.json",
+            "eai.application.schema-lock.json",
+            ".eai-manifest.json",
+            "eai.runtime.json",
+            "scripts/generate-application-package.mjs",
+            "scripts/ci-application-package-bootstrap.mjs",
+            ".github/workflows/ci.yml",
+            "src/lib/platform/app-access.ts",
+            "src/app/api/eai/[[...rest]]/handler.ts",
+            "packages/platform-sdk/src/workload.ts",
+            "docs/application-packaging.md"
+          ],
+          "required_repo_tests": [
+            "tests/application-package.test.mjs",
+            "tests/ci-application-package-bootstrap.test.mjs",
+            "src/lib/platform/app-access.test.ts",
+            "packages/platform-sdk/__tests__/workload.test.ts",
+            "src/eai.config/deployment-contract.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
           "required_cross_service_surfaces": [],
           "required_deployed_contracts": []
         }

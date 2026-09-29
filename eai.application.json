@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "eai.application-package.v1",
+  "packageId": "eai-app-template",
+  "appKey": "eai-app-template",
+  "displayName": "EnterpriseAI Application",
+  "version": "0.1.0",
+  "publisher": { "id": "application-owner", "kind": "customer", "displayName": "Application Owner" },
+  "distribution": { "visibility": "private" },
+  "source": { "repository": "https://github.com/enterpriseaigroup/eai-app-template", "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000" },
+  "artifact": {
+    "repository": "ghcr.io/enterpriseaigroup/eai-app-template",
+    "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "provenanceRef": "release/provenance.json",
+    "signatureRef": "release/signature.json",
+    "sbomRef": "release/sbom.spdx.json"
+  },
+  "manifestDigest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "runtime": { "type": "isolated-hosted", "topology": "eai-hosted", "healthPath": "/health" },
+  "routes": [{ "id": "application.home", "path": "/", "methods": ["GET"] }],
+  "objectTypes": [
+    { "name": "Application", "slug": "application", "manifestRef": "src/eai.config/object-types.json#application" },
+    { "name": "Document", "slug": "document", "manifestRef": "src/eai.config/object-types.json#document" }
+  ],
+  "services": [{ "id": "public-api", "minimumContractVersion": "v4" }, { "id": "curate", "minimumContractVersion": "v4" }],
+  "capabilities": { "contractVersion": "eai.app_capabilities.v1", "interactive": ["resource.read", "resource.write"], "workload": ["audit.write"] },
+  "dataGovernance": { "purposes": ["Tenant application operation"], "classifications": ["internal", "personal"], "residency": ["AU"], "retentionDays": 365, "export": "none", "deletionPolicyRef": "docs/application-packaging.md#deletion" },
+  "callbacks": [],
+  "commercial": { "model": "free", "termsRef": "docs/application-packaging.md#commercial" },
+  "support": { "owner": "Application Owner", "slaRef": "docs/application-packaging.md#support", "runbookRef": "docs/application-packaging.md#operations" },
+  "compatibility": { "platformContract": "eai.app-marketplace/v1", "minimumTemplateVersion": "0.1.0" },
+  "lifecycle": { "installRef": "docs/application-packaging.md#install", "updateRef": "docs/application-packaging.md#update", "uninstallRef": "docs/application-packaging.md#uninstall", "migrationRef": "docs/application-packaging.md#migration", "rollbackRef": "docs/application-packaging.md#rollback" },
+  "evidence": { "ciRef": ".eai/test-coverage.json", "securityRef": "docs/application-packaging.md#security", "tenantIsolationRef": "docs/application-packaging.md#tenant-isolation", "accessibilityRef": "docs/application-packaging.md#accessibility" }
+}

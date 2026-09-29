@@ -18,6 +18,9 @@
     "tenantWorkflowConfiguration": true,
     "serviceIdentity": false,
     "publicAnonymousEndpointsRequireServerPlatformAccess": false
+    ,"installedApplicationAccess": true,
+    "shortLivedWorkloadIdentity": true,
+    "buyerGeographyRouting": true
   },
   "environment": {
     "required": [
