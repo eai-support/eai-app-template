@@ -83,6 +83,28 @@ describe('HomeClient generated workflow runtime', () => {
       global.fetch = originalFetch;
     }
   });
+  it('keeps the selected live create in the trusted host outside the simulated frame', async () => {
+    const originalFetch = global.fetch;
+    const digest = `sha256:${'a'.repeat(64)}`;
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({
+      schemaVersion: 'eai.generated_app_operational_rows.v1',
+      acceptedArtifactDigest: digest, fixtureCollection: 'vehicles', rows: [],
+    }) });
+    try {
+      const { container } = render(<HomeClient
+        generatedDemo={{ sourceDigest: 'source-sha', fixtureDigest: 'fixture-sha' }}
+        generatedOperational={{ acceptedArtifactDigest: digest,
+          fixtureCollection: 'vehicles', maxRows: 2, projectedFields: ['name'],
+          createFields: [{ name: 'name', type: 'text', required: true }] }} />);
+      expect(await screen.findByRole('region', { name: 'Reviewed live create' })).toHaveTextContent('your account permissions');
+      expect(screen.getByRole('button', { name: 'Create record' })).toBeInTheDocument();
+      expect(screen.getByTitle('Generated app demo')).toHaveAttribute('sandbox', 'allow-scripts');
+      expect(container.querySelector('[data-eai-operational-create="true"]')).toBeInTheDocument();
+      expect(screen.getByText(/Sample data and simulated interactions/)).toBeInTheDocument();
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
   it('exposes semantic workflow markers on the rendered root', () => {
     const { container } = render(
       <HomeClient

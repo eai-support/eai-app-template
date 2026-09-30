@@ -71,6 +71,8 @@ export default async function Home() {
           fixtureCollection: operational.config.readBindings[0].fixtureCollection,
           maxRows: operational.config.readBindings[0].maxRows,
           projectedFields: operational.projectedFields,
+          createFields: operational.config.schemaVersion === 'eai.generated_app_operational.v2'
+            ? operational.createFields : undefined,
         } : undefined}
       />
     );

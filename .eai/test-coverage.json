@@ -149,7 +149,7 @@
         },
         {
           "id": "generated-demo-app-runtime",
-          "description": "Accepted v2 app source and sample fixtures render in a workflow-linked, opaque-origin demo. A separate read-only binding remains disabled unless an explicit platform runtime gate is enabled after browser security qualification; when enabled it uses tenant-bound user OBO and accepted Object Type scalar projection for bounded PublicAPI rows in a trusted host-owned text-only view. No operational rows or credentials enter the generated frame, whose actions remain simulated; denied reads fail closed without sample fallback. Readiness exposes exact digests, source compilation rejects unbound files, and production browser isolation must be qualified before enabling the gate.",
+          "description": "Accepted v2 app source and sample fixtures render in a workflow-linked, opaque-origin demo. A separate bounded read and selected-create binding remain disabled unless their explicit platform runtime gates are enabled after browser security qualification. Enabled reads use tenant-bound user OBO and accepted Object Type scalar projection in a trusted host-owned text-only view; selected creates use a trusted host form with same-origin actor-authorized write and readback. No operational rows, write authority, or credentials enter the generated frame, whose actions remain simulated; denied operations fail closed without sample fallback. Readiness exposes exact digests, source compilation rejects unbound files, and production browser isolation must be qualified before enabling either gate.",
           "owned_paths": [
             "next.config.ts",
             "src/app/layout.tsx",
@@ -167,6 +167,10 @@
             "scripts/validate-generated-demo.cjs",
             "tests/generated-demo-isolation.test.mjs"
           ],
+          "config_keys": [
+            "EAI_GENERATED_OPERATIONAL_READ_ENABLED",
+            "EAI_GENERATED_OPERATIONAL_CREATE_ENABLED"
+          ],
           "required_repo_tests": [
             "src/app/page.test.tsx",
             "src/app/home-client.test.tsx",
@@ -177,7 +181,9 @@
             "src/lib/generated-demo/operational-contract.test.ts",
             "src/lib/generated-demo/operational-bridge.test.ts",
             "src/lib/generated-demo/operational-read.test.ts",
+            "src/lib/generated-demo/operational-create.test.ts",
             "src/app/api/eai/generated-operational/route.test.ts",
+            "src/app/api/eai/generated-operational/create/route.test.ts",
             "scripts/validate-generated-demo.test.ts",
             "npm run check:generated-demo",
             "npm run test:generated-demo-isolation"

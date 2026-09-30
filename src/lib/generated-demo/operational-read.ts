@@ -19,7 +19,7 @@ function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-async function boundedJson(response: Response): Promise<unknown> {
+export async function boundedOperationalJson(response: Response): Promise<unknown> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('Resource read returned no body');
   const chunks: Uint8Array[] = [];
@@ -52,13 +52,11 @@ function requireBoundRouting(
   ) throw new Error('The active user is not bound to this app tenant');
 }
 
-/** User OBO and PublicAPI/ResourceAPI authorization remain authoritative for every read. */
-export async function readGeneratedOperationalRows(
+export async function resolveOperationalPublicApi(
   config: GeneratedOperationalConfig,
   accessToken: string,
   currentAppHost: string,
-  projectedFields: string[],
-): Promise<GeneratedOperationalRows> {
+): Promise<string> {
   const { baseUrl, routing } = await resolvePublicApiBaseUrl({
     accessToken,
     fallbackBaseUrl: process.env.BASE_URL_PUBLIC_API,
@@ -67,6 +65,17 @@ export async function readGeneratedOperationalRows(
     requestedTenantId: config.tenantId,
   });
   requireBoundRouting(routing, config.tenantId);
+  return baseUrl;
+}
+
+/** User OBO and PublicAPI/ResourceAPI authorization remain authoritative for every read. */
+export async function readGeneratedOperationalRows(
+  config: GeneratedOperationalConfig,
+  accessToken: string,
+  currentAppHost: string,
+  projectedFields: string[],
+): Promise<GeneratedOperationalRows> {
+  const baseUrl = await resolveOperationalPublicApi(config, accessToken, currentAppHost);
   const binding = config.readBindings[0];
   const url = new URL(
     `v4/data/resources/${encodeURIComponent(config.tenantId)}/${encodeURIComponent(binding.objectTypeSlug)}`,
@@ -86,7 +95,7 @@ export async function readGeneratedOperationalRows(
     signal: AbortSignal.timeout(8_000),
   });
   if (!response.ok) throw new Error(`Authorized resource read failed: ${response.status}`);
-  const result = await boundedJson(response);
+  const result = await boundedOperationalJson(response);
   if (!record(result) || !Array.isArray(result.docs) || result.docs.length > binding.maxRows)
     throw new Error('Resource read response is invalid');
   const rows = result.docs.map((item: unknown) => {

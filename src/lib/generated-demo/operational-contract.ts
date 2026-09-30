@@ -7,19 +7,37 @@ export interface GeneratedOperationalBinding {
   maxRows: number;
 }
 
-export interface GeneratedOperationalConfig {
-  schemaVersion: 'eai.generated_app_operational.v1';
+interface GeneratedOperationalBase {
   tenantId: string;
   appKey: string;
   acceptedArtifactDigest: `sha256:${string}`;
   readBindings: [GeneratedOperationalBinding];
+}
+
+export interface GeneratedOperationalReadConfig extends GeneratedOperationalBase {
+  schemaVersion: 'eai.generated_app_operational.v1';
   actionsMode: 'simulated';
+}
+
+export interface GeneratedOperationalCreateConfig extends GeneratedOperationalBase {
+  schemaVersion: 'eai.generated_app_operational.v2';
+  actionsMode: 'selected-create';
+  createBinding: { objectTypeSlug: string; fields: string[] };
+}
+
+export type GeneratedOperationalConfig = GeneratedOperationalReadConfig | GeneratedOperationalCreateConfig;
+
+export interface GeneratedOperationalCreateField {
+  name: string;
+  type: 'text' | 'number' | 'boolean';
+  required: boolean;
 }
 
 export type GeneratedOperationalResolution =
   | { status: 'unconfigured' }
   | { status: 'invalid'; errors: string[] }
-  | { status: 'ready'; config: GeneratedOperationalConfig; projectedFields: string[] };
+  | { status: 'ready'; config: GeneratedOperationalConfig; projectedFields: string[];
+      createFields: GeneratedOperationalCreateField[] };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SLUG = /^[a-z][a-z0-9-]{0,63}$/;
@@ -28,6 +46,7 @@ const FIELD_NAME = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
 const FORBIDDEN_FIELD = /(?:authorization|token|secret|credential|password|url|uri|endpoint|key)$/i;
 const RESERVED_FIELD = new Set(['__proto__', 'prototype', 'constructor']);
 const SCALAR_TYPES = new Set(['text', 'number', 'boolean', 'date', 'select']);
+const CREATE_TYPES = new Set(['text', 'number', 'boolean']);
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -37,7 +56,7 @@ function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {
   return Object.keys(value).sort().join('|') === [...keys].sort().join('|');
 }
 
-/** Read authority is separate from immutable demo source and must match its accepted bytes. */
+/** Operational authority is separate from immutable demo source and matches its accepted bytes. */
 export function resolveGeneratedOperationalRuntime(
   value: unknown,
   artifact: GeneratedDemoArtifact,
@@ -46,11 +65,13 @@ export function resolveGeneratedOperationalRuntime(
 ): GeneratedOperationalResolution {
   if (value === null || value === undefined) return { status: 'unconfigured' };
   const errors: string[] = [];
-  if (!record(value) || !exactKeys(value, [
+  if (!record(value)) return { status: 'invalid', errors: ['operational config shape is invalid'] };
+  const createMode = value.schemaVersion === 'eai.generated_app_operational.v2';
+  if (!exactKeys(value, [
     'schemaVersion', 'tenantId', 'appKey', 'acceptedArtifactDigest',
-    'readBindings', 'actionsMode',
+    'readBindings', 'actionsMode', ...(createMode ? ['createBinding'] : []),
   ])) return { status: 'invalid', errors: ['operational config shape is invalid'] };
-  if (value.schemaVersion !== 'eai.generated_app_operational.v1')
+  if (!createMode && value.schemaVersion !== 'eai.generated_app_operational.v1')
     errors.push('operational schema is unsupported');
   if (!expectedTenantId || !UUID.test(expectedTenantId) || value.tenantId !== expectedTenantId)
     errors.push('tenant binding does not match deployed identity');
@@ -61,7 +82,8 @@ export function resolveGeneratedOperationalRuntime(
     !DIGEST.test(value.acceptedArtifactDigest) ||
     value.acceptedArtifactDigest !== demoArtifactDigest(artifact)
   ) errors.push('accepted artifact digest does not match');
-  if (value.actionsMode !== 'simulated') errors.push('operational actions are unsupported');
+  if (value.actionsMode !== (createMode ? 'selected-create' : 'simulated'))
+    errors.push('operational actions are unsupported');
   const bindingValue = Array.isArray(value.readBindings) && value.readBindings.length === 1
     ? value.readBindings[0] : null;
   if (!record(bindingValue)) {
@@ -81,6 +103,7 @@ export function resolveGeneratedOperationalRuntime(
     }
   }
   const projectedFields: string[] = [];
+  const createFields: GeneratedOperationalCreateField[] = [];
   if (errors.length === 0 && record(bindingValue)) {
     const definitions = artifact.objectTypeDefinitions.filter((item) => item.slug === bindingValue.objectTypeSlug);
     const properties = definitions[0]?.properties;
@@ -106,7 +129,39 @@ export function resolveGeneratedOperationalRuntime(
         errors.push('operational field projection must contain 1 to 16 safe scalar fields');
     }
   }
+  if (createMode && errors.length === 0 && record(bindingValue)) {
+    const createBinding = value.createBinding;
+    const definition = artifact.objectTypeDefinitions.find((item) => item.slug === bindingValue.objectTypeSlug);
+    const properties = definition?.properties;
+    if (!record(createBinding) ||
+        !exactKeys(createBinding, ['objectTypeSlug', 'fields']) ||
+        createBinding.objectTypeSlug !== bindingValue.objectTypeSlug ||
+        !Array.isArray(createBinding.fields) ||
+        createBinding.fields.length < 1 || createBinding.fields.length > 16 ||
+        new Set(createBinding.fields).size !== createBinding.fields.length ||
+        !Array.isArray(properties)) {
+      errors.push('selected create binding is invalid');
+    } else {
+      for (const field of createBinding.fields) {
+        const matching = properties.filter((item) => record(item) && item.name === field);
+        const property = matching[0];
+        if (typeof field !== 'string' || !FIELD_NAME.test(field) || field === 'id' ||
+            RESERVED_FIELD.has(field) || FORBIDDEN_FIELD.test(field) ||
+            matching.length !== 1 || !record(property) || property.serverOnly === true ||
+            !CREATE_TYPES.has(String(property.type)) ||
+            (property.required !== undefined && typeof property.required !== 'boolean')) {
+          errors.push('selected create field is not an accepted writable scalar');
+          break;
+        }
+        createFields.push({ name: field, type: property.type as GeneratedOperationalCreateField['type'],
+          required: property.required === true });
+      }
+      if (errors.length === 0 && properties.some((item) =>
+        record(item) && item.required === true && !createBinding.fields.includes(item.name)))
+        errors.push('selected create omits a required accepted field');
+    }
+  }
   return errors.length
     ? { status: 'invalid', errors }
-    : { status: 'ready', config: value as unknown as GeneratedOperationalConfig, projectedFields };
+    : { status: 'ready', config: value as unknown as GeneratedOperationalConfig, projectedFields, createFields };
 }

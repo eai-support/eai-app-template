@@ -96,4 +96,33 @@ describe('reviewed operational binding', () => {
         .toMatchObject({ status: 'invalid' });
     }
   });
+
+  it('admits only one typed selected create on the exact accepted read Object Type', () => {
+    const accepted = artifact();
+    accepted.objectTypeDefinitions[0].properties = [
+      { name: 'name', type: 'text', required: true },
+      { name: 'mileage', type: 'number' },
+      { name: 'privateToken', type: 'text', serverOnly: true },
+    ];
+    const reviewed = {
+      ...config(accepted), schemaVersion: 'eai.generated_app_operational.v2',
+      actionsMode: 'selected-create',
+      createBinding: { objectTypeSlug: 'vehicle', fields: ['name', 'mileage'] },
+    };
+    expect(resolveGeneratedOperationalRuntime(reviewed, accepted, tenantId, 'fleet-demo'))
+      .toMatchObject({ status: 'ready', createFields: [
+        { name: 'name', type: 'text', required: true },
+        { name: 'mileage', type: 'number', required: false },
+      ] });
+    for (const createBinding of [
+      { objectTypeSlug: 'other', fields: ['name'] },
+      { objectTypeSlug: 'vehicle', fields: ['mileage'] },
+      { objectTypeSlug: 'vehicle', fields: ['name', 'name'] },
+      { objectTypeSlug: 'vehicle', fields: ['privateToken'] },
+      { objectTypeSlug: 'vehicle', fields: ['name'], endpoint: 'https://unreviewed.test' },
+    ]) {
+      expect(resolveGeneratedOperationalRuntime({ ...reviewed, createBinding }, accepted, tenantId, 'fleet-demo'))
+        .toMatchObject({ status: 'invalid' });
+    }
+  });
 });
