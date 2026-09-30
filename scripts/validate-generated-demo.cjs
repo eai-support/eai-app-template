@@ -107,6 +107,16 @@ const forbiddenIdentifiers = new Set([
   'Worker',
   'SharedWorker',
   'Image',
+  'self',
+  'top',
+  'parent',
+  'frames',
+  'opener',
+  'history',
+  'navigation',
+  'URL',
+  'Blob',
+  'FileReader',
 ]);
 const forbiddenElements = new Set([
   'script',
@@ -116,6 +126,23 @@ const forbiddenElements = new Set([
   'link',
   'meta',
   'base',
+  'a',
+  'area',
+  'form',
+  'portal',
+]);
+const forbiddenBrowserProperties = new Set([
+  'location', 'href', 'ownerDocument', 'defaultView', 'document', 'window',
+  'top', 'parent', 'opener', 'frames', 'history', 'navigation', 'baseURI',
+  'documentURI', 'open', 'assign', 'replace', 'postMessage', 'sendBeacon',
+  'createElement', 'createElementNS', 'cloneElement', 'createPortal',
+  'innerHTML', 'outerHTML', 'insertAdjacentHTML', 'setAttribute',
+  'setAttributeNS', 'submit', 'requestSubmit', 'click',
+  'constructor', '__proto__', 'prototype',
+]);
+const forbiddenJsxAttributes = new Set([
+  'href', 'action', 'formAction', 'target', 'srcDoc',
+  'dangerouslySetInnerHTML', 'ref', 'asChild', 'is',
 ]);
 const generatedRoot = path.resolve(__dirname, '../src/generated');
 const sourcePaths = new Set(
@@ -207,6 +234,8 @@ function inspectSource(file, diskPath) {
     }
     if (ts.isMetaProperty(node))
       failures.push(`${file.path}: import.meta is not allowed`);
+    if (ts.isImportEqualsDeclaration(node))
+      failures.push(`${file.path}: import equals is not allowed`);
     if (
       ts.isIdentifier(node) &&
       forbiddenIdentifiers.has(node.text) &&
@@ -218,21 +247,28 @@ function inspectSource(file, diskPath) {
       failures.push(`${file.path}: ${node.text} is not allowed in demo source`);
     }
     if (
+      (ts.isPropertyAccessExpression(node) && forbiddenBrowserProperties.has(node.name.text)) ||
+      (ts.isElementAccessExpression(node) && ts.isStringLiteralLike(node.argumentExpression) &&
+        forbiddenBrowserProperties.has(node.argumentExpression.text)) ||
+      (ts.isImportSpecifier(node) &&
+        forbiddenBrowserProperties.has(node.propertyName?.text || node.name.text))
+    ) {
+      failures.push(`${file.path}: browser navigation or DOM mutation is not allowed in demo source`);
+    }
+    if (
       (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-      ts.isIdentifier(node.tagName) &&
-      forbiddenElements.has(node.tagName.text)
+      ((ts.isIdentifier(node.tagName) && forbiddenElements.has(node.tagName.text)) ||
+        ts.isJsxNamespacedName(node.tagName))
     ) {
       failures.push(
         `${file.path}: <${node.tagName.text}> is not allowed in demo source`,
       );
     }
-    if (
-      ts.isJsxAttribute(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === 'dangerouslySetInnerHTML'
-    ) {
+    if (ts.isJsxSpreadAttribute(node) ||
+        (ts.isJsxAttribute(node) && ts.isIdentifier(node.name) &&
+          forbiddenJsxAttributes.has(node.name.text))) {
       failures.push(
-        `${file.path}: dangerouslySetInnerHTML is not allowed in demo source`,
+        `${file.path}: navigation-capable markup is not allowed in demo source`,
       );
     }
     ts.forEachChild(node, visit);

