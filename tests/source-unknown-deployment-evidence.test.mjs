@@ -145,10 +145,10 @@ test('customer build cannot reach OIDC or EAI credentials, and handoff never exe
   const handoff = workflow.split('\n  submit-handoff:\n')[1];
 
   assert.ok(build && handoff, 'build and handoff must be separate jobs');
-  assert.match(build, /permissions:\n\s+contents: read\n\s+packages: read/);
+  assert.match(build, /permissions:\n\s+contents: read/);
   assert.doesNotMatch(
     build,
-    /id-token: write|EAI_ACCESS_TOKEN|Request GitHub OIDC token/,
+    /id-token: write|packages: read|EAI_ACCESS_TOKEN|GITHUB_TOKEN|_authToken|Request GitHub OIDC token/,
   );
   assert.match(build, /persist-credentials: false/);
   assert.match(handoff, /needs: build-source/);
