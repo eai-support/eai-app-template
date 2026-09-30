@@ -80,7 +80,7 @@ export function resolveGeneratedOperationalRuntime(
       errors.push('read binding is not a bounded accepted Object Type');
     }
   }
-  let projectedFields: string[] = [];
+  const projectedFields: string[] = [];
   if (errors.length === 0 && record(bindingValue)) {
     const definitions = artifact.objectTypeDefinitions.filter((item) => item.slug === bindingValue.objectTypeSlug);
     const properties = definitions[0]?.properties;
