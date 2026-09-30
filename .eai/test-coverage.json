@@ -198,6 +198,20 @@
           ]
         },
         {
+          "id": "source-unknown-handoff-workflow",
+          "description": "The source-unknown app workflow builds customer source without deployment credentials and submits digest-checked evidence from a separate no-checkout OIDC job.",
+          "owned_paths": [
+            ".github/workflows/eai-app.yml",
+            "scripts/source-unknown-deployment-evidence.mjs",
+            "tests/source-unknown-deployment-evidence.test.mjs"
+          ],
+          "required_repo_tests": [
+            "tests/source-unknown-deployment-evidence.test.mjs"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": []
+        },
+        {
           "id": "eai-app-template-nextjs-runtime-dependencies",
           "description": "Root Next.js dependency and lockfile changes are validated by the repository's stable CI gate.",
           "ci_only": true,
