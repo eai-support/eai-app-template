@@ -33,6 +33,11 @@ export function GeneratedDemo({ artifact, operational }: GeneratedDemoProps) {
             operational.fixtureCollection, operational.maxRows)) return;
       received = true;
       setLiveRows(event.data.rows);
+      window.parent.postMessage({
+        type: 'eai.generated.operational.ack.v1',
+        nonce,
+        acceptedArtifactDigest: operational.acceptedArtifactDigest,
+      }, '*');
     };
     window.addEventListener('message', onRows);
     const timeout = window.setTimeout(() => {

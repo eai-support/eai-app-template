@@ -29,6 +29,12 @@ export interface OperationalReadyMessage {
   acceptedArtifactDigest: string;
 }
 
+export interface OperationalAckMessage {
+  type: 'eai.generated.operational.ack.v1';
+  nonce: string;
+  acceptedArtifactDigest: string;
+}
+
 export interface OperationalDataMessage {
   type: 'eai.generated.operational.data.v1';
   nonce: string;
@@ -43,6 +49,16 @@ export function isOperationalReadyMessage(
   return record(value) &&
     exactKeys(value, ['type', 'nonce', 'acceptedArtifactDigest']) &&
     value.type === 'eai.generated.operational.ready.v1' &&
+    value.nonce === nonce && NONCE.test(nonce) &&
+    value.acceptedArtifactDigest === digest;
+}
+
+export function isOperationalAckMessage(
+  value: unknown, nonce: string, digest: string,
+): value is OperationalAckMessage {
+  return record(value) &&
+    exactKeys(value, ['type', 'nonce', 'acceptedArtifactDigest']) &&
+    value.type === 'eai.generated.operational.ack.v1' &&
     value.nonce === nonce && NONCE.test(nonce) &&
     value.acceptedArtifactDigest === digest;
 }

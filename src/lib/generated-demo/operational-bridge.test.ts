@@ -1,4 +1,4 @@
-import { isOperationalDataMessage, isOperationalReadyMessage, isOperationalRowsResponse } from './operational-bridge';
+import { isOperationalAckMessage, isOperationalDataMessage, isOperationalReadyMessage, isOperationalRowsResponse } from './operational-bridge';
 
 const nonce = '11111111-1111-4111-8111-111111111111';
 const digest = `sha256:${'a'.repeat(64)}`;
@@ -11,6 +11,10 @@ describe('opaque-frame operational messages', () => {
     expect(isOperationalReadyMessage(ready, nonce, digest)).toBe(true);
     expect(isOperationalReadyMessage({ ...ready, token: 'bad' }, nonce, digest)).toBe(false);
     expect(isOperationalReadyMessage(ready, '22222222-2222-4222-8222-222222222222', digest)).toBe(false);
+    const ack = { type: 'eai.generated.operational.ack.v1', nonce,
+      acceptedArtifactDigest: digest };
+    expect(isOperationalAckMessage(ack, nonce, digest)).toBe(true);
+    expect(isOperationalAckMessage({ ...ack, url: 'https://example.com' }, nonce, digest)).toBe(false);
     const data = { type: 'eai.generated.operational.data.v1', nonce,
       acceptedArtifactDigest: digest, fixtureCollection: 'vehicles', rows };
     expect(isOperationalDataMessage(data, nonce, digest, 'vehicles', 1)).toBe(true);

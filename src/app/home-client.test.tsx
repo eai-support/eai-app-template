@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 
 import { HomeClient } from './home-client';
 
@@ -50,6 +50,34 @@ describe('HomeClient generated workflow runtime', () => {
           fixtureCollection: 'vehicles', maxRows: 2 }} />);
       expect(await screen.findByRole('alert')).toHaveTextContent('No sample data was substituted');
       expect(screen.queryByTitle('Generated app demo')).not.toBeInTheDocument();
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+  it('does not report an operational frame ready before a matching frame acknowledgement', async () => {
+    const originalFetch = global.fetch;
+    const digest = `sha256:${'a'.repeat(64)}`;
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({
+      schemaVersion: 'eai.generated_app_operational_rows.v1',
+      acceptedArtifactDigest: digest, fixtureCollection: 'vehicles',
+      rows: [{ id: 'vehicle-1', name: 'Car A' }],
+    }) });
+    try {
+      const { container } = render(<HomeClient
+        generatedDemo={{ sourceDigest: 'source-sha', fixtureDigest: 'fixture-sha' }}
+        generatedOperational={{ acceptedArtifactDigest: digest,
+          fixtureCollection: 'vehicles', maxRows: 2 }} />);
+      const frame = await screen.findByTitle('Generated app demo') as HTMLIFrameElement;
+      expect(container.querySelector('[data-eai-demo-ready="true"]')).not.toBeInTheDocument();
+      const nonce = new URL(frame.src).searchParams.get('nonce');
+      act(() => window.dispatchEvent(new MessageEvent('message', {
+        source: frame.contentWindow, origin: 'null', data: {
+          type: 'eai.generated.operational.ack.v1', nonce,
+          acceptedArtifactDigest: digest,
+        },
+      })));
+      expect(container.querySelector('[data-eai-demo-ready="true"]')).toBeInTheDocument();
+      expect(screen.getByText(/Authorized read-only data/)).toBeVisible();
     } finally {
       global.fetch = originalFetch;
     }

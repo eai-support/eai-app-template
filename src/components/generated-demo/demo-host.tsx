@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
+  isOperationalAckMessage,
   isOperationalReadyMessage,
   isOperationalRowsResponse,
   type OperationalDataMessage,
@@ -40,6 +41,7 @@ export function GeneratedDemoHost({
   const frameLoaded = useRef(false);
   const [nonce, setNonce] = useState('');
   const [rows, setRows] = useState<GeneratedOperationalRows | null>(null);
+  const [connected, setConnected] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -67,9 +69,13 @@ export function GeneratedDemoHost({
 
   useEffect(() => {
     if (!operational || !rows || failed) return;
-    const onReady = (event: MessageEvent<unknown>) => {
-      if (event.source !== frame.current?.contentWindow || event.origin !== 'null' ||
-          !isOperationalReadyMessage(event.data, nonce, operational.acceptedArtifactDigest)) return;
+    const onFrameMessage = (event: MessageEvent<unknown>) => {
+      if (event.source !== frame.current?.contentWindow || event.origin !== 'null') return;
+      if (isOperationalAckMessage(event.data, nonce, operational.acceptedArtifactDigest)) {
+        setConnected(true);
+        return;
+      }
+      if (!isOperationalReadyMessage(event.data, nonce, operational.acceptedArtifactDigest)) return;
       const message: OperationalDataMessage = {
         type: 'eai.generated.operational.data.v1',
         nonce,
@@ -79,22 +85,30 @@ export function GeneratedDemoHost({
       };
       frame.current?.contentWindow?.postMessage(message, '*');
     };
-    window.addEventListener('message', onReady);
-    return () => window.removeEventListener('message', onReady);
+    window.addEventListener('message', onFrameMessage);
+    return () => window.removeEventListener('message', onFrameMessage);
   }, [failed, nonce, operational, rows]);
+
+  useEffect(() => {
+    if (!operational || !rows || !nonce || connected || failed) return;
+    const timeout = window.setTimeout(() => setFailed(true), 12_000);
+    return () => window.clearTimeout(timeout);
+  }, [connected, failed, nonce, operational, rows]);
 
   if (failed) return <main role='alert'>Live data is unavailable. No sample data was substituted.</main>;
   if (operational && (!rows || !nonce)) return <main role='status'>Loading authorized app data…</main>;
   return (
     <main
-      data-eai-demo-ready='true'
+      data-eai-demo-ready={!operational || connected ? 'true' : undefined}
       data-eai-demo-source-digest={demo.sourceDigest}
       data-eai-demo-fixture-digest={demo.fixtureDigest}
       className='min-h-svh bg-slate-50'
     >
       <div className='border-b border-amber-300 bg-amber-50 px-5 py-3 text-center text-sm font-medium text-amber-950' role='status'>
         {operational
-          ? 'Authorized read-only data. All actions remain simulated; no real records are changed.'
+          ? connected
+            ? 'Authorized read-only data. All actions remain simulated; no real records are changed.'
+            : 'Connecting authorized app data…'
           : 'Demo app · Sample data and simulated interactions. Changes here do not affect real records or services.'}
       </div>
       <iframe
