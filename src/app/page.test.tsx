@@ -112,15 +112,25 @@ describe('Home routing bootstrap', () => {
   });
 
   it('selects a valid v2 demo before the v1 workflow runtime', async () => {
-    const artifact = { schemaVersion: 'eai.generated_app_artifact.v2' } as never;
-    jest.mocked(getGeneratedDemoRuntime).mockReturnValue({ status: 'ready', artifact });
+    const artifact = {
+      digests: { sourceBundle: 'source-sha', previewFixtures: 'fixture-sha' },
+    } as never;
+    jest
+      .mocked(getGeneratedDemoRuntime)
+      .mockReturnValue({ status: 'ready', artifact });
     const element = await Home();
-    expect(element.props.generatedDemo).toBe(artifact);
+    expect(element.props.generatedDemo).toEqual({
+      sourceDigest: 'source-sha',
+      fixtureDigest: 'fixture-sha',
+    });
+    expect(element.props.generatedDemo).not.toBe(artifact);
     expect(getGeneratedWorkflowRuntime).not.toHaveBeenCalled();
   });
 
   it('fails closed when the v2 artifact is invalid', async () => {
-    jest.mocked(getGeneratedDemoRuntime).mockReturnValue({ status: 'invalid', errors: ['digest mismatch'] });
+    jest
+      .mocked(getGeneratedDemoRuntime)
+      .mockReturnValue({ status: 'invalid', errors: ['digest mismatch'] });
     const element = await Home();
     expect(element.props.runtimeError).toBe('DEMO_ARTIFACT_INVALID');
     expect(getGeneratedWorkflowRuntime).not.toHaveBeenCalled();

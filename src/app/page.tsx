@@ -55,7 +55,14 @@ async function redirectToResolvedAppHost(): Promise<void> {
 export default async function Home() {
   const generatedDemo = getGeneratedDemoRuntime();
   if (generatedDemo.status === 'ready') {
-    return <HomeClient generatedDemo={generatedDemo.artifact} />;
+    return (
+      <HomeClient
+        generatedDemo={{
+          sourceDigest: generatedDemo.artifact.digests.sourceBundle,
+          fixtureDigest: generatedDemo.artifact.digests.previewFixtures,
+        }}
+      />
+    );
   }
   if (generatedDemo.status === 'invalid') {
     return <HomeClient runtimeError='DEMO_ARTIFACT_INVALID' />;

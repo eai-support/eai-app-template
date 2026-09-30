@@ -3,16 +3,17 @@
 import dynamic from 'next/dynamic';
 
 import { GeneratedWorkflowForm } from '@/components/generated-workflow/workflow-form';
-import { GeneratedDemo } from '@/components/generated-demo/demo-app';
 import type { GeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime-contract';
-import type { GeneratedDemoArtifact } from '@/lib/generated-demo/contract';
 
 const DemoPage = dynamic(() =>
   import('@enterpriseaigroup/demo').then((module) => module.DemoPage),
 );
 
 interface HomeClientProps {
-  generatedDemo?: GeneratedDemoArtifact;
+  generatedDemo?: {
+    sourceDigest: string;
+    fixtureDigest: string;
+  };
   generatedWorkflow?: Pick<
     GeneratedWorkflowRuntime,
     'appKey' | 'binding' | 'snapshot' | 'branding' | 'assistantEnabled'
@@ -42,7 +43,35 @@ export function HomeClient({
       </main>
     );
   }
-  if (generatedDemo) return <GeneratedDemo artifact={generatedDemo} />;
+  if (generatedDemo) {
+    const basePath = (process.env.NEXT_PUBLIC_APP_BASE_PATH ?? '').replace(
+      /\/+$/,
+      '',
+    );
+    return (
+      <main
+        data-eai-demo-ready='true'
+        data-eai-demo-source-digest={generatedDemo.sourceDigest}
+        data-eai-demo-fixture-digest={generatedDemo.fixtureDigest}
+        className='min-h-svh bg-slate-50'
+      >
+        <div
+          className='border-b border-amber-300 bg-amber-50 px-5 py-3 text-center text-sm font-medium text-amber-950'
+          role='status'
+        >
+          Demo app · Sample data and simulated interactions. Changes here do not
+          affect real records or services.
+        </div>
+        <iframe
+          title='Generated app demo'
+          src={`${basePath}/eai-demo-frame`}
+          sandbox='allow-scripts'
+          referrerPolicy='no-referrer'
+          className='min-h-[calc(100svh-3rem)] w-full border-0'
+        />
+      </main>
+    );
+  }
   if (!generatedWorkflow) {
     return <DemoPage />;
   }

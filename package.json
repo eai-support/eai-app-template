@@ -43,6 +43,7 @@
     "test:release-version": "node --test tests/next-release-version.test.mjs",
     "test:smoke": "npm run check:route-exports && npm run eai:config:validate && npm run check:object-types && npm run test:ai-workspace-guidance && npm run test:cross-platform-lifecycle",
     "test:e2e": "playwright test tests/e2e tests/business-scenarios",
+    "test:generated-demo-isolation": "node --test tests/generated-demo-isolation.test.mjs",
     "test:business-scenarios": "playwright test tests/business-scenarios",
     "verify": "npm run build:object-types && npm run check:route-exports && npm run eai:config:validate && npm run check:generated-demo && npm run check:object-types && npm run typecheck && npm run test:unit:ci",
     "prepare": "husky",

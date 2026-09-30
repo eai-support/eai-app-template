@@ -21,12 +21,20 @@ export function generateMetadata(): Metadata {
   return generatedWorkflowDocumentMetadata(getGeneratedWorkflowRuntime());
 }
 
+/** The middleware-selected demo document omits providers that carry tenant/session state. */
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const allHeaders = await headers();
+  if (allHeaders.get('x-eai-isolated-demo') === '1') {
+    return (
+      <html lang='en'>
+        <body className={`${geistSans.variable} antialiased`}>{children}</body>
+      </html>
+    );
+  }
   const nonce = allHeaders.get('x-nonce') ?? '';
 
   return (

@@ -72,3 +72,9 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Install browser for generated demo isolation
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify generated demo browser isolation
+        run: npm run test:generated-demo-isolation

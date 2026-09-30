@@ -21,6 +21,26 @@ jest.mock('@/components/generated-workflow/workflow-form', () => ({
 }));
 
 describe('HomeClient generated workflow runtime', () => {
+  it('renders a sandboxed demo without serializing the accepted source or fixtures into the parent', () => {
+    const { container } = render(
+      <HomeClient
+        generatedDemo={{
+          sourceDigest: 'source-sha',
+          fixtureDigest: 'fixture-sha',
+        }}
+      />,
+    );
+    const frame = screen.getByTitle('Generated app demo');
+    expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+    expect(frame).toHaveAttribute('src', '/eai-demo-frame');
+    expect(
+      container.querySelector('[data-eai-demo-ready="true"]'),
+    ).toHaveAttribute('data-eai-demo-source-digest', 'source-sha');
+    expect(container.textContent).toMatch(
+      /Sample data and simulated interactions/,
+    );
+    expect(container.innerHTML).not.toContain('GeneratedApp');
+  });
   it('exposes semantic workflow markers on the rendered root', () => {
     const { container } = render(
       <HomeClient
