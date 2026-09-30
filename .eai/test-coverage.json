@@ -204,10 +204,12 @@
             ".github/workflows/ci.yml",
             ".github/workflows/eai-app.yml",
             "scripts/source-unknown-deployment-evidence.mjs",
-            "tests/source-unknown-deployment-evidence.test.mjs"
+            "tests/source-unknown-deployment-evidence.test.mjs",
+            "tests/locked-cli-install-smoke.test.mjs"
           ],
           "required_repo_tests": [
-            "tests/source-unknown-deployment-evidence.test.mjs"
+            "tests/source-unknown-deployment-evidence.test.mjs",
+            "tests/locked-cli-install-smoke.test.mjs"
           ],
           "required_ci_checks": ["validate"],
           "required_cross_service_surfaces": []

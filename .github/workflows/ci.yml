@@ -55,6 +55,9 @@ jobs:
       - name: Source-unknown handoff evidence test
         run: npm run test:source-unknown-evidence
 
+      - name: Locked CLI handoff install smoke
+        run: node --test tests/locked-cli-install-smoke.test.mjs
+
       - name: AI workspace handoff guidance test
         run: npm run test:ai-workspace-guidance
 
