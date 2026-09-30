@@ -18,7 +18,7 @@ function artifact(): GeneratedDemoArtifact {
   const previewFixtures = { schemaVersion: 'eai.generated_app_fixtures.v1' as const,
     collections: { vehicles: [{ id: 'sample-car' }] },
     actions: { book: { effect: 'session-local' as const, message: 'Simulated' } } };
-  const objectTypeDefinitions = [{ slug: 'vehicle', name: 'Vehicle', properties: [
+  const objectTypeDefinitions: GeneratedDemoArtifact['objectTypeDefinitions'] = [{ slug: 'vehicle', name: 'Vehicle', properties: [
     { name: 'name', type: 'text' },
     { name: 'mileage', type: 'number' },
     { name: 'privateToken', type: 'text', serverOnly: true },

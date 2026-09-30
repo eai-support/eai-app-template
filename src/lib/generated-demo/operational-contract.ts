@@ -62,11 +62,12 @@ export function resolveGeneratedOperationalRuntime(
     value.acceptedArtifactDigest !== demoArtifactDigest(artifact)
   ) errors.push('accepted artifact digest does not match');
   if (value.actionsMode !== 'simulated') errors.push('operational actions are unsupported');
-  if (!Array.isArray(value.readBindings) || value.readBindings.length !== 1 ||
-      !record(value.readBindings[0])) {
+  const bindingValue = Array.isArray(value.readBindings) && value.readBindings.length === 1
+    ? value.readBindings[0] : null;
+  if (!record(bindingValue)) {
     errors.push('exactly one reviewed read binding is required');
   } else {
-    const binding = value.readBindings[0];
+    const binding = bindingValue;
     if (!exactKeys(binding, ['fixtureCollection', 'objectTypeSlug', 'maxRows']) ||
         typeof binding.fixtureCollection !== 'string' ||
         !SLUG.test(binding.fixtureCollection) ||
@@ -74,14 +75,14 @@ export function resolveGeneratedOperationalRuntime(
         typeof binding.objectTypeSlug !== 'string' ||
         !SLUG.test(binding.objectTypeSlug) ||
         !artifact.objectTypeDefinitions.some((item) => item.slug === binding.objectTypeSlug) ||
-        !Number.isInteger(binding.maxRows) || binding.maxRows < 1 || binding.maxRows > 50) {
+        typeof binding.maxRows !== 'number' || !Number.isInteger(binding.maxRows) ||
+        binding.maxRows < 1 || binding.maxRows > 50) {
       errors.push('read binding is not a bounded accepted Object Type');
     }
   }
   let projectedFields: string[] = [];
-  if (errors.length === 0) {
-    const binding = value.readBindings[0] as Record<string, unknown>;
-    const definitions = artifact.objectTypeDefinitions.filter((item) => item.slug === binding.objectTypeSlug);
+  if (errors.length === 0 && record(bindingValue)) {
+    const definitions = artifact.objectTypeDefinitions.filter((item) => item.slug === bindingValue.objectTypeSlug);
     const properties = definitions[0]?.properties;
     if (definitions.length !== 1 || !Array.isArray(properties) || properties.length > 100) {
       errors.push('operational read has no unambiguous accepted property declaration');
