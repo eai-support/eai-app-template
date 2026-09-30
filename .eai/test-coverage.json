@@ -201,6 +201,7 @@
           "id": "source-unknown-handoff-workflow",
           "description": "The source-unknown app workflow builds customer source without deployment credentials and submits digest-checked evidence from a separate no-checkout OIDC job.",
           "owned_paths": [
+            ".github/workflows/ci.yml",
             ".github/workflows/eai-app.yml",
             "scripts/source-unknown-deployment-evidence.mjs",
             "tests/source-unknown-deployment-evidence.test.mjs"

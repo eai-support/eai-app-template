@@ -19,6 +19,7 @@ const evidenceScript = join(
   'scripts/source-unknown-deployment-evidence.mjs',
 );
 const workflowPath = join(repoRoot, '.github/workflows/eai-app.yml');
+const ciWorkflowPath = join(repoRoot, '.github/workflows/ci.yml');
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 
 function writeFixtureApp(root) {
@@ -174,6 +175,15 @@ test('customer build cannot reach OIDC or EAI credentials, and handoff never exe
   assert.doesNotMatch(
     handoff,
     /\| tee .*workflow-evidence-response|\| tee .*deployment-handoff-response/,
+  );
+});
+
+test('pull-request validation does not expose a package token to app source', () => {
+  const ciWorkflow = readFileSync(ciWorkflowPath, 'utf8');
+  assert.match(ciWorkflow, /persist-credentials: false/);
+  assert.doesNotMatch(
+    ciWorkflow,
+    /GITHUB_TOKEN|_authToken|packages: write|packages: read/,
   );
 });
 
