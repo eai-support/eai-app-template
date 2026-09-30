@@ -44,7 +44,7 @@ export function isOperationalRowsResponse(
   if (new Set(value.rows.map((row: { id: string }) => row.id)).size !== value.rows.length)
     return false;
   try {
-    return new TextEncoder().encode(JSON.stringify(value)).byteLength <= MAX_RESPONSE_BYTES;
+    return new Blob([JSON.stringify(value)]).size <= MAX_RESPONSE_BYTES;
   } catch {
     return false;
   }
