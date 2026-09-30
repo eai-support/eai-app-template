@@ -156,7 +156,7 @@ test('customer build cannot reach OIDC or EAI credentials, and handoff never exe
   assert.match(handoff, /permissions:\n\s+actions: read\n\s+id-token: write/);
   assert.doesNotMatch(
     handoff,
-    /actions\/checkout@|docker build|docker\/build-push-action@|npm ci|npm run build|source-unknown-deployment-evidence\.mjs/,
+    /actions\/checkout@|docker build|docker\/build-push-action@|npm run build|source-unknown-deployment-evidence\.mjs/,
   );
   assert.match(handoff, /Build evidence exceeds the accepted size range/);
   assert.doesNotMatch(workflow.split('\njobs:\n')[0], /id-token: write/);
@@ -166,7 +166,27 @@ test('customer build cannot reach OIDC or EAI credentials, and handoff never exe
     'artifact digest and run identity must be verified before requesting OIDC',
   );
   assert.match(handoff, /@enterpriseai\/cli\/-\/cli-3\.18\.4\.tgz/);
-  assert.match(handoff, /npm install -g --ignore-scripts/);
+  assert.match(
+    handoff,
+    /0fb7e80e009ce316cbe2f0f4f22da53188c83098\/package-lock\.json/,
+  );
+  assert.match(
+    handoff,
+    /e2441c521657059410667136da2411a70865d90ef31375df53be4f1764a3054b/,
+  );
+  assert.match(
+    handoff,
+    /npm ci --prefix "\$EAI_CLI_INSTALL_DIR" --omit=dev --ignore-scripts/,
+  );
+  assert.doesNotMatch(handoff, /npm install -g|npm ci(?:\n|\s+--omit=dev)/);
+  assert.match(
+    handoff,
+    /node "\$EAI_CLI_INSTALL_DIR\/dist\/index\.js" app workflow-evidence/,
+  );
+  assert.match(
+    handoff,
+    /node "\$EAI_CLI_INSTALL_DIR\/dist\/index\.js" app deploy-source-unknown/,
+  );
   assert.match(
     handoff,
     /EAI_ACCESS_TOKEN: \$\{\{ secrets\.EAI_ACCESS_TOKEN \}\}/,

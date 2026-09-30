@@ -170,6 +170,7 @@ jobs:
       BASE_TEMPLATE_SHA: ${{ needs.build-source.outputs.base_template_sha }}
       SCHEMA_DIGEST: ${{ needs.build-source.outputs.schema_digest }}
       VALIDATOR_DIGEST: ${{ needs.build-source.outputs.validator_digest }}
+      EAI_CLI_INSTALL_DIR: /tmp/eai-cli-3.18.4
     steps:
       - name: Download exact build evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -238,13 +239,18 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install pinned EAI CLI without lifecycle scripts
+      - name: Install immutable EAI CLI dependency closure
         run: |
           set -euo pipefail
           curl -fsSLo /tmp/eai-cli-3.18.4.tgz \
             https://registry.npmjs.org/@enterpriseai/cli/-/cli-3.18.4.tgz
           node -e "const fs=require('node:fs');const crypto=require('node:crypto');const actual=crypto.createHash('sha512').update(fs.readFileSync('/tmp/eai-cli-3.18.4.tgz')).digest('base64');if(actual!=='Djls3yYBJy89r7LB7eQ20PURHpf4f9Hhv98quZdJROg7n6v3lKhgAiPsru2F2OyyDfWcWwCYaRPmgSb+xwq9Xg==')process.exit(1)"
-          npm install -g --ignore-scripts --no-audit --no-fund /tmp/eai-cli-3.18.4.tgz
+          mkdir -p "$EAI_CLI_INSTALL_DIR"
+          tar -xzf /tmp/eai-cli-3.18.4.tgz --strip-components=1 --no-same-owner -C "$EAI_CLI_INSTALL_DIR"
+          curl -fsSLo "$EAI_CLI_INSTALL_DIR/package-lock.json" \
+            https://raw.githubusercontent.com/eai-support/eai/0fb7e80e009ce316cbe2f0f4f22da53188c83098/package-lock.json
+          node -e "const fs=require('node:fs');const crypto=require('node:crypto');const actual=crypto.createHash('sha256').update(fs.readFileSync(process.argv[1])).digest('hex');if(actual!=='e2441c521657059410667136da2411a70865d90ef31375df53be4f1764a3054b')process.exit(1)" "$EAI_CLI_INSTALL_DIR/package-lock.json"
+          npm ci --prefix "$EAI_CLI_INSTALL_DIR" --omit=dev --ignore-scripts --no-audit --no-fund
 
       - name: Request GitHub OIDC token
         id: github-oidc
@@ -265,7 +271,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .eai-build/evidence
-          eai app workflow-evidence "$APP_KEY" \
+          node "$EAI_CLI_INSTALL_DIR/dist/index.js" app workflow-evidence "$APP_KEY" \
             --tenant-id "$TENANT_ID" \
             --repo "$GITHUB_REPOSITORY" \
             --operation-id "$OPERATION_ID" \
@@ -305,7 +311,7 @@ jobs:
           EAI_ACCESS_TOKEN: ${{ secrets.EAI_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          eai app deploy-source-unknown "$APP_KEY" \
+          node "$EAI_CLI_INSTALL_DIR/dist/index.js" app deploy-source-unknown "$APP_KEY" \
             --tenant-id "$TENANT_ID" \
             --operation-id "$OPERATION_ID" \
             --environment "$DEPLOY_ENVIRONMENT" \
