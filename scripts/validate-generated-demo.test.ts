@@ -111,7 +111,7 @@ function validateSource(
 describe('generated demo build source guard', () => {
   it('accepts a safe view with only source-bound components', () => {
     const result = validateSource(
-      "import type { GeneratedDemoAppProps } from '@/lib/generated-demo/contract'; import { title } from './title'; export default function App({viewId}:GeneratedDemoAppProps) { return <main>{title} {viewId}</main>; }",
+      "import type { GeneratedDemoAppProps } from '@/lib/generated-demo/contract'; import { Button, Card } from '@enterpriseaigroup/core'; import { useState } from 'react'; import { Car } from 'lucide-react'; import { title } from './title'; export default function App({viewId}:GeneratedDemoAppProps) { const [count,setCount] = useState(0); return <Card><Button onClick={() => setCount(count + 1)}><Car />{title} {viewId} {count}</Button></Card>; }",
       {
         path: 'src/generated/title.ts',
         content: "export const title = 'Fleet';",
@@ -122,6 +122,18 @@ describe('generated demo build source guard', () => {
   });
 
   it.each([
+    [
+      "import { GeneratedDemoAppProps } from '@/lib/generated-demo/contract'; export default function App() { return <main />; }",
+      'import @/lib/generated-demo/contract is not allowed',
+    ],
+    [
+      "const helper = import('./title'); export default function App() { return <main />; }",
+      'dynamic import is not allowed',
+    ],
+    [
+      "import { getAccessToken } from '@enterpriseaigroup/core/server'; export default function App() { return <main />; }",
+      'import @enterpriseaigroup/core/server is not allowed',
+    ],
     [
       "import { secret } from './unlisted'; export default function App() { return <main />; }",
       'import ./unlisted is not allowed',
