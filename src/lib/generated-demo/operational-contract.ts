@@ -43,8 +43,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const SLUG = /^[a-z][a-z0-9-]{0,63}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
 const FIELD_NAME = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
-const FORBIDDEN_FIELD = /(?:authorization|token|secret|credential|password|url|uri|endpoint|key)$/i;
-const RESERVED_FIELD = new Set(['__proto__', 'prototype', 'constructor']);
+const FORBIDDEN_FIELD = /password|secret|token|credential|api.?key|private|ssn|(?:authorization|url|uri|endpoint|key)$/i;
+const RESERVED_FIELD = new Set(['id', '__proto__', 'prototype', 'constructor']);
 const SCALAR_TYPES = new Set(['text', 'number', 'boolean', 'date', 'select']);
 const CREATE_TYPES = new Set(['text', 'number', 'boolean']);
 
@@ -117,8 +117,8 @@ export function resolveGeneratedOperationalRuntime(
         }
         if (property.serverOnly === true || !SCALAR_TYPES.has(String(property.type))) continue;
         const name = property.name;
-        if (typeof name !== 'string' || !FIELD_NAME.test(name) || name === 'id' ||
-            RESERVED_FIELD.has(name) ||
+        if (typeof name !== 'string' || !FIELD_NAME.test(name) ||
+            RESERVED_FIELD.has(name.toLowerCase()) ||
             FORBIDDEN_FIELD.test(name) || projectedFields.includes(name)) {
           errors.push('operational field projection is unsafe');
           break;
@@ -145,8 +145,8 @@ export function resolveGeneratedOperationalRuntime(
       for (const field of createBinding.fields) {
         const matching = properties.filter((item) => record(item) && item.name === field);
         const property = matching[0];
-        if (typeof field !== 'string' || !FIELD_NAME.test(field) || field === 'id' ||
-            RESERVED_FIELD.has(field) || FORBIDDEN_FIELD.test(field) ||
+        if (typeof field !== 'string' || !FIELD_NAME.test(field) ||
+            RESERVED_FIELD.has(field.toLowerCase()) || FORBIDDEN_FIELD.test(field) ||
             matching.length !== 1 || !record(property) || property.serverOnly === true ||
             !CREATE_TYPES.has(String(property.type)) ||
             (property.required !== undefined && typeof property.required !== 'boolean')) {

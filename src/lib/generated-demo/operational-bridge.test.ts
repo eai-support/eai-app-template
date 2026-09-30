@@ -33,6 +33,10 @@ describe('trusted operational row projection', () => {
       .toBe(false);
     expect(isOperationalRowsResponse({ ...base, rows }, digest, 'vehicles', 1, ['constructor']))
       .toBe(false);
+    for (const field of ['ID', 'privateNote', 'customerSSN', 'callbackUrl', 'apiKey']) {
+      expect(isOperationalRowsResponse({ ...base, rows }, digest, 'vehicles', 1, [field]))
+        .toBe(false);
+    }
     expect(isOperationalRowsResponse({ ...base, rows: [rows[0], rows[0]] }, digest, 'vehicles', 2, fields))
       .toBe(false);
   });

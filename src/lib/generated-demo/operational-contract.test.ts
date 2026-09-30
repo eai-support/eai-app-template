@@ -86,8 +86,12 @@ describe('reviewed operational binding', () => {
     for (const properties of [
       [],
       [{ name: 'privateToken', type: 'text' }],
+      [{ name: 'privateNote', type: 'text' }],
+      [{ name: 'customerSSN', type: 'text' }],
+      [{ name: 'callbackUrl', type: 'text' }],
       [{ name: 'name', type: 'text' }, { name: 'name', type: 'text' }],
       [{ name: 'constructor', type: 'text' }],
+      [{ name: 'ID', type: 'text' }],
       [{ name: 'safe', type: 'text', serverOnly: 'false' }],
     ]) {
       const accepted = artifact();
@@ -95,6 +99,13 @@ describe('reviewed operational binding', () => {
       expect(resolveGeneratedOperationalRuntime(config(accepted), accepted, tenantId, 'fleet-demo'))
         .toMatchObject({ status: 'invalid' });
     }
+  });
+
+  it('keeps an accepted hyphenated scalar property in the reviewed read projection', () => {
+    const accepted = artifact();
+    accepted.objectTypeDefinitions[0].properties = [{ name: 'car-model', type: 'text' }];
+    expect(resolveGeneratedOperationalRuntime(config(accepted), accepted, tenantId, 'fleet-demo'))
+      .toMatchObject({ status: 'ready', projectedFields: ['car-model'] });
   });
 
   it('admits only one typed selected create on the exact accepted read Object Type', () => {
@@ -119,10 +130,32 @@ describe('reviewed operational binding', () => {
       { objectTypeSlug: 'vehicle', fields: ['mileage'] },
       { objectTypeSlug: 'vehicle', fields: ['name', 'name'] },
       { objectTypeSlug: 'vehicle', fields: ['privateToken'] },
+      { objectTypeSlug: 'vehicle', fields: ['privateNote'] },
+      { objectTypeSlug: 'vehicle', fields: ['customerSSN'] },
+      { objectTypeSlug: 'vehicle', fields: ['callbackUrl'] },
       { objectTypeSlug: 'vehicle', fields: ['name'], endpoint: 'https://unreviewed.test' },
     ]) {
       expect(resolveGeneratedOperationalRuntime({ ...reviewed, createBinding }, accepted, tenantId, 'fleet-demo'))
         .toMatchObject({ status: 'invalid' });
+    }
+  });
+
+  it('permits a hyphenated reviewed create field while denying credential-like names', () => {
+    const accepted = artifact();
+    accepted.objectTypeDefinitions[0].properties = [{ name: 'car-model', type: 'text', required: true }];
+    const reviewed = {
+      ...config(accepted), schemaVersion: 'eai.generated_app_operational.v2',
+      actionsMode: 'selected-create',
+      createBinding: { objectTypeSlug: 'vehicle', fields: ['car-model'] },
+    };
+    expect(resolveGeneratedOperationalRuntime(reviewed, accepted, tenantId, 'fleet-demo'))
+      .toMatchObject({ status: 'ready', createFields: [{ name: 'car-model', type: 'text', required: true }] });
+    for (const name of ['privateNote', 'customerSSN', 'callbackUrl', 'apiKey']) {
+      accepted.objectTypeDefinitions[0].properties = [{ name, type: 'text', required: true }];
+      expect(resolveGeneratedOperationalRuntime({
+        ...reviewed, acceptedArtifactDigest: demoArtifactDigest(accepted),
+        createBinding: { objectTypeSlug: 'vehicle', fields: [name] },
+      }, accepted, tenantId, 'fleet-demo')).toMatchObject({ status: 'invalid' });
     }
   });
 });
