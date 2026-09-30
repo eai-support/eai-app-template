@@ -56,6 +56,7 @@ function fixture() {
     "'use client';",
     "import { useState } from 'react';",
     "import type { GeneratedDemoAppProps } from '@/lib/generated-demo/contract';",
+    "if (typeof requestAnimationFrame !== 'function') throw new Error('generated source ran on the server');",
     'export default function GeneratedApp({ viewId, fixtures, runAction }: GeneratedDemoAppProps) {',
     '  const [count, setCount] = useState(0);',
     '  return <section><p data-testid="fixture-row">{String(fixtures.collections.vehicles[0].name)}</p><p data-testid="view">{viewId}</p><button type="button" onClick={() => { setCount(count + 1); runAction(\'book-car\'); }}>Book {count}</button></section>;',

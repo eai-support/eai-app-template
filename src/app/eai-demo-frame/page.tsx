@@ -1,4 +1,4 @@
-import { GeneratedDemo } from '@/components/generated-demo/demo-app';
+import { ClientOnlyGeneratedDemo } from '@/components/generated-demo/client-only-demo';
 import { getGeneratedDemoRuntime } from '@/lib/generated-demo/runtime';
 
 export const dynamic = 'force-dynamic';
@@ -9,5 +9,5 @@ export default function IsolatedDemoPage() {
   if (runtime.status !== 'ready') {
     return <main role='alert'>The demo app is unavailable.</main>;
   }
-  return <GeneratedDemo artifact={runtime.artifact} />;
+  return <ClientOnlyGeneratedDemo artifact={runtime.artifact} />;
 }
