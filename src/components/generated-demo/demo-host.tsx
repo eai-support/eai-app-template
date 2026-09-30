@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { isOperationalRowsResponse } from '@/lib/generated-demo/operational-bridge';
 import type { GeneratedOperationalRows } from '@/lib/generated-demo/operational-read';
 
@@ -63,7 +63,6 @@ export function GeneratedDemoHost({
   operational?: DemoOperationalIdentity;
 }) {
   const basePath = (process.env.NEXT_PUBLIC_APP_BASE_PATH ?? '').replace(/\/+$/, '');
-  const frameLoaded = useRef(false);
   const [rows, setRows] = useState<GeneratedOperationalRows | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -100,10 +99,6 @@ export function GeneratedDemoHost({
         Demo app · Sample data and simulated interactions. Changes here do not affect real records or services.
       </div>
       <iframe
-        onLoad={() => {
-          if (operational && frameLoaded.current) setFailed(true);
-          frameLoaded.current = true;
-        }}
         title='Generated app demo'
         src={`${basePath}/eai-demo-frame`}
         sandbox='allow-scripts'
