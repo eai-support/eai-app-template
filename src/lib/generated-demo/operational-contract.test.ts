@@ -18,7 +18,11 @@ function artifact(): GeneratedDemoArtifact {
   const previewFixtures = { schemaVersion: 'eai.generated_app_fixtures.v1' as const,
     collections: { vehicles: [{ id: 'sample-car' }] },
     actions: { book: { effect: 'session-local' as const, message: 'Simulated' } } };
-  const objectTypeDefinitions = [{ slug: 'vehicle', name: 'Vehicle' }];
+  const objectTypeDefinitions = [{ slug: 'vehicle', name: 'Vehicle', properties: [
+    { name: 'name', type: 'text' },
+    { name: 'mileage', type: 'number' },
+    { name: 'privateToken', type: 'text', serverOnly: true },
+  ] }];
   return { schemaVersion: 'eai.generated_app_artifact.v2', appDefinition,
     sourceBundle, previewFixtures, objectTypeDefinitions,
     digests: {
@@ -42,7 +46,7 @@ describe('reviewed operational binding', () => {
   it('accepts one bounded read tied to exact tenant, app and accepted artifact', () => {
     const accepted = artifact();
     expect(resolveGeneratedOperationalRuntime(config(accepted), accepted, tenantId, 'fleet-demo'))
-      .toMatchObject({ status: 'ready' });
+      .toMatchObject({ status: 'ready', projectedFields: ['name', 'mileage'] });
     expect(resolveGeneratedOperationalRuntime(null, accepted, tenantId, 'fleet-demo'))
       .toEqual({ status: 'unconfigured' });
   });
@@ -74,6 +78,21 @@ describe('reviewed operational binding', () => {
       [{ fixtureCollection: 'vehicles', objectTypeSlug: 'vehicle', maxRows: 25, token: 'bad' }],
     ]) {
       expect(resolveGeneratedOperationalRuntime({ ...valid, readBindings }, accepted, tenantId, 'fleet-demo'))
+        .toMatchObject({ status: 'invalid' });
+    }
+  });
+
+  it('rejects ambiguous, empty or sensitive operational field projections', () => {
+    for (const properties of [
+      [],
+      [{ name: 'privateToken', type: 'text' }],
+      [{ name: 'name', type: 'text' }, { name: 'name', type: 'text' }],
+      [{ name: 'constructor', type: 'text' }],
+      [{ name: 'safe', type: 'text', serverOnly: 'false' }],
+    ]) {
+      const accepted = artifact();
+      accepted.objectTypeDefinitions[0].properties = properties;
+      expect(resolveGeneratedOperationalRuntime(config(accepted), accepted, tenantId, 'fleet-demo'))
         .toMatchObject({ status: 'invalid' });
     }
   });

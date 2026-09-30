@@ -19,11 +19,15 @@ export interface GeneratedOperationalConfig {
 export type GeneratedOperationalResolution =
   | { status: 'unconfigured' }
   | { status: 'invalid'; errors: string[] }
-  | { status: 'ready'; config: GeneratedOperationalConfig };
+  | { status: 'ready'; config: GeneratedOperationalConfig; projectedFields: string[] };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SLUG = /^[a-z][a-z0-9-]{0,63}$/;
 const DIGEST = /^sha256:[a-f0-9]{64}$/;
+const FIELD_NAME = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
+const FORBIDDEN_FIELD = /(?:authorization|token|secret|credential|password|url|uri|endpoint|key)$/i;
+const RESERVED_FIELD = new Set(['__proto__', 'prototype', 'constructor']);
+const SCALAR_TYPES = new Set(['text', 'number', 'boolean', 'date', 'select']);
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -74,7 +78,34 @@ export function resolveGeneratedOperationalRuntime(
       errors.push('read binding is not a bounded accepted Object Type');
     }
   }
+  let projectedFields: string[] = [];
+  if (errors.length === 0) {
+    const binding = value.readBindings[0] as Record<string, unknown>;
+    const definitions = artifact.objectTypeDefinitions.filter((item) => item.slug === binding.objectTypeSlug);
+    const properties = definitions[0]?.properties;
+    if (definitions.length !== 1 || !Array.isArray(properties) || properties.length > 100) {
+      errors.push('operational read has no unambiguous accepted property declaration');
+    } else {
+      for (const property of properties) {
+        if (!record(property) || (property.serverOnly !== undefined && typeof property.serverOnly !== 'boolean')) {
+          errors.push('operational property declaration is invalid');
+          break;
+        }
+        if (property.serverOnly === true || !SCALAR_TYPES.has(String(property.type))) continue;
+        const name = property.name;
+        if (typeof name !== 'string' || !FIELD_NAME.test(name) || name === 'id' ||
+            RESERVED_FIELD.has(name) ||
+            FORBIDDEN_FIELD.test(name) || projectedFields.includes(name)) {
+          errors.push('operational field projection is unsafe');
+          break;
+        }
+        projectedFields.push(name);
+      }
+      if (projectedFields.length === 0 || projectedFields.length > 16)
+        errors.push('operational field projection must contain 1 to 16 safe scalar fields');
+    }
+  }
   return errors.length
     ? { status: 'invalid', errors }
-    : { status: 'ready', config: value as unknown as GeneratedOperationalConfig };
+    : { status: 'ready', config: value as unknown as GeneratedOperationalConfig, projectedFields };
 }

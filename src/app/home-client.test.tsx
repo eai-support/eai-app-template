@@ -47,37 +47,38 @@ describe('HomeClient generated workflow runtime', () => {
     try {
       render(<HomeClient generatedDemo={{ sourceDigest: 'source-sha', fixtureDigest: 'fixture-sha' }}
         generatedOperational={{ acceptedArtifactDigest: `sha256:${'a'.repeat(64)}`,
-          fixtureCollection: 'vehicles', maxRows: 2 }} />);
+          fixtureCollection: 'vehicles', maxRows: 2, projectedFields: ['name'] }} />);
       expect(await screen.findByRole('alert')).toHaveTextContent('No sample data was substituted');
       expect(screen.queryByTitle('Generated app demo')).not.toBeInTheDocument();
     } finally {
       global.fetch = originalFetch;
     }
   });
-  it('does not report an operational frame ready before a matching frame acknowledgement', async () => {
+  it('renders authorized rows as trusted text while the generated frame stays sample-only', async () => {
     const originalFetch = global.fetch;
     const digest = `sha256:${'a'.repeat(64)}`;
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({
       schemaVersion: 'eai.generated_app_operational_rows.v1',
       acceptedArtifactDigest: digest, fixtureCollection: 'vehicles',
-      rows: [{ id: 'vehicle-1', name: 'Car A' }],
+      rows: [{ id: 'vehicle-1', name: '<img src=x onerror=alert(1)>' }],
     }) });
     try {
       const { container } = render(<HomeClient
         generatedDemo={{ sourceDigest: 'source-sha', fixtureDigest: 'fixture-sha' }}
         generatedOperational={{ acceptedArtifactDigest: digest,
-          fixtureCollection: 'vehicles', maxRows: 2 }} />);
+          fixtureCollection: 'vehicles', maxRows: 2, projectedFields: ['name'] }} />);
       const frame = await screen.findByTitle('Generated app demo') as HTMLIFrameElement;
-      expect(container.querySelector('[data-eai-demo-ready="true"]')).not.toBeInTheDocument();
-      const nonce = new URL(frame.src).searchParams.get('nonce');
-      act(() => window.dispatchEvent(new MessageEvent('message', {
-        source: frame.contentWindow, origin: 'null', data: {
-          type: 'eai.generated.operational.ack.v1', nonce,
-          acceptedArtifactDigest: digest,
-        },
-      })));
       expect(container.querySelector('[data-eai-demo-ready="true"]')).toBeInTheDocument();
-      expect(screen.getByText(/Authorized read-only data/)).toBeVisible();
+      expect(screen.getByRole('region', { name: 'Live read-only data' })).toHaveTextContent('<img src=x onerror=alert(1)>');
+      expect(screen.getByRole('region', { name: 'Live read-only data' }).querySelector('img')).toBeNull();
+      expect(frame).toHaveAttribute('src', '/eai-demo-frame');
+      expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
+      const framePostMessage = jest.spyOn(frame.contentWindow!, 'postMessage');
+      act(() => window.dispatchEvent(new MessageEvent('message', {
+        source: frame.contentWindow, origin: 'null', data: { rows: [{ id: 'secret', name: 'ignore' }] },
+      })));
+      expect(framePostMessage).not.toHaveBeenCalled();
+      expect(screen.getByText(/Sample data and simulated interactions/)).toBeVisible();
     } finally {
       global.fetch = originalFetch;
     }

@@ -1,5 +1,4 @@
 import type { GeneratedOperationalConfig } from './operational-contract';
-import type { DemoJson } from './contract';
 import { isOperationalRowsResponse } from './operational-bridge';
 import {
   resolvePublicApiBaseUrl,
@@ -10,7 +9,7 @@ export interface GeneratedOperationalRows {
   schemaVersion: 'eai.generated_app_operational_rows.v1';
   acceptedArtifactDigest: string;
   fixtureCollection: string;
-  rows: Array<Record<string, DemoJson>>;
+  rows: Array<{ id: string } & Record<string, string | number | boolean | null>>;
 }
 
 const MAX_RESPONSE_BYTES = 256_000;
@@ -58,6 +57,7 @@ export async function readGeneratedOperationalRows(
   config: GeneratedOperationalConfig,
   accessToken: string,
   currentAppHost: string,
+  projectedFields: string[],
 ): Promise<GeneratedOperationalRows> {
   const { baseUrl, routing } = await resolvePublicApiBaseUrl({
     accessToken,
@@ -90,10 +90,21 @@ export async function readGeneratedOperationalRows(
   if (!record(result) || !Array.isArray(result.docs) || result.docs.length > binding.maxRows)
     throw new Error('Resource read response is invalid');
   const rows = result.docs.map((item: unknown) => {
-    if (!record(item) || !record(item.data) || typeof item.id !== 'string')
+    if (!record(item) || !record(item.data) || typeof item.id !== 'string' ||
+        item.id.length === 0 || item.id.length > 128)
       throw new Error('Resource row is invalid');
-    return { ...item.data, id: item.id };
-  }) as Array<Record<string, DemoJson>>;
+    const row: { id: string } & Record<string, string | number | boolean | null> = { id: item.id };
+    for (const field of projectedFields) {
+      const value = Object.hasOwn(item.data, field) ? item.data[field] ?? null : null;
+      if (value !== null && typeof value !== 'string' && typeof value !== 'boolean' &&
+          (typeof value !== 'number' || !Number.isFinite(value)))
+        throw new Error('Resource field is not a supported scalar');
+      if (typeof value === 'string' && value.length > 512)
+        throw new Error('Resource field exceeds text limit');
+      row[field] = value;
+    }
+    return row;
+  });
   if (Buffer.byteLength(JSON.stringify(rows), 'utf8') > MAX_PROJECTED_BYTES)
     throw new Error('Projected resource rows exceeded byte limit');
   const projection: GeneratedOperationalRows = {
@@ -103,7 +114,7 @@ export async function readGeneratedOperationalRows(
     rows,
   };
   if (!isOperationalRowsResponse(projection, config.acceptedArtifactDigest,
-      binding.fixtureCollection, binding.maxRows))
+      binding.fixtureCollection, binding.maxRows, projectedFields))
     throw new Error('Resource rows contain unsupported fields or values');
   return projection;
 }

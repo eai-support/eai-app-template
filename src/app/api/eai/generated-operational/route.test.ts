@@ -24,7 +24,7 @@ const request = new NextRequest('https://fleet.example.test/api/eai/generated-op
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(getGeneratedOperationalRuntime).mockReturnValue({ status: 'ready', config } as never);
+  jest.mocked(getGeneratedOperationalRuntime).mockReturnValue({ status: 'ready', config, projectedFields: ['name'] } as never);
   jest.mocked(getAccessToken).mockResolvedValue('user-obo-token');
   jest.mocked(readGeneratedOperationalRows).mockResolvedValue({
     schemaVersion: 'eai.generated_app_operational_rows.v1',
@@ -56,7 +56,7 @@ describe('generated operational read BFF', () => {
     expect(await response.json()).toMatchObject({
       fixtureCollection: 'vehicles', rows: [{ id: 'vehicle-1', name: 'Car A' }],
     });
-    expect(readGeneratedOperationalRows).toHaveBeenCalledWith(config, 'user-obo-token', 'fleet.example.test');
+    expect(readGeneratedOperationalRows).toHaveBeenCalledWith(config, 'user-obo-token', 'fleet.example.test', ['name']);
   });
 
   it('does not expose provider or tenant errors to the browser', async () => {

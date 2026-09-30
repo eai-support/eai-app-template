@@ -1,12 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import {
-  isOperationalAckMessage,
-  isOperationalReadyMessage,
-  isOperationalRowsResponse,
-  type OperationalDataMessage,
-} from '@/lib/generated-demo/operational-bridge';
+import { isOperationalRowsResponse } from '@/lib/generated-demo/operational-bridge';
 import type { GeneratedOperationalRows } from '@/lib/generated-demo/operational-read';
 
 interface DemoIdentity {
@@ -18,18 +13,49 @@ export interface DemoOperationalIdentity {
   acceptedArtifactDigest: string;
   fixtureCollection: string;
   maxRows: number;
+  projectedFields: string[];
 }
 
-function randomNavigationNonce(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const value = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+function displayCell(value: string | number | boolean | null): string {
+  return value === null ? '—' : String(value);
 }
 
-/** Authenticated outer document loads rows; the opaque source frame never fetches them. */
+function TrustedOperationalRows({
+  rows, fields,
+}: {
+  rows: GeneratedOperationalRows['rows'];
+  fields: string[];
+}) {
+  return (
+    <section className='mx-auto max-w-7xl p-5' aria-label='Live read-only data' data-eai-operational-read='true'>
+      <h2 className='text-lg font-semibold text-slate-950'>Live read-only data</h2>
+      <p className='mt-1 text-sm text-slate-600'>This trusted view shows authorized records. The app preview below still uses sample data and simulated actions.</p>
+      {rows.length === 0 ? (
+        <p className='mt-4 rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600'>No records are available.</p>
+      ) : (
+        <div className='mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white'>
+          <table className='min-w-full divide-y divide-slate-200 text-left text-sm'>
+            <thead className='bg-slate-50'>
+              <tr>
+                {['id', ...fields].map((field) => <th key={field} scope='col' className='px-4 py-3 font-medium text-slate-700'>{field}</th>)}
+              </tr>
+            </thead>
+            <tbody className='divide-y divide-slate-100'>
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <th scope='row' className='px-4 py-3 font-medium text-slate-900'>{row.id}</th>
+                  {fields.map((field) => <td key={field} className='px-4 py-3 text-slate-700'>{displayCell(row[field])}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Authenticated parent renders operational rows; arbitrary generated source sees samples only. */
 export function GeneratedDemoHost({
   demo, operational,
 }: {
@@ -37,16 +63,9 @@ export function GeneratedDemoHost({
   operational?: DemoOperationalIdentity;
 }) {
   const basePath = (process.env.NEXT_PUBLIC_APP_BASE_PATH ?? '').replace(/\/+$/, '');
-  const frame = useRef<HTMLIFrameElement>(null);
   const frameLoaded = useRef(false);
-  const [nonce, setNonce] = useState('');
   const [rows, setRows] = useState<GeneratedOperationalRows | null>(null);
-  const [connected, setConnected] = useState(false);
   const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (operational) setNonce(randomNavigationNonce());
-  }, [operational]);
 
   useEffect(() => {
     if (!operational) return;
@@ -58,7 +77,7 @@ export function GeneratedDemoHost({
       if (!response.ok) throw new Error('Authorized read unavailable');
       const value: unknown = await response.json();
       if (!isOperationalRowsResponse(value, operational.acceptedArtifactDigest,
-          operational.fixtureCollection, operational.maxRows))
+          operational.fixtureCollection, operational.maxRows, operational.projectedFields))
         throw new Error('Authorized read response invalid');
       setRows(value);
     }).catch(() => {
@@ -67,59 +86,26 @@ export function GeneratedDemoHost({
     return () => controller.abort();
   }, [basePath, operational]);
 
-  useEffect(() => {
-    if (!operational || !rows || failed) return;
-    const onFrameMessage = (event: MessageEvent<unknown>) => {
-      if (event.source !== frame.current?.contentWindow || event.origin !== 'null') return;
-      if (isOperationalAckMessage(event.data, nonce, operational.acceptedArtifactDigest)) {
-        setConnected(true);
-        return;
-      }
-      if (!isOperationalReadyMessage(event.data, nonce, operational.acceptedArtifactDigest)) return;
-      const message: OperationalDataMessage = {
-        type: 'eai.generated.operational.data.v1',
-        nonce,
-        acceptedArtifactDigest: operational.acceptedArtifactDigest,
-        fixtureCollection: rows.fixtureCollection,
-        rows: rows.rows,
-      };
-      frame.current?.contentWindow?.postMessage(message, '*');
-    };
-    window.addEventListener('message', onFrameMessage);
-    return () => window.removeEventListener('message', onFrameMessage);
-  }, [failed, nonce, operational, rows]);
-
-  useEffect(() => {
-    if (!operational || !rows || !nonce || connected || failed) return;
-    const timeout = window.setTimeout(() => setFailed(true), 12_000);
-    return () => window.clearTimeout(timeout);
-  }, [connected, failed, nonce, operational, rows]);
-
   if (failed) return <main role='alert'>Live data is unavailable. No sample data was substituted.</main>;
-  if (operational && (!rows || !nonce)) return <main role='status'>Loading authorized app data…</main>;
+  if (operational && !rows) return <main role='status'>Loading authorized app data…</main>;
   return (
     <main
-      data-eai-demo-ready={!operational || connected ? 'true' : undefined}
+      data-eai-demo-ready='true'
       data-eai-demo-source-digest={demo.sourceDigest}
       data-eai-demo-fixture-digest={demo.fixtureDigest}
       className='min-h-svh bg-slate-50'
     >
+      {operational && rows ? <TrustedOperationalRows rows={rows.rows} fields={operational.projectedFields} /> : null}
       <div className='border-b border-amber-300 bg-amber-50 px-5 py-3 text-center text-sm font-medium text-amber-950' role='status'>
-        {operational
-          ? connected
-            ? 'Authorized read-only data. All actions remain simulated; no real records are changed.'
-            : 'Connecting authorized app data…'
-          : 'Demo app · Sample data and simulated interactions. Changes here do not affect real records or services.'}
+        Demo app · Sample data and simulated interactions. Changes here do not affect real records or services.
       </div>
       <iframe
-        ref={frame}
         onLoad={() => {
-          // A second navigation must get a fresh parent document and nonce.
           if (operational && frameLoaded.current) setFailed(true);
           frameLoaded.current = true;
         }}
         title='Generated app demo'
-        src={`${basePath}/eai-demo-frame${operational ? `?nonce=${encodeURIComponent(nonce)}` : ''}`}
+        src={`${basePath}/eai-demo-frame`}
         sandbox='allow-scripts'
         referrerPolicy='no-referrer'
         className='min-h-[calc(100svh-3rem)] w-full border-0'

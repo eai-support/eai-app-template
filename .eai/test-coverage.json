@@ -149,7 +149,7 @@
         },
         {
           "id": "generated-demo-app-runtime",
-          "description": "Accepted v2 app source and sample fixtures render in a workflow-linked, opaque-origin demo. A separate read-only binding is disabled unless an explicit platform runtime gate is enabled after browser security qualification; when enabled it uses tenant-bound user OBO for bounded PublicAPI rows, keeps actions simulated, and fails closed without sample fallback. Readiness exposes exact digests, source compilation rejects unbound files, and existing production browser tests deny app API navigation plus fetch, script, and image egress.",
+          "description": "Accepted v2 app source and sample fixtures render in a workflow-linked, opaque-origin demo. A separate read-only binding remains disabled unless an explicit platform runtime gate is enabled after browser security qualification; when enabled it uses tenant-bound user OBO and accepted Object Type scalar projection for bounded PublicAPI rows in a trusted host-owned text-only view. No operational rows or credentials enter the generated frame, whose actions remain simulated; denied reads fail closed without sample fallback. Readiness exposes exact digests, source compilation rejects unbound files, and production browser isolation must be qualified before enabling the gate.",
           "owned_paths": [
             "next.config.ts",
             "src/app/layout.tsx",

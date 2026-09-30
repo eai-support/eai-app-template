@@ -17,6 +17,7 @@ const config: GeneratedOperationalConfig = {
   actionsMode: 'simulated',
 };
 const originalFetch = global.fetch;
+const projectedFields = ['name'];
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -33,9 +34,9 @@ afterEach(() => { global.fetch = originalFetch; });
 describe('user-delegated operational read', () => {
   it('uses only the reviewed tenant/type/limit and projects bounded data without credentials', async () => {
     global.fetch = jest.fn().mockResolvedValue(Response.json({
-      docs: [{ id: 'vehicle-1', data: { name: 'Car A' } }], nextCursor: null,
+      docs: [{ id: 'vehicle-1', data: { name: 'Car A', privateToken: 'not-for-client' } }], nextCursor: null,
     }));
-    const rows = await readGeneratedOperationalRows(config, 'user-obo-token', 'fleet.example.test');
+    const rows = await readGeneratedOperationalRows(config, 'user-obo-token', 'fleet.example.test', projectedFields);
     expect(resolvePublicApiBaseUrl).toHaveBeenCalledWith(expect.objectContaining({
       accessToken: 'user-obo-token', product: 'fleet-demo', requestedTenantId: tenantId,
     }));
@@ -52,6 +53,7 @@ describe('user-delegated operational read', () => {
       rows: [{ id: 'vehicle-1', name: 'Car A' }],
     });
     expect(JSON.stringify(rows)).not.toContain('user-obo-token');
+    expect(JSON.stringify(rows)).not.toContain('not-for-client');
   });
 
   it('denies a different active tenant before any resource fetch', async () => {
@@ -64,19 +66,20 @@ describe('user-delegated operational read', () => {
       },
     });
     global.fetch = jest.fn();
-    await expect(readGeneratedOperationalRows(config, 'user-obo-token', 'fleet.example.test'))
+    await expect(readGeneratedOperationalRows(config, 'user-obo-token', 'fleet.example.test', projectedFields))
       .rejects.toThrow('not bound');
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('rejects excess rows, secret fields and upstream failures without using demo samples', async () => {
+  it('rejects excess rows, invalid projected scalars and upstream failures without using demo samples', async () => {
     for (const response of [
       Response.json({ docs: [1, 2, 3].map((id) => ({ id: String(id), data: {} })) }),
-      Response.json({ docs: [{ id: 'one', data: { apiToken: 'secret' } }] }),
+      Response.json({ docs: [{ id: 'one', data: { name: { nested: 'bad' } } }] }),
+      Response.json({ docs: [{ id: 'one', data: { name: 'x'.repeat(513) } }] }),
       Response.json({ error: 'denied' }, { status: 403 }),
     ]) {
       global.fetch = jest.fn().mockResolvedValue(response);
-      await expect(readGeneratedOperationalRows(config, 'user-obo-token', 'fleet.example.test'))
+      await expect(readGeneratedOperationalRows(config, 'user-obo-token', 'fleet.example.test', projectedFields))
         .rejects.toThrow();
     }
   });

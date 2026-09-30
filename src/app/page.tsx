@@ -70,6 +70,7 @@ export default async function Home() {
           acceptedArtifactDigest: operational.config.acceptedArtifactDigest,
           fixtureCollection: operational.config.readBindings[0].fixtureCollection,
           maxRows: operational.config.readBindings[0].maxRows,
+          projectedFields: operational.projectedFields,
         } : undefined}
       />
     );

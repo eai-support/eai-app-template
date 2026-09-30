@@ -27,6 +27,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       runtime.config,
       token,
       request.nextUrl.host,
+      runtime.projectedFields,
     );
     return NextResponse.json(rows, { headers });
   } catch {
