@@ -152,7 +152,23 @@ describe('generated demo build source guard', () => {
     ],
     [
       "export default function App() { return <div dangerouslySetInnerHTML={{__html:'x'}} />; }",
-      'dangerouslySetInnerHTML is not allowed',
+      'navigation-capable markup is not allowed',
+    ],
+    [
+      "export default function App() { self.location.assign('https://example.invalid/collect'); return <main />; }",
+      'self is not allowed',
+    ],
+    [
+      "export default function App() { return <a href='https://example.invalid/collect'>Leave</a>; }",
+      '<a> is not allowed',
+    ],
+    [
+      "import * as React from 'react'; export default function App() { return React.createElement('a', {href:'https://example.invalid'}); }",
+      'browser navigation or DOM mutation is not allowed',
+    ],
+    [
+      "export default function App() { return <div {...{onClick: () => location.assign('https://example.invalid')}} />; }",
+      'navigation-capable markup is not allowed',
     ],
   ])('rejects unsafe source %s', (content, error) => {
     const result = validateSource(content);
