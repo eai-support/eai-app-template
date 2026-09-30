@@ -41,6 +41,19 @@ describe('HomeClient generated workflow runtime', () => {
     );
     expect(container.innerHTML).not.toContain('GeneratedApp');
   });
+  it('does not mount the generated frame when an authorized operational read is denied', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403 });
+    try {
+      render(<HomeClient generatedDemo={{ sourceDigest: 'source-sha', fixtureDigest: 'fixture-sha' }}
+        generatedOperational={{ acceptedArtifactDigest: `sha256:${'a'.repeat(64)}`,
+          fixtureCollection: 'vehicles', maxRows: 2 }} />);
+      expect(await screen.findByRole('alert')).toHaveTextContent('No sample data was substituted');
+      expect(screen.queryByTitle('Generated app demo')).not.toBeInTheDocument();
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
   it('exposes semantic workflow markers on the rendered root', () => {
     const { container } = render(
       <HomeClient

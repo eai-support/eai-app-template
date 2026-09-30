@@ -60,6 +60,7 @@ export async function middleware(request: NextRequest) {
         "connect-src 'none'",
         "form-action 'none'",
         "frame-src 'none'",
+        "frame-ancestors 'self'",
         "object-src 'none'",
         "worker-src 'none'",
         "base-uri 'none'",

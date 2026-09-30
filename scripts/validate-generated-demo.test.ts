@@ -161,14 +161,18 @@ describe('generated demo build source guard', () => {
   });
 
   it('rejects external CSS resources', () => {
-    const result = validateSource(
-      "import './styles.css'; export default function App() { return <main />; }",
-      {
-        path: 'src/generated/styles.css',
-        content: ".demo { background: url('https://example.com/x'); }",
-      },
-    );
-    expect(result.status).toBe(1);
-    expect(result.output).toContain('external CSS imports are forbidden');
+    for (const content of [
+      ".demo { background: url('https://example.com/x'); }",
+      '.demo { background: u\\72l(https://example.com/x); }',
+      '.demo { background: image-set("https://example.com/x" 1x); }',
+      '@\\69mport "https://example.com/x.css";',
+    ]) {
+      const result = validateSource(
+        "import './styles.css'; export default function App() { return <main />; }",
+        { path: 'src/generated/styles.css', content },
+      );
+      expect(result.status).toBe(1);
+      expect(result.output).toContain('external CSS imports are forbidden');
+    }
   });
 });

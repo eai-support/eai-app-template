@@ -10,6 +10,7 @@ import {
 } from '@/lib/platform/session-resolve';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 import { getGeneratedDemoRuntime } from '@/lib/generated-demo/runtime';
+import { getGeneratedOperationalRuntime } from '@/lib/generated-demo/operational-runtime';
 
 const SERVER_TENANT_ID =
   process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
@@ -55,12 +56,21 @@ async function redirectToResolvedAppHost(): Promise<void> {
 export default async function Home() {
   const generatedDemo = getGeneratedDemoRuntime();
   if (generatedDemo.status === 'ready') {
+    const operational = getGeneratedOperationalRuntime();
+    if (operational.status === 'invalid') {
+      return <HomeClient runtimeError='OPERATIONAL_BINDING_INVALID' />;
+    }
     return (
       <HomeClient
         generatedDemo={{
           sourceDigest: generatedDemo.artifact.digests.sourceBundle,
           fixtureDigest: generatedDemo.artifact.digests.previewFixtures,
         }}
+        generatedOperational={operational.status === 'ready' ? {
+          acceptedArtifactDigest: operational.config.acceptedArtifactDigest,
+          fixtureCollection: operational.config.readBindings[0].fixtureCollection,
+          maxRows: operational.config.readBindings[0].maxRows,
+        } : undefined}
       />
     );
   }

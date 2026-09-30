@@ -149,19 +149,21 @@
         },
         {
           "id": "generated-demo-app-runtime",
-          "description": "Accepted v2 app source and sample fixtures render in a workflow-linked, opaque-origin demo; readiness exposes exact digests, source compilation rejects unbound files, and production browser tests deny app API navigation plus fetch, script, and image egress.",
+          "description": "Accepted v2 app source and sample fixtures render in a workflow-linked, opaque-origin demo. A separate read-only binding is disabled unless an explicit platform runtime gate is enabled after browser security qualification; when enabled it uses tenant-bound user OBO for bounded PublicAPI rows, keeps actions simulated, and fails closed without sample fallback. Readiness exposes exact digests, source compilation rejects unbound files, and existing production browser tests deny app API navigation plus fetch, script, and image egress.",
           "owned_paths": [
             "next.config.ts",
             "src/app/layout.tsx",
             "src/app/page.tsx",
             "src/app/home-client.tsx",
             "src/app/eai-demo-frame/**",
+            "src/app/api/eai/generated-operational/**",
             "src/app/api/eai/readiness/route.ts",
             "src/middleware.ts",
             "src/components/generated-demo/**",
             "src/lib/generated-demo/**",
             "src/generated/**",
             "src/eai.config/generated-demo.json",
+            "src/eai.config/generated-operational.json",
             "scripts/validate-generated-demo.cjs",
             "tests/generated-demo-isolation.test.mjs"
           ],
@@ -172,6 +174,10 @@
             "src/components/generated-demo/demo-app.test.tsx",
             "src/lib/generated-demo/frame-boundary.test.ts",
             "src/lib/generated-demo/runtime-contract.test.ts",
+            "src/lib/generated-demo/operational-contract.test.ts",
+            "src/lib/generated-demo/operational-bridge.test.ts",
+            "src/lib/generated-demo/operational-read.test.ts",
+            "src/app/api/eai/generated-operational/route.test.ts",
             "scripts/validate-generated-demo.test.ts",
             "npm run check:generated-demo",
             "npm run test:generated-demo-isolation"

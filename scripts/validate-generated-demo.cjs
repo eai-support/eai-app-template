@@ -170,7 +170,13 @@ function allowedModule(specifier, fromFile, importClause) {
 
 function inspectSource(file, diskPath) {
   if (file.path.endsWith('.css')) {
-    if (/@import\b|url\s*\(/i.test(file.content))
+    const decodedCss = file.content.replace(/\\([0-9a-f]{1,6}\s?|.)/gi, (_escape, sequence) => {
+      const value = sequence.trim();
+      if (!/^[0-9a-f]{1,6}$/i.test(value)) return sequence;
+      const codePoint = parseInt(value, 16);
+      return codePoint > 0x10ffff || codePoint === 0 ? '\ufffd' : String.fromCodePoint(codePoint);
+    });
+    if (/@import\b|url\s*\(|image-set\s*\(/i.test(decodedCss))
       failures.push(`${file.path}: external CSS imports are forbidden`);
     return;
   }
