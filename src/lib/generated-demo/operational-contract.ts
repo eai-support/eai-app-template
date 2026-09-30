@@ -157,7 +157,8 @@ export function resolveGeneratedOperationalRuntime(
           required: property.required === true });
       }
       if (errors.length === 0 && properties.some((item) =>
-        record(item) && item.required === true && !createBinding.fields.includes(item.name)))
+        record(item) && item.required === true &&
+        !createFields.some((field) => field.name === item.name)))
         errors.push('selected create omits a required accepted field');
     }
   }

@@ -96,7 +96,7 @@ function TrustedCreateForm({
             ) : (
               <input type={field.type === 'number' ? 'number' : 'text'} required={field.required}
                 maxLength={field.type === 'text' ? 512 : undefined}
-                value={typeof draft[field.name] === 'string' ? draft[field.name] : ''}
+                value={typeof draft[field.name] === 'string' ? String(draft[field.name]) : ''}
                 disabled={pending || attempt.current !== null}
                 onChange={(event) => setDraft((current) => ({ ...current, [field.name]: event.target.value }))}
                 className='rounded border border-slate-300 bg-white px-2 py-1' />
