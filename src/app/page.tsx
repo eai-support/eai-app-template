@@ -9,6 +9,7 @@ import {
   RoutingResolutionError,
 } from '@/lib/platform/session-resolve';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
+import { getGeneratedDemoRuntime } from '@/lib/generated-demo/runtime';
 
 const SERVER_TENANT_ID =
   process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
@@ -52,6 +53,13 @@ async function redirectToResolvedAppHost(): Promise<void> {
 
 /** Renders immutable generated workflows while retaining the generic template fallback. */
 export default async function Home() {
+  const generatedDemo = getGeneratedDemoRuntime();
+  if (generatedDemo.status === 'ready') {
+    return <HomeClient generatedDemo={generatedDemo.artifact} />;
+  }
+  if (generatedDemo.status === 'invalid') {
+    return <HomeClient runtimeError='DEMO_ARTIFACT_INVALID' />;
+  }
   const generatedWorkflow = getGeneratedWorkflowRuntime();
   if (generatedWorkflow.status === 'ready') {
     const { appKey, binding, branding, snapshot, assistantEnabled } =

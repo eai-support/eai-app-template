@@ -5,8 +5,12 @@ import { getAccessToken } from '@enterpriseaigroup/core/server';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
+import { getGeneratedDemoRuntime } from '@/lib/generated-demo/runtime';
 jest.mock('@/lib/generated-workflow/runtime', () => ({
   getGeneratedWorkflowRuntime: jest.fn(() => ({ status: 'unconfigured' })),
+}));
+jest.mock('@/lib/generated-demo/runtime', () => ({
+  getGeneratedDemoRuntime: jest.fn(() => ({ status: 'unconfigured' })),
 }));
 import {
   resolvePublicApiBaseUrl,
@@ -66,6 +70,9 @@ describe('Home routing bootstrap', () => {
     jest
       .mocked(getGeneratedWorkflowRuntime)
       .mockReturnValue({ status: 'unconfigured' });
+    jest
+      .mocked(getGeneratedDemoRuntime)
+      .mockReturnValue({ status: 'unconfigured' });
   });
 
   it('passes the configured assistant to the browser without its server tenant context', async () => {
@@ -102,6 +109,21 @@ describe('Home routing bootstrap', () => {
     expect(getAccessToken).not.toHaveBeenCalled();
     expect(headers).not.toHaveBeenCalled();
     expect(resolvePublicApiBaseUrl).not.toHaveBeenCalled();
+  });
+
+  it('selects a valid v2 demo before the v1 workflow runtime', async () => {
+    const artifact = { schemaVersion: 'eai.generated_app_artifact.v2' } as never;
+    jest.mocked(getGeneratedDemoRuntime).mockReturnValue({ status: 'ready', artifact });
+    const element = await Home();
+    expect(element.props.generatedDemo).toBe(artifact);
+    expect(getGeneratedWorkflowRuntime).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the v2 artifact is invalid', async () => {
+    jest.mocked(getGeneratedDemoRuntime).mockReturnValue({ status: 'invalid', errors: ['digest mismatch'] });
+    const element = await Home();
+    expect(element.props.runtimeError).toBe('DEMO_ARTIFACT_INVALID');
+    expect(getGeneratedWorkflowRuntime).not.toHaveBeenCalled();
   });
 
   it('redirects to the resolved app host when routing requires correction', async () => {

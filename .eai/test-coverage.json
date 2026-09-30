@@ -148,6 +148,37 @@
           ]
         },
         {
+          "id": "generated-demo-app-runtime",
+          "description": "Accepted v2 app source and sample fixtures render in a workflow-linked demo, while readiness exposes exact digests and source compilation rejects unbound files and unsafe imports.",
+          "owned_paths": [
+            "src/app/page.tsx",
+            "src/app/home-client.tsx",
+            "src/app/api/eai/readiness/route.ts",
+            "src/components/generated-demo/**",
+            "src/lib/generated-demo/**",
+            "src/generated/**",
+            "src/eai.config/generated-demo.json",
+            "scripts/validate-generated-demo.cjs"
+          ],
+          "required_repo_tests": [
+            "src/app/page.test.tsx",
+            "src/app/home-client.test.tsx",
+            "src/app/api/eai/readiness/route.test.ts",
+            "src/components/generated-demo/demo-app.test.tsx",
+            "src/lib/generated-demo/runtime-contract.test.ts",
+            "scripts/validate-generated-demo.test.ts",
+            "npm run check:generated-demo"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["ncb-sugar-hit"],
+          "required_deployed_contracts": [
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/ncb/ncb-boundaries.spec.ts"
+            }
+          ]
+        },
+        {
           "id": "eai-app-template-nextjs-runtime-dependencies",
           "description": "Root Next.js dependency and lockfile changes are validated by the repository's stable CI gate.",
           "ci_only": true,

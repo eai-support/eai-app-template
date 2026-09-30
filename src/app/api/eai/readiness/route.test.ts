@@ -1,10 +1,14 @@
 import { GET } from './route';
 import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
+import { getGeneratedDemoRuntime } from '@/lib/generated-demo/runtime';
 import { objectTypes } from '@/eai.config/object-types';
 
 jest.mock('@/lib/generated-workflow/runtime', () => ({
   getGeneratedWorkflowRuntime: jest.fn(),
+}));
+jest.mock('@/lib/generated-demo/runtime', () => ({
+  getGeneratedDemoRuntime: jest.fn(),
 }));
 jest.mock('@/lib/generated-workflow/platform', () => ({
   generatedWorkflowPlatformFetch: jest.fn(),
@@ -56,6 +60,9 @@ describe('readiness route', () => {
       [READINESS_PROBE_TOKEN_ENV]: 'probe-token',
     };
     (getGeneratedWorkflowRuntime as jest.Mock).mockReturnValue({
+      status: 'unconfigured',
+    });
+    (getGeneratedDemoRuntime as jest.Mock).mockReturnValue({
       status: 'unconfigured',
     });
     (generatedWorkflowPlatformFetch as jest.Mock).mockResolvedValue({
@@ -113,6 +120,28 @@ describe('readiness route', () => {
       service: 'contract-test',
       failureCategories: [],
     });
+  });
+
+  it('reports v2 source and fixture digests without a v1 platform workflow read', async () => {
+    (getGeneratedDemoRuntime as jest.Mock).mockReturnValue({
+      status: 'ready',
+      artifact: { digests: { sourceBundle: `sha256:${'a'.repeat(64)}`, previewFixtures: `sha256:${'b'.repeat(64)}` } },
+    });
+    const response = await GET(readinessRequest());
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.demo).toEqual({ sourceDigest: `sha256:${'a'.repeat(64)}`, fixtureDigest: `sha256:${'b'.repeat(64)}` });
+    expect(generatedWorkflowPlatformFetch).not.toHaveBeenCalled();
+  });
+
+  it('fails readiness when the v2 artifact is invalid', async () => {
+    (getGeneratedDemoRuntime as jest.Mock).mockReturnValue({ status: 'invalid', errors: ['drift'] });
+    const response = await GET(readinessRequest());
+    const body = await response.json();
+    expect(response.status).toBe(503);
+    expect(body.checks).toEqual(expect.arrayContaining([
+      { name: 'generated-demo-artifact', ok: false, category: 'config_missing' },
+    ]));
   });
 
   it('returns 503 with sanitized failure categories when readiness fails', async () => {
