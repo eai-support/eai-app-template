@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { GeneratedDemo } from './demo-app';
-import type { GeneratedDemoArtifact } from '@/lib/generated-demo/contract';
+import type { GeneratedDemoClientView } from '@/lib/generated-demo/contract';
 
 jest.mock('@/generated/app', () => ({
   __esModule: true,
@@ -10,7 +10,7 @@ jest.mock('@/generated/app', () => ({
     runAction,
   }: {
     viewId: string;
-    fixtures: GeneratedDemoArtifact['previewFixtures'];
+    fixtures: GeneratedDemoClientView['previewFixtures'];
     runAction: (id: string) => string;
   }) => (
     <div>
@@ -23,32 +23,26 @@ jest.mock('@/generated/app', () => ({
   ),
 }));
 
-const artifact = {
-  appDefinition: {
-    appName: 'Car app',
-    businessCard: { outcome: 'Find available cars' },
-    workflow: {
-      steps: [
-        { id: 'fleet', title: 'Fleet', viewId: 'fleet-view' },
-        { id: 'booking', title: 'Booking', viewId: 'booking-view' },
-      ],
-    },
-  },
+const demo = {
+  appName: 'Car app',
+  workflowSteps: [
+    { id: 'fleet', title: 'Fleet', viewId: 'fleet-view' },
+    { id: 'booking', title: 'Booking', viewId: 'booking-view' },
+  ],
   previewFixtures: {
+    schemaVersion: 'eai.generated_app_fixtures.v1',
     collections: { cars: [{ name: 'Sample car' }] },
     actions: {
       book: { effect: 'session-local', message: 'Booking previewed.' },
     },
   },
-  digests: {
-    sourceBundle: `sha256:${'a'.repeat(64)}`,
-    previewFixtures: `sha256:${'b'.repeat(64)}`,
-  },
-} as unknown as GeneratedDemoArtifact;
+  sourceDigest: `sha256:${'a'.repeat(64)}`,
+  fixtureDigest: `sha256:${'b'.repeat(64)}`,
+} as GeneratedDemoClientView;
 
 describe('GeneratedDemo', () => {
   it('shows permanent sample labels, navigates views and announces simulated actions', () => {
-    const { container } = render(<GeneratedDemo artifact={artifact} />);
+    const { container } = render(<GeneratedDemo demo={demo} />);
     expect(
       screen.getByText(/Sample data and simulated interactions/),
     ).toBeVisible();

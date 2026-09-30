@@ -47,3 +47,25 @@ export interface GeneratedDemoAppProps {
   fixtures: GeneratedDemoArtifact['previewFixtures'];
   runAction: (actionId: string) => string;
 }
+
+/** Frame-bound props exclude the accepted source, business card and Object Type proposal. */
+export interface GeneratedDemoClientView {
+  appName: string;
+  workflowSteps: GeneratedDemoArtifact['appDefinition']['workflow']['steps'];
+  previewFixtures: GeneratedDemoArtifact['previewFixtures'];
+  sourceDigest: GeneratedDemoArtifact['digests']['sourceBundle'];
+  fixtureDigest: GeneratedDemoArtifact['digests']['previewFixtures'];
+}
+
+/** SECURITY: Serialize only the displayed title, workflow links and intended sample fixtures. */
+export function projectGeneratedDemoClientView(
+  artifact: GeneratedDemoArtifact,
+): GeneratedDemoClientView {
+  return {
+    appName: artifact.appDefinition.appName,
+    workflowSteps: artifact.appDefinition.workflow.steps,
+    previewFixtures: artifact.previewFixtures,
+    sourceDigest: artifact.digests.sourceBundle,
+    fixtureDigest: artifact.digests.previewFixtures,
+  };
+}

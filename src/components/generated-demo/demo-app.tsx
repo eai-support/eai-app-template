@@ -2,21 +2,24 @@
 
 import { useCallback, useState } from 'react';
 import GeneratedApp from '@/generated/app';
-import type { GeneratedDemoArtifact } from '@/lib/generated-demo/contract';
+import type { GeneratedDemoClientView } from '@/lib/generated-demo/contract';
 
 interface GeneratedDemoProps {
-  artifact: GeneratedDemoArtifact;
+  demo: GeneratedDemoClientView;
 }
 
-export function GeneratedDemo({ artifact }: GeneratedDemoProps) {
-  const { appDefinition, previewFixtures, digests } = artifact;
-  const [activeStepId, setActiveStepId] = useState(
-    appDefinition.workflow.steps[0].id,
-  );
+export function GeneratedDemo({ demo }: GeneratedDemoProps) {
+  const {
+    appName,
+    workflowSteps,
+    previewFixtures,
+    sourceDigest,
+    fixtureDigest,
+  } = demo;
+  const [activeStepId, setActiveStepId] = useState(workflowSteps[0].id);
   const [announcement, setAnnouncement] = useState('');
   const activeStep =
-    appDefinition.workflow.steps.find((step) => step.id === activeStepId) ??
-    appDefinition.workflow.steps[0];
+    workflowSteps.find((step) => step.id === activeStepId) ?? workflowSteps[0];
 
   const runAction = useCallback(
     (actionId: string): string => {
@@ -33,27 +36,25 @@ export function GeneratedDemo({ artifact }: GeneratedDemoProps) {
   return (
     <main
       data-eai-demo-ready='true'
-      data-eai-demo-source-digest={digests.sourceBundle}
-      data-eai-demo-fixture-digest={digests.previewFixtures}
+      data-eai-demo-source-digest={sourceDigest}
+      data-eai-demo-fixture-digest={fixtureDigest}
       className='min-h-svh bg-slate-50 text-slate-950'
     >
       <div
         className='border-b border-amber-300 bg-amber-50 px-5 py-3 text-center text-sm font-medium text-amber-950'
         role='status'
       >
-        Demo app · Sample data and simulated interactions. Changes here do not affect real records or services.
+        Demo app · Sample data and simulated interactions. Changes here do not
+        affect real records or services.
       </div>
       <header className='border-b border-slate-200 bg-white px-5 py-5'>
-        <h1 className='text-2xl font-semibold'>{appDefinition.appName}</h1>
-        <p className='mt-1 text-sm text-slate-600'>
-          {appDefinition.businessCard.outcome}
-        </p>
+        <h1 className='text-2xl font-semibold'>{appName}</h1>
       </header>
       <nav
         className='flex flex-wrap gap-2 border-b border-slate-200 bg-white px-5 py-3'
         aria-label='Workflow views'
       >
-        {appDefinition.workflow.steps.map((step) => (
+        {workflowSteps.map((step) => (
           <button
             key={step.id}
             type='button'

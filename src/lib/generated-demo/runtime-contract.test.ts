@@ -2,6 +2,7 @@ import {
   demoArtifactDigest,
   resolveGeneratedDemoRuntime,
 } from './runtime-contract';
+import { projectGeneratedDemoClientView } from './contract';
 
 const appDefinition = {
   schemaVersion: 'eai.generated_app_definition.v2',
@@ -56,6 +57,34 @@ function artifact() {
 }
 
 describe('generated demo runtime', () => {
+  it('serializes only public labels and synthetic demo data into the frame', () => {
+    const ready = resolveGeneratedDemoRuntime(artifact(), 'fleet-demo');
+    if (ready.status !== 'ready')
+      throw new Error('Expected a valid demo fixture');
+    ready.artifact.appDefinition.businessCard.description =
+      'PRIVATE_BUSINESS_BRIEF';
+    ready.artifact.appDefinition.businessCard.outcome = 'PRIVATE_ROI_TARGET';
+    ready.artifact.sourceBundle.files[0].content = 'PRIVATE_SOURCE_TEXT';
+    ready.artifact.objectTypeDefinitions = [
+      { confidentialField: 'PRIVATE_SCHEMA_FIELD' },
+    ];
+    const projection = projectGeneratedDemoClientView(ready.artifact);
+    expect(projection).toEqual({
+      appName: 'Fleet Demo',
+      workflowSteps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }],
+      previewFixtures: ready.artifact.previewFixtures,
+      sourceDigest: ready.artifact.digests.sourceBundle,
+      fixtureDigest: ready.artifact.digests.previewFixtures,
+    });
+    const serialized = JSON.stringify(projection);
+    expect(serialized).not.toMatch(
+      /PRIVATE_BUSINESS_BRIEF|PRIVATE_ROI_TARGET|PRIVATE_SOURCE_TEXT|PRIVATE_SCHEMA_FIELD/,
+    );
+    expect(serialized).not.toContain('objectTypeDefinitions');
+    expect(serialized).not.toContain('sourceBundle');
+    expect(serialized).not.toContain('businessCard');
+  });
+
   it('uses the cross-language canonical digest vector and resolves a valid one-step app', () => {
     const accepted = artifact();
     expect(accepted.digests).toEqual({
