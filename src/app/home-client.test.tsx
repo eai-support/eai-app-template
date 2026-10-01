@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 
 import { HomeClient } from './home-client';
 
@@ -140,7 +140,8 @@ describe('HomeClient generated workflow runtime', () => {
       act(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
         origin: 'null', data: { type: 'eai.generated_app_view.v1', acceptedArtifactDigest: digest,
           sourceDigest, viewId: 'booking-view' } })));
-      expect(screen.queryByText('Car A')).not.toBeInTheDocument();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(screen.queryByText('Car A')).not.toBeInTheDocument());
       expect(await screen.findByText('confirmed')).toBeVisible();
       expect(screen.getByRole('region', { name: 'Live read-only data' }))
         .toHaveAttribute('data-eai-operational-slot', 'booking-table');
@@ -148,7 +149,48 @@ describe('HomeClient generated workflow runtime', () => {
       act(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
         origin: 'null', data: { type: 'eai.generated_app_view.v1', acceptedArtifactDigest: digest,
           sourceDigest, viewId: 'confirmation-view' } })));
-      expect(screen.queryByText('confirmed')).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByText('confirmed')).not.toBeInTheDocument());
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+  it('coalesces a burst of valid frame navigation messages into one reviewed live read', async () => {
+    const originalFetch = global.fetch;
+    const digest = `sha256:${'a'.repeat(64)}`;
+    const sourceDigest = `sha256:${'b'.repeat(64)}`;
+    global.fetch = jest.fn().mockImplementation(async (url: string) => ({
+      ok: true, json: async () => ({
+        schemaVersion: 'eai.generated_app_operational_rows.v1',
+        acceptedArtifactDigest: digest,
+        fixtureCollection: url.includes('booking-view') ? 'bookings' : 'vehicles',
+        rows: [{ id: 'row-1', [url.includes('booking-view') ? 'status' : 'name']:
+          url.includes('booking-view') ? 'confirmed' : 'Car A' }],
+      }),
+    }));
+    try {
+      render(<HomeClient generatedDemo={{ sourceDigest, fixtureDigest: 'fixture-sha',
+        workflowViews: ['fleet-view', 'booking-view'] }}
+      generatedOperational={{ acceptedArtifactDigest: digest,
+        fixtureCollection: 'vehicles', maxRows: 2, projectedFields: ['name'],
+        bindings: [
+          { viewId: 'fleet-view', viewTitle: 'Fleet', componentId: 'fleet-table',
+            fixtureCollection: 'vehicles', maxRows: 2, projectedFields: ['name'] },
+          { viewId: 'booking-view', viewTitle: 'Booking', componentId: 'booking-table',
+            fixtureCollection: 'bookings', maxRows: 2, projectedFields: ['status'] },
+        ] }} />);
+      expect(await screen.findByText('Car A')).toBeVisible();
+      const frame = screen.getByTitle('Generated app demo') as HTMLIFrameElement;
+      const send = (viewId: string) => act(() => window.dispatchEvent(new MessageEvent('message', {
+        source: frame.contentWindow, origin: 'null', data: {
+          type: 'eai.generated_app_view.v1', acceptedArtifactDigest: digest, sourceDigest, viewId,
+        },
+      })));
+      send('booking-view');
+      send('fleet-view');
+      send('booking-view');
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(await screen.findByText('confirmed')).toBeVisible();
       expect(global.fetch).toHaveBeenCalledTimes(2);
     } finally {
       global.fetch = originalFetch;
