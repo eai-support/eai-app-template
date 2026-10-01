@@ -159,7 +159,7 @@ export function resolveGeneratedDemoRuntime(
           componentIds.add(id);
         }
         if (view.dataBindings !== undefined) {
-          if (!Array.isArray(view.dataBindings) || view.dataBindings.length > 4) {
+          if (!Array.isArray(view.dataBindings) || view.dataBindings.length > 16) {
             errors.push('view data bindings are invalid');
           } else {
             const boundComponents = new Set<string>();
@@ -198,7 +198,7 @@ export function resolveGeneratedDemoRuntime(
         }
         stepIds.add(step.id);
       }
-      if (dataBindings.length > 4) errors.push('view data bindings exceed operational limit');
+      if (dataBindings.length > 128) errors.push('view data bindings exceed artifact limit');
       for (const binding of dataBindings) {
         if (!record(value.previewFixtures) ||
             !record(value.previewFixtures.collections) ||
