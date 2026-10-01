@@ -95,7 +95,7 @@
         },
         {
           "id": "generated-workflow-anonymous-container-runtime",
-          "description": "Generated NCB apps render an immutable workflow snapshot, use an ACA managed-identity BFF for anonymous submissions and files, and expose semantic readiness proof.",
+          "description": "Generated NCB apps render an immutable workflow snapshot, use an ACA managed-identity BFF for anonymous submissions, files and bound AI document templates, and expose semantic readiness proof.",
           "owned_paths": [
             "next.config.ts",
             "src/app/globals.css",
@@ -108,7 +108,9 @@
             "src/eai.config/index.ts",
             "src/lib/generated-workflow/**",
             "src/app/api/eai/workflow-assistant/**",
-            "tests/fixtures/ncb/**"
+            "src/app/api/eai/document-template/**",
+            "tests/fixtures/ncb/**",
+            "tests/fixtures/document-template/**"
           ],
           "required_repo_tests": [
             "src/app/globals.test.ts",
@@ -132,7 +134,12 @@
             "src/components/generated-workflow/workflow-assistant.test.tsx",
             "src/lib/generated-workflow/assistant-contract.test.ts",
             "src/lib/generated-workflow/field-validation.test.ts",
-            "src/app/page.test.tsx"
+            "src/app/page.test.tsx",
+            "src/app/api/eai/document-template/extract-placeholders/route.test.ts",
+            "src/app/api/eai/document-template/ai-field-mapper/route.test.ts",
+            "src/app/api/eai/document-template/template-fill/route.test.ts",
+            "src/components/generated-workflow/document-creation-block.test.tsx",
+            "src/lib/generated-workflow/document-creation.test.ts"
           ],
           "required_ci_checks": ["validate"],
           "required_cross_service_surfaces": ["admin-portal", "ncb-sugar-hit"],
