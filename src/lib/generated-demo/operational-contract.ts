@@ -134,7 +134,13 @@ export function resolveGeneratedOperationalRuntime(
         binding.maxRows < 1 || binding.maxRows > 50 ||
         typeof viewId !== 'string' || !view ||
         !artifact.appDefinition.workflow.steps.some((step) => step.viewId === viewId) ||
-        typeof componentId !== 'string' || (viewMode && !view.componentIds.includes(componentId)) ||
+        typeof componentId !== 'string' || (viewMode && (
+          !view.componentIds.includes(componentId) ||
+          !view.dataBindings?.some((accepted) =>
+            accepted.componentId === componentId &&
+            accepted.fixtureCollection === binding.fixtureCollection &&
+            accepted.objectTypeSlug === binding.objectTypeSlug)
+        )) ||
         boundViews.has(viewId) || boundComponents.has(componentId)) {
       errors.push('read binding is not a bounded accepted view and Object Type');
       continue;

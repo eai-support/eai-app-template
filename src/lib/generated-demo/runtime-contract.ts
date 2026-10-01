@@ -135,6 +135,7 @@ export function resolveGeneratedDemoRuntime(
       const viewIds = new Set<string>();
       const stepIds = new Set<string>();
       const componentIds = new Set<string>();
+      const dataBindings: Array<Record<string, unknown>> = [];
       for (const view of views) {
         if (
           !record(view) ||
@@ -157,6 +158,29 @@ export function resolveGeneratedDemoRuntime(
           if (componentIds.has(id)) errors.push('component id is duplicated');
           componentIds.add(id);
         }
+        if (view.dataBindings !== undefined) {
+          if (!Array.isArray(view.dataBindings) || view.dataBindings.length > 4) {
+            errors.push('view data bindings are invalid');
+          } else {
+            const boundComponents = new Set<string>();
+            for (const binding of view.dataBindings) {
+              if (!record(binding) ||
+                  Object.keys(binding).sort().join('|') !== 'componentId|fixtureCollection|objectTypeSlug' ||
+                  typeof binding.componentId !== 'string' ||
+                  !(view.componentIds as string[]).includes(binding.componentId) ||
+                  boundComponents.has(binding.componentId) ||
+                  typeof binding.fixtureCollection !== 'string' ||
+                  !ID_PATTERN.test(binding.fixtureCollection) ||
+                  typeof binding.objectTypeSlug !== 'string' ||
+                  !ID_PATTERN.test(binding.objectTypeSlug)) {
+                errors.push('view data binding does not name an accepted component');
+                continue;
+              }
+              boundComponents.add(binding.componentId);
+              dataBindings.push(binding);
+            }
+          }
+        }
       }
       for (const step of steps) {
         if (
@@ -173,6 +197,17 @@ export function resolveGeneratedDemoRuntime(
           continue;
         }
         stepIds.add(step.id);
+      }
+      if (dataBindings.length > 4) errors.push('view data bindings exceed operational limit');
+      for (const binding of dataBindings) {
+        if (!record(value.previewFixtures) ||
+            !record(value.previewFixtures.collections) ||
+            !Object.hasOwn(value.previewFixtures.collections, String(binding.fixtureCollection)) ||
+            !Array.isArray(value.objectTypeDefinitions) ||
+            value.objectTypeDefinitions.filter((item: unknown) =>
+              record(item) && item.slug === binding.objectTypeSlug).length !== 1) {
+          errors.push('view data binding is outside accepted fixtures or Object Types');
+        }
       }
     }
   }

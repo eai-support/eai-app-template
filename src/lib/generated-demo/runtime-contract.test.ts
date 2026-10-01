@@ -133,4 +133,20 @@ describe('generated demo runtime', () => {
       errors: expect.arrayContaining(['previewFixtures digest does not match']),
     });
   });
+
+  it('accepts only a component-scoped fixture and Object Type mapping in the accepted definition', () => {
+    const accepted = artifact();
+    accepted.objectTypeDefinitions.push({ slug: 'vehicle', name: 'Vehicle', properties: [] });
+    accepted.appDefinition.views[0].dataBindings = [{
+      componentId: 'fleet-table', fixtureCollection: 'vehicles', objectTypeSlug: 'vehicle',
+    }];
+    accepted.digests.appDefinition = demoArtifactDigest(accepted.appDefinition);
+    accepted.digests.objectTypeDefinitions = demoArtifactDigest(accepted.objectTypeDefinitions);
+    expect(resolveGeneratedDemoRuntime(accepted, 'fleet-demo')).toMatchObject({ status: 'ready' });
+    accepted.appDefinition.views[0].dataBindings[0].componentId = 'unreviewed';
+    accepted.digests.appDefinition = demoArtifactDigest(accepted.appDefinition);
+    expect(resolveGeneratedDemoRuntime(accepted, 'fleet-demo')).toMatchObject({
+      status: 'invalid', errors: expect.arrayContaining(['view data binding does not name an accepted component']),
+    });
+  });
 });

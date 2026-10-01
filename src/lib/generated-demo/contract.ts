@@ -20,7 +20,16 @@ export interface GeneratedDemoArtifact {
       assumptions?: string[];
     };
     workflow: { steps: Array<{ id: string; title: string; viewId: string }> };
-    views: Array<{ id: string; title: string; componentIds: string[] }>;
+    views: Array<{
+      id: string;
+      title: string;
+      componentIds: string[];
+      dataBindings?: Array<{
+        componentId: string;
+        fixtureCollection: string;
+        objectTypeSlug: string;
+      }>;
+    }>;
     entryPath: 'src/generated/app.tsx';
   };
   sourceBundle: {

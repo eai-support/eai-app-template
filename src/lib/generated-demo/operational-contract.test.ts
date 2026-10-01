@@ -10,7 +10,8 @@ function artifact(): GeneratedDemoArtifact {
     appKey: 'fleet-demo', appName: 'Fleet Demo',
     businessCard: { description: 'Fleet', goal: 'Read cars', audience: 'Staff', outcome: 'Fleet view' },
     workflow: { steps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }] },
-    views: [{ id: 'fleet-view', title: 'Fleet', componentIds: ['fleet-table'] }],
+    views: [{ id: 'fleet-view', title: 'Fleet', componentIds: ['fleet-table'],
+      dataBindings: [{ componentId: 'fleet-table', fixtureCollection: 'vehicles', objectTypeSlug: 'vehicle' }] }],
     entryPath: 'src/generated/app.tsx' as const,
   };
   const sourceBundle = { schemaVersion: 'eai.generated_app_source.v1' as const,
@@ -161,7 +162,8 @@ describe('reviewed operational binding', () => {
 
   it('binds multiple v3 live reads to accepted view and component IDs without widening legacy modes', () => {
     const accepted = artifact();
-    accepted.appDefinition.views.push({ id: 'booking-view', title: 'Booking', componentIds: ['booking-table'] });
+    accepted.appDefinition.views.push({ id: 'booking-view', title: 'Booking', componentIds: ['booking-table'],
+      dataBindings: [{ componentId: 'booking-table', fixtureCollection: 'bookings', objectTypeSlug: 'booking' }] });
     accepted.appDefinition.workflow.steps.push({ id: 'booking', title: 'Booking', viewId: 'booking-view' });
     accepted.previewFixtures.collections.bookings = [{ id: 'sample-booking' }];
     accepted.objectTypeDefinitions.push({ slug: 'booking', name: 'Booking', properties: [{ name: 'status', type: 'text' }] });
@@ -180,6 +182,7 @@ describe('reviewed operational binding', () => {
     for (const change of [
       { readBindings: [reviewed.readBindings[0], reviewed.readBindings[0]] },
       { readBindings: [{ ...reviewed.readBindings[0], componentId: 'unreviewed' }] },
+      { readBindings: [{ ...reviewed.readBindings[0], objectTypeSlug: 'booking' }] },
       { readBindings: [{ ...reviewed.readBindings[0], viewId: 'unreviewed' }] },
       { readBindings: [{ ...reviewed.readBindings[0], endpoint: 'https://bad.example' }] },
       { readBindings: Array(5).fill(reviewed.readBindings[0]) },
