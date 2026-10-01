@@ -73,8 +73,10 @@ function validateSafeUi(
         [null, 'string', 'number', 'boolean'].includes(rows[rowIndex as number][field] === null ? null :
           typeof rows[rowIndex as number][field]);
     }
-    return rows.some((row: unknown) => record(row) && Object.hasOwn(row, field) &&
-      (row[field] === null || ['string', 'number', 'boolean'].includes(typeof row[field])));
+    const visibleRows = rows.slice(0, 50);
+    return visibleRows.some((row: unknown) => record(row) && Object.hasOwn(row, field)) &&
+      visibleRows.every((row: unknown) => record(row) && (!Object.hasOwn(row, field) ||
+        row[field] === null || ['string', 'number', 'boolean'].includes(typeof row[field])));
   };
   const walk = (node: unknown, depth: number): void => {
     nodes += 1;
@@ -113,7 +115,7 @@ function validateSafeUi(
       case 'stat': {
         const stat = node.value;
         if (!allowed(['kind', 'label', 'value'], ['kind', 'label', 'value']) ||
-            !boundedText(node.label) || !record(stat)) {
+            !boundedText(node.label, 120) || !record(stat)) {
           errors.push('safe UI stat is invalid');
           break;
         }
@@ -138,7 +140,7 @@ function validateSafeUi(
         const fields = new Set<string>();
         for (const column of node.columns) {
           if (!record(column) || !exactKeys(column, ['field', 'label'], ['field', 'label']) ||
-              !boundedText(column.label) || typeof column.field !== 'string' ||
+              !boundedText(column.label, 120) || typeof column.field !== 'string' ||
               fields.has(column.field) || !fixtureField(node.fixtureCollection, column.field))
             errors.push('safe UI table column is invalid');
           else fields.add(column.field);
@@ -147,20 +149,20 @@ function validateSafeUi(
       }
       case 'button':
         if (!allowed(['kind', 'label', 'actionId'], ['kind', 'label', 'actionId']) ||
-            !boundedText(node.label) || typeof node.actionId !== 'string' ||
+            !boundedText(node.label, 120) || typeof node.actionId !== 'string' ||
             !ID_PATTERN.test(node.actionId) || !Object.hasOwn(actions, node.actionId))
           errors.push('safe UI action is invalid');
         break;
       case 'input':
         if (!allowed(['kind', 'id', 'label', 'inputType'], ['kind', 'id', 'label', 'inputType']) ||
             typeof node.id !== 'string' || !ID_PATTERN.test(node.id) || usedInputs.has(node.id) ||
-            !boundedText(node.label) || !['text', 'number'].includes(String(node.inputType)))
+            !boundedText(node.label, 120) || !['text', 'number'].includes(String(node.inputType)))
           errors.push('safe UI input is invalid');
         else usedInputs.add(node.id);
         break;
       case 'view-link':
         if (!allowed(['kind', 'label', 'targetViewId'], ['kind', 'label', 'targetViewId']) ||
-            !boundedText(node.label) || typeof node.targetViewId !== 'string' ||
+            !boundedText(node.label, 120) || typeof node.targetViewId !== 'string' ||
             !targetViews.has(node.targetViewId))
           errors.push('safe UI view link is invalid');
         break;

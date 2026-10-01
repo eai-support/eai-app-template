@@ -164,10 +164,14 @@ describe('generated demo runtime', () => {
       { kind: 'text', text: 'Unsafe', href: 'https://example.invalid' },
       { kind: 'html', value: '<script>unsafe</script>' },
       { kind: 'text', text: 'x'.repeat(501) },
+      { kind: 'button', label: 'x'.repeat(121), actionId: 'book-car' },
       { kind: 'button', label: 'Go', actionId: 'external' },
       { kind: 'view-link', label: 'Go', targetViewId: 'external-view' },
       { kind: 'stat', label: 'Secret', value: { kind: 'fixture', collection: 'vehicles', field: 'secret', rowIndex: 0 } },
       { kind: 'table', fixtureCollection: 'vehicles', columns: Array(13).fill({ field: 'name', label: 'Car' }) },
+      { kind: 'table', fixtureCollection: 'vehicles', columns: [
+        { field: 'name', label: 'Car' }, { field: 'name', label: 'Duplicate' },
+      ] },
       { kind: 'stack', direction: 'column', gap: 'md', children: Array(17).fill({ kind: 'text', text: 'x' }) },
       { kind: 'stack', direction: 'column', gap: 'md', children: [
         { kind: 'text', text: 'one', componentId: 'fleet-heading' },
@@ -185,5 +189,9 @@ describe('generated demo runtime', () => {
     delete missing.appDefinition.views[0].safeUi;
     missing.digests.appDefinition = demoArtifactDigest(missing.appDefinition);
     expect(resolveGeneratedDemoRuntime(missing, 'fleet-demo')).toMatchObject({ status: 'invalid' });
+    const nonScalar = JSON.parse(JSON.stringify(accepted));
+    nonScalar.previewFixtures.collections.vehicles.push({ id: 'car-2', name: { nested: 'unsafe' } });
+    nonScalar.digests.previewFixtures = demoArtifactDigest(nonScalar.previewFixtures);
+    expect(resolveGeneratedDemoRuntime(nonScalar, 'fleet-demo')).toMatchObject({ status: 'invalid' });
   });
 });
