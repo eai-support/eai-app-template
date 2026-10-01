@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import GeneratedApp from '@/generated/app';
 import type { GeneratedDemoClientView } from '@/lib/generated-demo/contract';
 
@@ -15,11 +15,22 @@ export function GeneratedDemo({ demo }: GeneratedDemoProps) {
     previewFixtures,
     sourceDigest,
     fixtureDigest,
+    acceptedArtifactDigest,
   } = demo;
   const [activeStepId, setActiveStepId] = useState(workflowSteps[0].id);
   const [announcement, setAnnouncement] = useState('');
   const activeStep =
     workflowSteps.find((step) => step.id === activeStepId) ?? workflowSteps[0];
+
+  useEffect(() => {
+    // The opaque frame reports only an accepted view ID; live rows stay in the trusted parent.
+    window.parent.postMessage({
+      type: 'eai.generated_app_view.v1',
+      acceptedArtifactDigest,
+      sourceDigest,
+      viewId: activeStep.viewId,
+    }, '*');
+  }, [acceptedArtifactDigest, activeStep.viewId, sourceDigest]);
 
   const runAction = useCallback(
     (actionId: string): string => {

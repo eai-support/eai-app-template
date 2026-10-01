@@ -65,4 +65,24 @@ describe('generated operational read BFF', () => {
     expect(response.status).toBe(503);
     expect(JSON.stringify(await response.json())).not.toContain('tenant-secret-error');
   });
+
+  it('selects only a reviewed v3 view and rejects an unbound view before obtaining a token', async () => {
+    const bindings = [
+      { viewId: 'fleet-view', componentId: 'fleet-table', fixtureCollection: 'vehicles',
+        objectTypeSlug: 'vehicle', maxRows: 2, projectedFields: ['name'], viewTitle: 'Fleet' },
+      { viewId: 'booking-view', componentId: 'booking-table', fixtureCollection: 'bookings',
+        objectTypeSlug: 'booking', maxRows: 2, projectedFields: ['status'], viewTitle: 'Booking' },
+    ];
+    const v3 = { ...config, schemaVersion: 'eai.generated_app_operational.v3',
+      readBindings: bindings.map(({ viewId, componentId, fixtureCollection, objectTypeSlug, maxRows }) =>
+        ({ viewId, componentId, fixtureCollection, objectTypeSlug, maxRows })) };
+    jest.mocked(getGeneratedOperationalRuntime).mockReturnValue({ status: 'ready', config: v3,
+      bindings, projectedFields: ['name'], createFields: [] } as never);
+    expect((await GET(new NextRequest('https://fleet.example.test/api/eai/generated-operational?viewId=other'))).status).toBe(404);
+    expect(getAccessToken).not.toHaveBeenCalled();
+    const response = await GET(new NextRequest('https://fleet.example.test/api/eai/generated-operational?viewId=booking-view'));
+    expect(response.status).toBe(200);
+    expect(readGeneratedOperationalRows).toHaveBeenCalledWith(v3, 'user-obo-token',
+      'fleet.example.test', ['status'], bindings[1]);
+  });
 });

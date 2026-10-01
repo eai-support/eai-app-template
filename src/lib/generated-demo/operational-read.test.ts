@@ -71,6 +71,25 @@ describe('user-delegated operational read', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('reads the selected reviewed v3 binding without using another view Object Type', async () => {
+    const selected = { viewId: 'booking-view', componentId: 'booking-table',
+      fixtureCollection: 'bookings', objectTypeSlug: 'booking', maxRows: 1 };
+    const v3: GeneratedOperationalConfig = {
+      ...config, schemaVersion: 'eai.generated_app_operational.v3', actionsMode: 'simulated',
+      readBindings: [{ ...config.readBindings[0], viewId: 'fleet-view', componentId: 'fleet-table' }, selected],
+    };
+    global.fetch = jest.fn().mockResolvedValue(Response.json({
+      docs: [{ id: 'booking-1', data: { status: 'confirmed', privateToken: 'not-for-client' } }],
+    }));
+    const rows = await readGeneratedOperationalRows(v3, 'user-obo-token',
+      'fleet.example.test', ['status'], selected);
+    expect(String(jest.mocked(global.fetch).mock.calls[0][0]))
+      .toBe(`https://public-api.example.test/v4/data/resources/${tenantId}/booking?limit=1&includeTotal=false`);
+    expect(rows).toMatchObject({ fixtureCollection: 'bookings',
+      rows: [{ id: 'booking-1', status: 'confirmed' }] });
+    expect(JSON.stringify(rows)).not.toContain('privateToken');
+  });
+
   it('rejects excess rows, invalid projected scalars and upstream failures without using demo samples', async () => {
     for (const response of [
       Response.json({ docs: [1, 2, 3].map((id) => ({ id: String(id), data: {} })) }),

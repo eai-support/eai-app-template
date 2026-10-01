@@ -1,3 +1,5 @@
+import { demoArtifactDigest } from './runtime-contract';
+
 export type DemoJson =
   string | number | boolean | null | DemoJson[] | { [key: string]: DemoJson };
 
@@ -52,6 +54,7 @@ export interface GeneratedDemoAppProps {
 export interface GeneratedDemoClientView {
   appName: string;
   workflowSteps: GeneratedDemoArtifact['appDefinition']['workflow']['steps'];
+  acceptedArtifactDigest: `sha256:${string}`;
   previewFixtures: GeneratedDemoArtifact['previewFixtures'];
   sourceDigest: GeneratedDemoArtifact['digests']['sourceBundle'];
   fixtureDigest: GeneratedDemoArtifact['digests']['previewFixtures'];
@@ -64,6 +67,7 @@ export function projectGeneratedDemoClientView(
   return {
     appName: artifact.appDefinition.appName,
     workflowSteps: artifact.appDefinition.workflow.steps,
+    acceptedArtifactDigest: demoArtifactDigest(artifact),
     previewFixtures: artifact.previewFixtures,
     sourceDigest: artifact.digests.sourceBundle,
     fixtureDigest: artifact.digests.previewFixtures,

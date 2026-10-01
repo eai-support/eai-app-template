@@ -158,4 +158,35 @@ describe('reviewed operational binding', () => {
       }, accepted, tenantId, 'fleet-demo')).toMatchObject({ status: 'invalid' });
     }
   });
+
+  it('binds multiple v3 live reads to accepted view and component IDs without widening legacy modes', () => {
+    const accepted = artifact();
+    accepted.appDefinition.views.push({ id: 'booking-view', title: 'Booking', componentIds: ['booking-table'] });
+    accepted.appDefinition.workflow.steps.push({ id: 'booking', title: 'Booking', viewId: 'booking-view' });
+    accepted.previewFixtures.collections.bookings = [{ id: 'sample-booking' }];
+    accepted.objectTypeDefinitions.push({ slug: 'booking', name: 'Booking', properties: [{ name: 'status', type: 'text' }] });
+    const reviewed = {
+      ...config(accepted), schemaVersion: 'eai.generated_app_operational.v3',
+      readBindings: [
+        { viewId: 'fleet-view', componentId: 'fleet-table', fixtureCollection: 'vehicles', objectTypeSlug: 'vehicle', maxRows: 25 },
+        { viewId: 'booking-view', componentId: 'booking-table', fixtureCollection: 'bookings', objectTypeSlug: 'booking', maxRows: 10 },
+      ],
+    };
+    expect(resolveGeneratedOperationalRuntime(reviewed, accepted, tenantId, 'fleet-demo'))
+      .toMatchObject({ status: 'ready', bindings: [
+        { viewId: 'fleet-view', componentId: 'fleet-table', projectedFields: ['name', 'mileage'] },
+        { viewId: 'booking-view', componentId: 'booking-table', projectedFields: ['status'] },
+      ] });
+    for (const change of [
+      { readBindings: [reviewed.readBindings[0], reviewed.readBindings[0]] },
+      { readBindings: [{ ...reviewed.readBindings[0], componentId: 'unreviewed' }] },
+      { readBindings: [{ ...reviewed.readBindings[0], viewId: 'unreviewed' }] },
+      { readBindings: [{ ...reviewed.readBindings[0], endpoint: 'https://bad.example' }] },
+      { readBindings: Array(5).fill(reviewed.readBindings[0]) },
+      { actionsMode: 'selected-create' },
+    ]) {
+      expect(resolveGeneratedOperationalRuntime({ ...reviewed, ...change }, accepted, tenantId, 'fleet-demo'))
+        .toMatchObject({ status: 'invalid' });
+    }
+  });
 });

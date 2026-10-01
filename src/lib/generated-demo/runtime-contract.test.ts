@@ -73,6 +73,7 @@ describe('generated demo runtime', () => {
       appName: 'Fleet Demo',
       workflowSteps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }],
       previewFixtures: ready.artifact.previewFixtures,
+      acceptedArtifactDigest: demoArtifactDigest(ready.artifact),
       sourceDigest: ready.artifact.digests.sourceBundle,
       fixtureDigest: ready.artifact.digests.previewFixtures,
     });

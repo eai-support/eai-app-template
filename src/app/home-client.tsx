@@ -14,6 +14,7 @@ interface HomeClientProps {
   generatedDemo?: {
     sourceDigest: string;
     fixtureDigest: string;
+    workflowViews?: string[];
   };
   generatedOperational?: DemoOperationalIdentity;
   generatedWorkflow?: Pick<

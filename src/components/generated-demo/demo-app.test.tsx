@@ -38,10 +38,12 @@ const demo = {
   },
   sourceDigest: `sha256:${'a'.repeat(64)}`,
   fixtureDigest: `sha256:${'b'.repeat(64)}`,
+  acceptedArtifactDigest: `sha256:${'c'.repeat(64)}`,
 } as GeneratedDemoClientView;
 
 describe('GeneratedDemo', () => {
   it('shows permanent sample labels, navigates views and announces simulated actions', () => {
+    const notify = jest.spyOn(window.parent, 'postMessage');
     const { container } = render(<GeneratedDemo demo={demo} />);
     expect(
       screen.getByText(/Sample data and simulated interactions/),
@@ -50,6 +52,10 @@ describe('GeneratedDemo', () => {
     expect(screen.getByText('Sample car')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Booking' }));
     expect(screen.getByText('View booking-view')).toBeVisible();
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'eai.generated_app_view.v1', viewId: 'booking-view',
+      acceptedArtifactDigest: demo.acceptedArtifactDigest,
+    }), '*');
     fireEvent.click(screen.getByRole('button', { name: 'Book' }));
     expect(
       screen.getByText(/Booking previewed. This was a simulation/),
@@ -60,5 +66,6 @@ describe('GeneratedDemo', () => {
       'data-eai-demo-fixture-digest',
       `sha256:${'b'.repeat(64)}`,
     );
+    notify.mockRestore();
   });
 });
