@@ -136,6 +136,7 @@ export function resolveGeneratedDemoRuntime(
       const stepIds = new Set<string>();
       const componentIds = new Set<string>();
       const dataBindings: Array<Record<string, unknown>> = [];
+      let trustedSlotCount = 0;
       for (const view of views) {
         if (
           !record(view) ||
@@ -181,6 +182,37 @@ export function resolveGeneratedDemoRuntime(
             }
           }
         }
+        if (view.trustedLayout !== undefined) {
+          const layout = view.trustedLayout;
+          if (!record(layout) || Object.keys(layout).sort().join('|') !== 'columns|slots' ||
+              ![1, 2, 3].includes(layout.columns as number) ||
+              !Array.isArray(layout.slots) || layout.slots.length > 16) {
+            errors.push('view trusted layout is invalid');
+          } else {
+            trustedSlotCount += layout.slots.length;
+            const slotIds = new Set<string>();
+            for (const slot of layout.slots) {
+              if (!record(slot) ||
+                  Object.keys(slot).some((key) => !['componentId', 'kind', 'title', 'columnSpan', 'text'].includes(key)) ||
+                  typeof slot.componentId !== 'string' ||
+                  !(view.componentIds as string[]).includes(slot.componentId) ||
+                  slotIds.has(slot.componentId) ||
+                  (slot.kind !== 'read-table' && slot.kind !== 'static-copy') ||
+                  typeof slot.title !== 'string' || !slot.title.trim() || slot.title.length > 120 ||
+                  (slot.columnSpan !== undefined && (![1, 2, 3].includes(slot.columnSpan as number) ||
+                    (slot.columnSpan as number) > (layout.columns as number))) ||
+                  (slot.kind === 'static-copy' && (typeof slot.text !== 'string' ||
+                    !slot.text.trim() || slot.text.length > 2000)) ||
+                  (slot.kind === 'read-table' && (slot.text !== undefined ||
+                    !Array.isArray(view.dataBindings) ||
+                    !view.dataBindings.some((binding: unknown) => record(binding) && binding.componentId === slot.componentId)))) {
+                errors.push('view trusted layout contains an invalid slot');
+                continue;
+              }
+              slotIds.add(slot.componentId);
+            }
+          }
+        }
       }
       for (const step of steps) {
         if (
@@ -199,6 +231,7 @@ export function resolveGeneratedDemoRuntime(
         stepIds.add(step.id);
       }
       if (dataBindings.length > 128) errors.push('view data bindings exceed artifact limit');
+      if (trustedSlotCount > 128) errors.push('view trusted layout slots exceed artifact limit');
       for (const binding of dataBindings) {
         if (!record(value.previewFixtures) ||
             !record(value.previewFixtures.collections) ||

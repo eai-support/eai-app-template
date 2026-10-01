@@ -3,6 +3,17 @@ import { demoArtifactDigest } from './runtime-contract';
 export type DemoJson =
   string | number | boolean | null | DemoJson[] | { [key: string]: DemoJson };
 
+export interface GeneratedTrustedLayout {
+  columns: 1 | 2 | 3;
+  slots: Array<{
+    componentId: string;
+    kind: 'read-table' | 'static-copy';
+    title: string;
+    columnSpan?: 1 | 2 | 3;
+    text?: string;
+  }>;
+}
+
 export interface GeneratedDemoArtifact {
   schemaVersion: 'eai.generated_app_artifact.v2';
   appDefinition: {
@@ -29,6 +40,7 @@ export interface GeneratedDemoArtifact {
         fixtureCollection: string;
         objectTypeSlug: string;
       }>;
+      trustedLayout?: GeneratedTrustedLayout;
     }>;
     entryPath: 'src/generated/app.tsx';
   };

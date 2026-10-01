@@ -163,7 +163,10 @@ describe('reviewed operational binding', () => {
   it('binds multiple v3 live reads to accepted view and component IDs without widening legacy modes', () => {
     const accepted = artifact();
     accepted.appDefinition.views.push({ id: 'booking-view', title: 'Booking', componentIds: ['booking-table'],
-      dataBindings: [{ componentId: 'booking-table', fixtureCollection: 'bookings', objectTypeSlug: 'booking' }] });
+      dataBindings: [{ componentId: 'booking-table', fixtureCollection: 'bookings', objectTypeSlug: 'booking' }],
+      trustedLayout: { columns: 1, slots: [{ componentId: 'booking-table', kind: 'read-table', title: 'Bookings' }] } });
+    accepted.appDefinition.views[0].trustedLayout = { columns: 1,
+      slots: [{ componentId: 'fleet-table', kind: 'read-table', title: 'Fleet' }] };
     accepted.appDefinition.workflow.steps.push({ id: 'booking', title: 'Booking', viewId: 'booking-view' });
     accepted.previewFixtures.collections.bookings = [{ id: 'sample-booking' }];
     accepted.objectTypeDefinitions.push({ slug: 'booking', name: 'Booking', properties: [{ name: 'status', type: 'text' }] });
@@ -179,6 +182,11 @@ describe('reviewed operational binding', () => {
         { viewId: 'fleet-view', componentId: 'fleet-table', projectedFields: ['name', 'mileage'] },
         { viewId: 'booking-view', componentId: 'booking-table', projectedFields: ['status'] },
       ] });
+    const withoutSlot = JSON.parse(JSON.stringify(accepted)) as GeneratedDemoArtifact;
+    delete withoutSlot.appDefinition.views[0].trustedLayout;
+    expect(resolveGeneratedOperationalRuntime({ ...reviewed,
+      acceptedArtifactDigest: demoArtifactDigest(withoutSlot) }, withoutSlot, tenantId, 'fleet-demo'))
+      .toMatchObject({ status: 'invalid' });
     for (const change of [
       { readBindings: [reviewed.readBindings[0], reviewed.readBindings[0]] },
       { readBindings: [{ ...reviewed.readBindings[0], componentId: 'unreviewed' }] },

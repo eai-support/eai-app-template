@@ -149,4 +149,29 @@ describe('generated demo runtime', () => {
       status: 'invalid', errors: expect.arrayContaining(['view data binding does not name an accepted component']),
     });
   });
+  it('bounds trusted operational slots and requires a same-view data binding', () => {
+    const accepted = artifact();
+    accepted.objectTypeDefinitions.push({ slug: 'vehicle', name: 'Vehicle', properties: [] });
+    accepted.appDefinition.views[0].dataBindings = [{
+      componentId: 'fleet-table', fixtureCollection: 'vehicles', objectTypeSlug: 'vehicle',
+    }];
+    accepted.appDefinition.views[0].trustedLayout = { columns: 2, slots: [
+      { componentId: 'fleet-table', kind: 'read-table', title: 'Fleet', columnSpan: 2 },
+    ] };
+    accepted.digests.appDefinition = demoArtifactDigest(accepted.appDefinition);
+    accepted.digests.objectTypeDefinitions = demoArtifactDigest(accepted.objectTypeDefinitions);
+    expect(resolveGeneratedDemoRuntime(accepted, 'fleet-demo')).toMatchObject({ status: 'ready' });
+    for (const layout of [
+      { columns: 2, slots: [{ componentId: 'fleet-table', kind: 'read-table', title: 'Fleet', columnSpan: 3 }] },
+      { columns: 2, slots: [{ componentId: 'fleet-table', kind: 'read-table', title: 'Fleet', text: 'unsafe' }] },
+      { columns: 2, slots: [{ componentId: 'fleet-table', kind: 'static-copy', title: 'Fleet' }] },
+      { columns: 2, slots: Array(17).fill({ componentId: 'fleet-table', kind: 'read-table', title: 'Fleet' }) },
+    ]) {
+      const modified = JSON.parse(JSON.stringify(accepted));
+      modified.appDefinition.views[0].trustedLayout = layout;
+      modified.digests.appDefinition = demoArtifactDigest(modified.appDefinition);
+      expect(resolveGeneratedDemoRuntime(modified, 'fleet-demo'))
+        .toMatchObject({ status: 'invalid' });
+    }
+  });
 });

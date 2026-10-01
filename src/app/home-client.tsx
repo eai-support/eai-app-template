@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { GeneratedWorkflowForm } from '@/components/generated-workflow/workflow-form';
 import { GeneratedDemoHost, type DemoOperationalIdentity } from '@/components/generated-demo/demo-host';
 import type { GeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime-contract';
+import type { GeneratedTrustedLayout } from '@/lib/generated-demo/contract';
 
 const DemoPage = dynamic(() =>
   import('@enterpriseaigroup/demo').then((module) => module.DemoPage),
@@ -15,6 +16,8 @@ interface HomeClientProps {
     sourceDigest: string;
     fixtureDigest: string;
     workflowViews?: string[];
+    workflowSteps?: Array<{ id: string; title: string; viewId: string }>;
+    trustedViews?: Array<{ id: string; title: string; trustedLayout?: GeneratedTrustedLayout }>;
   };
   generatedOperational?: DemoOperationalIdentity;
   generatedWorkflow?: Pick<

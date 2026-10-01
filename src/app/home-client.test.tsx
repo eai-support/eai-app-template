@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { HomeClient } from './home-client';
 
@@ -121,7 +121,24 @@ describe('HomeClient generated workflow runtime', () => {
     });
     try {
       render(<HomeClient generatedDemo={{ sourceDigest, fixtureDigest: 'fixture-sha',
-        workflowViews: ['fleet-view', 'booking-view', 'confirmation-view'] }}
+        workflowViews: ['fleet-view', 'booking-view', 'confirmation-view'],
+        workflowSteps: [
+          { id: 'fleet', title: 'Fleet', viewId: 'fleet-view' },
+          { id: 'booking', title: 'Booking', viewId: 'booking-view' },
+          { id: 'confirmation', title: 'Confirmation', viewId: 'confirmation-view' },
+        ],
+        trustedViews: [
+          { id: 'fleet-view', title: 'Fleet', trustedLayout: { columns: 2, slots: [
+            { componentId: 'fleet-copy', kind: 'static-copy', title: 'Introduction', text: '<script>unsafe</script>' },
+            { componentId: 'fleet-table', kind: 'read-table', title: 'Fleet cars', columnSpan: 2 },
+          ] } },
+          { id: 'booking-view', title: 'Booking', trustedLayout: { columns: 1, slots: [
+            { componentId: 'booking-table', kind: 'read-table', title: 'Bookings' },
+          ] } },
+          { id: 'confirmation-view', title: 'Confirmation', trustedLayout: { columns: 1, slots: [
+            { componentId: 'confirmation-copy', kind: 'static-copy', title: 'Confirmed', text: 'Review bookings' },
+          ] } },
+        ] }}
       generatedOperational={{ acceptedArtifactDigest: digest,
         fixtureCollection: 'vehicles', maxRows: 2, projectedFields: ['name'],
         bindings: [
@@ -131,26 +148,24 @@ describe('HomeClient generated workflow runtime', () => {
             fixtureCollection: 'bookings', maxRows: 2, projectedFields: ['status'] },
         ] }} />);
       expect(await screen.findByText('Car A')).toBeVisible();
-      const frame = screen.getByTitle('Generated app demo') as HTMLIFrameElement;
-      const framePostMessage = jest.spyOn(frame.contentWindow!, 'postMessage');
-      act(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
-        origin: 'null', data: { type: 'eai.generated_app_view.v1', acceptedArtifactDigest: 'wrong',
-          sourceDigest, viewId: 'booking-view' } })));
+      expect(screen.queryByTitle('Generated app demo')).not.toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Live app view' }).querySelector('script')).toBeNull();
+      expect(screen.getByText('<script>unsafe</script>')).toBeVisible();
+      expect(screen.getByText('Car A').closest('[data-eai-operational-slot]'))
+        .toHaveAttribute('data-eai-operational-slot', 'fleet-table');
       expect(global.fetch).toHaveBeenCalledTimes(1);
-      act(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
-        origin: 'null', data: { type: 'eai.generated_app_view.v1', acceptedArtifactDigest: digest,
-          sourceDigest, viewId: 'booking-view' } })));
-      expect(global.fetch).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Booking' }));
       await waitFor(() => expect(screen.queryByText('Car A')).not.toBeInTheDocument());
       expect(await screen.findByText('confirmed')).toBeVisible();
-      expect(screen.getByRole('region', { name: 'Live read-only data' }))
+      expect(screen.getByText('confirmed').closest('[data-eai-operational-slot]'))
         .toHaveAttribute('data-eai-operational-slot', 'booking-table');
-      expect(framePostMessage).not.toHaveBeenCalled();
-      act(() => window.dispatchEvent(new MessageEvent('message', { source: frame.contentWindow,
-        origin: 'null', data: { type: 'eai.generated_app_view.v1', acceptedArtifactDigest: digest,
-          sourceDigest, viewId: 'confirmation-view' } })));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmation' }));
       await waitFor(() => expect(screen.queryByText('confirmed')).not.toBeInTheDocument());
+      expect(screen.getByText('Review bookings')).toBeVisible();
       expect(global.fetch).toHaveBeenCalledTimes(2);
+      fireEvent.click(screen.getByRole('button', { name: 'Sample preview' }));
+      expect(screen.getByTitle('Generated app demo')).toHaveAttribute('sandbox', 'allow-scripts');
+      expect(screen.queryByText('Review bookings')).not.toBeInTheDocument();
     } finally {
       global.fetch = originalFetch;
     }
@@ -170,7 +185,15 @@ describe('HomeClient generated workflow runtime', () => {
     }));
     try {
       render(<HomeClient generatedDemo={{ sourceDigest, fixtureDigest: 'fixture-sha',
-        workflowViews: ['fleet-view', 'booking-view'] }}
+        workflowViews: ['fleet-view', 'booking-view'],
+        trustedViews: [
+          { id: 'fleet-view', title: 'Fleet', trustedLayout: { columns: 1, slots: [
+            { componentId: 'fleet-table', kind: 'read-table', title: 'Fleet' },
+          ] } },
+          { id: 'booking-view', title: 'Booking', trustedLayout: { columns: 1, slots: [
+            { componentId: 'booking-table', kind: 'read-table', title: 'Booking' },
+          ] } },
+        ] }}
       generatedOperational={{ acceptedArtifactDigest: digest,
         fixtureCollection: 'vehicles', maxRows: 2, projectedFields: ['name'],
         bindings: [
@@ -180,6 +203,7 @@ describe('HomeClient generated workflow runtime', () => {
             fixtureCollection: 'bookings', maxRows: 2, projectedFields: ['status'] },
         ] }} />);
       expect(await screen.findByText('Car A')).toBeVisible();
+      fireEvent.click(screen.getByRole('button', { name: 'Sample preview' }));
       const frame = screen.getByTitle('Generated app demo') as HTMLIFrameElement;
       const send = (viewId: string) => act(() => window.dispatchEvent(new MessageEvent('message', {
         source: frame.contentWindow, origin: 'null', data: {
@@ -190,7 +214,7 @@ describe('HomeClient generated workflow runtime', () => {
       send('fleet-view');
       send('booking-view');
       expect(global.fetch).toHaveBeenCalledTimes(1);
-      expect(await screen.findByText('confirmed')).toBeVisible();
+      await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
       expect(global.fetch).toHaveBeenCalledTimes(2);
     } finally {
       global.fetch = originalFetch;
