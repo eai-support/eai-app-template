@@ -114,7 +114,10 @@ describe('Home routing bootstrap', () => {
   it('selects a valid v2 demo before the v1 workflow runtime', async () => {
     const artifact = {
       digests: { sourceBundle: 'source-sha', previewFixtures: 'fixture-sha' },
-      appDefinition: { workflow: { steps: [{ id: 'fleet', viewId: 'fleet-view' }] } },
+      appDefinition: {
+        workflow: { steps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }] },
+        views: [{ id: 'fleet-view', title: 'Fleet', componentIds: [] }],
+      },
     } as never;
     jest
       .mocked(getGeneratedDemoRuntime)
@@ -124,6 +127,8 @@ describe('Home routing bootstrap', () => {
       sourceDigest: 'source-sha',
       fixtureDigest: 'fixture-sha',
       workflowViews: ['fleet-view'],
+      workflowSteps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }],
+      trustedViews: [{ id: 'fleet-view', title: 'Fleet' }],
     });
     expect(element.props.generatedDemo).not.toBe(artifact);
     expect(getGeneratedWorkflowRuntime).not.toHaveBeenCalled();
