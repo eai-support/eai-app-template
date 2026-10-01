@@ -9,6 +9,8 @@ import {
   RoutingResolutionError,
 } from '@/lib/platform/session-resolve';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
+import { getGeneratedDemoRuntime } from '@/lib/generated-demo/runtime';
+import { getGeneratedOperationalRuntime } from '@/lib/generated-demo/operational-runtime';
 
 const SERVER_TENANT_ID =
   process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
@@ -52,6 +54,43 @@ async function redirectToResolvedAppHost(): Promise<void> {
 
 /** Renders immutable generated workflows while retaining the generic template fallback. */
 export default async function Home() {
+  const generatedDemo = getGeneratedDemoRuntime();
+  if (generatedDemo.status === 'ready') {
+    const operational = getGeneratedOperationalRuntime();
+    if (operational.status === 'invalid') {
+      return <HomeClient runtimeError='OPERATIONAL_BINDING_INVALID' />;
+    }
+    return (
+      <HomeClient
+        generatedDemo={{
+          appName: generatedDemo.artifact.appDefinition.appName,
+          sourceDigest: generatedDemo.artifact.digests.sourceBundle,
+          fixtureDigest: generatedDemo.artifact.digests.previewFixtures,
+          previewFixtures: generatedDemo.artifact.previewFixtures,
+          workflowViews: generatedDemo.artifact.appDefinition.workflow.steps.map((step) => step.viewId),
+          workflowSteps: generatedDemo.artifact.appDefinition.workflow.steps,
+          trustedViews: generatedDemo.artifact.appDefinition.views.map(({ id, title, trustedLayout, safeUi }) => ({
+            id, title, trustedLayout, safeUi,
+          })),
+        }}
+        generatedOperational={operational.status === 'ready' ? {
+          acceptedArtifactDigest: operational.config.acceptedArtifactDigest,
+          fixtureCollection: operational.config.readBindings[0].fixtureCollection,
+          maxRows: operational.config.readBindings[0].maxRows,
+          projectedFields: operational.projectedFields,
+          bindings: operational.config.schemaVersion === 'eai.generated_app_operational.v3'
+            ? operational.bindings.map(({ viewId, viewTitle, componentId, fixtureCollection,
+              maxRows, projectedFields }) => ({ viewId, viewTitle, componentId,
+              fixtureCollection, maxRows, projectedFields })) : undefined,
+          createFields: operational.config.schemaVersion === 'eai.generated_app_operational.v2'
+            ? operational.createFields : undefined,
+        } : undefined}
+      />
+    );
+  }
+  if (generatedDemo.status === 'invalid') {
+    return <HomeClient runtimeError='DEMO_ARTIFACT_INVALID' />;
+  }
   const generatedWorkflow = getGeneratedWorkflowRuntime();
   if (generatedWorkflow.status === 'ready') {
     const { appKey, binding, branding, snapshot, assistantEnabled } =

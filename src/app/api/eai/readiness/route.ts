@@ -2,6 +2,7 @@ import { evaluateRuntimeReadiness } from '@/lib/platform/readiness';
 import { generatedWorkflowPlatformFetch } from '@/lib/generated-workflow/platform';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 import { validateGeneratedAppRuntimeBinding } from '@/lib/generated-workflow/runtime-contract';
+import { getGeneratedDemoRuntime } from '@/lib/generated-demo/runtime';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -126,14 +127,32 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const readiness = evaluateRuntimeReadiness();
+  const demoRuntime = getGeneratedDemoRuntime();
   const workflowRuntime = getGeneratedWorkflowRuntime();
-  const platformCheck = await generatedWorkflowPlatformCheck(workflowRuntime);
+  const platformCheck =
+    demoRuntime.status === 'unconfigured'
+      ? await generatedWorkflowPlatformCheck(workflowRuntime)
+      : null;
+  const demoCheck =
+    demoRuntime.status === 'unconfigured'
+      ? null
+      : {
+          name: 'generated-demo-artifact',
+          ok: demoRuntime.status === 'ready',
+          category:
+            demoRuntime.status === 'ready'
+              ? undefined
+              : ('config_missing' as const),
+        };
   const checks = platformCheck
     ? [...readiness.checks, platformCheck]
-    : readiness.checks;
-  const platformFailureCategories = platformCheck?.category
-    ? [platformCheck.category]
-    : [];
+    : demoCheck
+      ? [...readiness.checks, demoCheck]
+      : readiness.checks;
+  const platformFailureCategories: Array<
+    'publicapi_unreachable' | 'tenant_assignment_invalid' | 'config_missing'
+  > = platformCheck?.category ? [platformCheck.category] : [];
+  if (demoCheck?.category) platformFailureCategories.push(demoCheck.category);
   const failureCategories = Array.from(
     new Set([...readiness.failureCategories, ...platformFailureCategories]),
   ).sort();
@@ -144,37 +163,48 @@ export async function GET(request: Request): Promise<Response> {
     failureCategories,
   };
   const responseBody =
-    workflowRuntime.status === 'ready'
+    demoRuntime.status === 'ready'
       ? {
           ...platformReadiness,
-          runtimeBinding: {
-            workflowTemplate: {
-              digest: workflowRuntime.runtime.binding.workflowTemplate.digest,
-              title: workflowRuntime.runtime.binding.workflowTemplate.title,
-            },
+          demo: {
+            sourceDigest: demoRuntime.artifact.digests.sourceBundle,
+            fixtureDigest: demoRuntime.artifact.digests.previewFixtures,
           },
         }
-      : workflowRuntime.status === 'invalid'
-        ? {
-            ...platformReadiness,
-            ok: false,
-            checks: [
-              ...platformReadiness.checks,
-              {
-                name: 'generated-workflow-snapshot',
-                ok: false,
-                category: 'config_missing' as const,
-                missing: ['runtimeBinding.workflowTemplate.digest'],
+      : demoRuntime.status === 'invalid'
+        ? platformReadiness
+        : workflowRuntime.status === 'ready'
+          ? {
+              ...platformReadiness,
+              runtimeBinding: {
+                workflowTemplate: {
+                  digest:
+                    workflowRuntime.runtime.binding.workflowTemplate.digest,
+                  title: workflowRuntime.runtime.binding.workflowTemplate.title,
+                },
               },
-            ],
-            failureCategories: Array.from(
-              new Set([
-                ...platformReadiness.failureCategories,
-                'config_missing',
-              ]),
-            ).sort(),
-          }
-        : platformReadiness;
+            }
+          : workflowRuntime.status === 'invalid'
+            ? {
+                ...platformReadiness,
+                ok: false,
+                checks: [
+                  ...platformReadiness.checks,
+                  {
+                    name: 'generated-workflow-snapshot',
+                    ok: false,
+                    category: 'config_missing' as const,
+                    missing: ['runtimeBinding.workflowTemplate.digest'],
+                  },
+                ],
+                failureCategories: Array.from(
+                  new Set([
+                    ...platformReadiness.failureCategories,
+                    'config_missing',
+                  ]),
+                ).sort(),
+              }
+            : platformReadiness;
 
   return Response.json(responseBody, {
     status: responseBody.ok ? 200 : 503,

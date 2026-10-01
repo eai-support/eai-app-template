@@ -1,29 +1,51 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const evidenceScript = join(repoRoot, 'scripts/source-unknown-deployment-evidence.mjs');
+const evidenceScript = join(
+  repoRoot,
+  'scripts/source-unknown-deployment-evidence.mjs',
+);
 const workflowPath = join(repoRoot, '.github/workflows/eai-app.yml');
+const ciWorkflowPath = join(repoRoot, '.github/workflows/ci.yml');
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 
 function writeFixtureApp(root) {
   mkdirSync(join(root, '.next/standalone'), { recursive: true });
   mkdirSync(join(root, '.next/static'), { recursive: true });
   mkdirSync(join(root, 'src/eai.config'), { recursive: true });
-  mkdirSync(join(root, 'tests/fixtures/schema-provenance'), { recursive: true });
+  mkdirSync(join(root, 'tests/fixtures/schema-provenance'), {
+    recursive: true,
+  });
   mkdirSync(join(root, '.eai-build'), { recursive: true });
 
-  writeFileSync(join(root, '.next/standalone/server.js'), 'console.log("ok");\n');
+  writeFileSync(
+    join(root, '.next/standalone/server.js'),
+    'console.log("ok");\n',
+  );
   writeFileSync(join(root, '.next/static/app.js'), 'static\n');
   writeFileSync(join(root, 'package.json'), '{"name":"fixture-app"}\n');
   writeFileSync(join(root, 'eai.runtime.json'), '{"runtime":"fixture"}\n');
-  writeFileSync(join(root, 'src/eai.config/object-types.json'), '{"types":[]}\n');
-  writeFileSync(join(root, '.eai-build/eai-app-image.oci.tar'), 'oci image archive fixture\n');
+  writeFileSync(
+    join(root, 'src/eai.config/object-types.json'),
+    '{"types":[]}\n',
+  );
+  writeFileSync(
+    join(root, '.eai-build/eai-app-image.oci.tar'),
+    'oci image archive fixture\n',
+  );
 
   cpSync(
     join(repoRoot, 'tests/fixtures/schema-provenance/valid.json'),
@@ -71,10 +93,16 @@ test('collect writes source-unknown handoff evidence and GitHub outputs', () => 
       outputFile,
     ]);
 
-    const evidencePath = join(fixtureRoot, '.eai-build/evidence/source-unknown-deployment-evidence.json');
+    const evidencePath = join(
+      fixtureRoot,
+      '.eai-build/evidence/source-unknown-deployment-evidence.json',
+    );
     const evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
     assert.deepEqual(JSON.parse(stdout), evidence);
-    assert.equal(evidence.contract, 'source-unknown-app-template-deployment-handoff');
+    assert.equal(
+      evidence.contract,
+      'source-unknown-app-template-deployment-handoff',
+    );
     assert.equal(evidence.sourceMode, 'source-unknown');
     assert.equal(evidence.handoff.expectedStatus, 'handoff_pending');
     assert.equal(evidence.handoff.tenantInfraImplementedHere, false);
@@ -110,6 +138,75 @@ test('workflow sends source metadata in deployment handoff', () => {
   assert.match(handoffStep, /--workflow-run-id "\$GITHUB_RUN_ID"/);
 });
 
+test('customer build cannot reach OIDC or EAI credentials, and handoff never executes repository code', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const build = workflow
+    .split('\n  build-source:\n')[1]
+    ?.split('\n  submit-handoff:\n')[0];
+  const handoff = workflow.split('\n  submit-handoff:\n')[1];
+
+  assert.ok(build && handoff, 'build and handoff must be separate jobs');
+  assert.match(build, /permissions:\n\s+contents: read/);
+  assert.doesNotMatch(
+    build,
+    /id-token: write|packages: read|EAI_ACCESS_TOKEN|GITHUB_TOKEN|_authToken|Request GitHub OIDC token/,
+  );
+  assert.match(build, /persist-credentials: false/);
+  assert.match(handoff, /needs: build-source/);
+  assert.match(handoff, /permissions:\n\s+actions: read\n\s+id-token: write/);
+  assert.doesNotMatch(
+    handoff,
+    /actions\/checkout@|docker build|docker\/build-push-action@|npm run build|source-unknown-deployment-evidence\.mjs/,
+  );
+  assert.match(handoff, /Build evidence exceeds the accepted size range/);
+  assert.doesNotMatch(workflow.split('\njobs:\n')[0], /id-token: write/);
+  assert.ok(
+    handoff.indexOf('Verify immutable build evidence') <
+      handoff.indexOf('Request GitHub OIDC token'),
+    'artifact digest and run identity must be verified before requesting OIDC',
+  );
+  assert.match(handoff, /@enterpriseai\/cli\/-\/cli-3\.18\.4\.tgz/);
+  assert.match(
+    handoff,
+    /0fb7e80e009ce316cbe2f0f4f22da53188c83098\/package-lock\.json/,
+  );
+  assert.match(
+    handoff,
+    /e2441c521657059410667136da2411a70865d90ef31375df53be4f1764a3054b/,
+  );
+  assert.match(
+    handoff,
+    /npm ci --prefix "\$EAI_CLI_INSTALL_DIR" --omit=dev --ignore-scripts/,
+  );
+  assert.doesNotMatch(handoff, /npm install -g|npm ci(?:\n|\s+--omit=dev)/);
+  assert.match(
+    handoff,
+    /node "\$EAI_CLI_INSTALL_DIR\/dist\/index\.js" app workflow-evidence/,
+  );
+  assert.match(
+    handoff,
+    /node "\$EAI_CLI_INSTALL_DIR\/dist\/index\.js" app deploy-source-unknown/,
+  );
+  assert.match(
+    handoff,
+    /EAI_ACCESS_TOKEN: \$\{\{ secrets\.EAI_ACCESS_TOKEN \}\}/,
+  );
+  assert.doesNotMatch(handoff.split('    steps:\n')[0], /EAI_ACCESS_TOKEN/);
+  assert.doesNotMatch(
+    handoff,
+    /\| tee .*workflow-evidence-response|\| tee .*deployment-handoff-response/,
+  );
+});
+
+test('pull-request validation does not expose a package token to app source', () => {
+  const ciWorkflow = readFileSync(ciWorkflowPath, 'utf8');
+  assert.match(ciWorkflow, /persist-credentials: false/);
+  assert.doesNotMatch(
+    ciWorkflow,
+    /GITHUB_TOKEN|_authToken|packages: write|packages: read/,
+  );
+});
+
 test('assert-handoff-submitted accepts pending and accepted TenantInfra handoff responses', () => {
   const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-handoff-'));
   try {
@@ -126,7 +223,11 @@ test('assert-handoff-submitted accepts pending and accepted TenantInfra handoff 
         }),
       );
 
-      const stdout = runEvidenceScript(['assert-handoff-submitted', '--response', responsePath]);
+      const stdout = runEvidenceScript([
+        'assert-handoff-submitted',
+        '--response',
+        responsePath,
+      ]);
       assert.match(stdout, new RegExp(`^${status} source-unknown-deploy-1`));
     }
   } finally {
@@ -135,7 +236,9 @@ test('assert-handoff-submitted accepts pending and accepted TenantInfra handoff 
 });
 
 test('assert-handoff-submitted rejects completed or missing handoff responses', () => {
-  const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-handoff-bad-'));
+  const workDir = mkdtempSync(
+    join(tmpdir(), 'eai-source-unknown-handoff-bad-'),
+  );
   try {
     const responsePath = join(workDir, 'deployment-response-bad.json');
     writeFileSync(
