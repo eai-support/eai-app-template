@@ -40,7 +40,8 @@ function validateSource(
         steps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }],
       },
       views: [
-        { id: 'fleet-view', title: 'Fleet', componentIds: ['fleet-table'] },
+        { id: 'fleet-view', title: 'Fleet', componentIds: ['fleet-table'],
+          safeUi: { version: 'eai.safe_ui.v1', root: { kind: 'heading', level: 1, text: 'Fleet' } } },
       ],
       entryPath: 'src/generated/app.tsx',
     };

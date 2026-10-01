@@ -2,7 +2,6 @@ import {
   demoArtifactDigest,
   resolveGeneratedDemoRuntime,
 } from './runtime-contract';
-import { projectGeneratedDemoClientView } from './contract';
 
 const appDefinition = {
   schemaVersion: 'eai.generated_app_definition.v2',
@@ -19,7 +18,8 @@ const appDefinition = {
     assumptions: ['Sample data only'],
   },
   workflow: { steps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }] },
-  views: [{ id: 'fleet-view', title: 'Fleet', componentIds: ['fleet-table'] }],
+  views: [{ id: 'fleet-view', title: 'Fleet', componentIds: ['fleet-table'],
+    safeUi: { version: 'eai.safe_ui.v1', root: { kind: 'heading', level: 1, text: 'Fleet' } } }],
   entryPath: 'src/generated/app.tsx',
 };
 const sourceBundle = {
@@ -57,40 +57,11 @@ function artifact() {
 }
 
 describe('generated demo runtime', () => {
-  it('serializes only public labels and synthetic demo data into the frame', () => {
-    const ready = resolveGeneratedDemoRuntime(artifact(), 'fleet-demo');
-    if (ready.status !== 'ready')
-      throw new Error('Expected a valid demo fixture');
-    ready.artifact.appDefinition.businessCard.description =
-      'PRIVATE_BUSINESS_BRIEF';
-    ready.artifact.appDefinition.businessCard.outcome = 'PRIVATE_ROI_TARGET';
-    ready.artifact.sourceBundle.files[0].content = 'PRIVATE_SOURCE_TEXT';
-    ready.artifact.objectTypeDefinitions = [
-      { confidentialField: 'PRIVATE_SCHEMA_FIELD' },
-    ];
-    const projection = projectGeneratedDemoClientView(ready.artifact);
-    expect(projection).toEqual({
-      appName: 'Fleet Demo',
-      workflowSteps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }],
-      previewFixtures: ready.artifact.previewFixtures,
-      acceptedArtifactDigest: demoArtifactDigest(ready.artifact),
-      sourceDigest: ready.artifact.digests.sourceBundle,
-      fixtureDigest: ready.artifact.digests.previewFixtures,
-    });
-    const serialized = JSON.stringify(projection);
-    expect(serialized).not.toMatch(
-      /PRIVATE_BUSINESS_BRIEF|PRIVATE_ROI_TARGET|PRIVATE_SOURCE_TEXT|PRIVATE_SCHEMA_FIELD/,
-    );
-    expect(serialized).not.toContain('objectTypeDefinitions');
-    expect(serialized).not.toContain('sourceBundle');
-    expect(serialized).not.toContain('businessCard');
-  });
-
   it('uses the cross-language canonical digest vector and resolves a valid one-step app', () => {
     const accepted = artifact();
     expect(accepted.digests).toEqual({
       appDefinition:
-        'sha256:81b9fd99476934625a797d8e6eb00857cf701251f3254218f7863f64276ebfc4',
+        'sha256:73066d719da516f437b6cbb1631929204f5ed46f4f3ba86662f14271bf9c9d7a',
       sourceBundle:
         'sha256:b84f90dee30a2269f1df76a2461e7cc0c872d3778164a1bf016056ca8a0aab66',
       previewFixtures:
@@ -173,5 +144,46 @@ describe('generated demo runtime', () => {
       expect(resolveGeneratedDemoRuntime(modified, 'fleet-demo'))
         .toMatchObject({ status: 'invalid' });
     }
+  });
+  it('accepts only bounded declarative preview nodes and reviewed local references', () => {
+    const accepted = artifact();
+    accepted.appDefinition.views[0].componentIds.push('fleet-heading', 'fleet-button');
+    accepted.appDefinition.views[0].safeUi = { version: 'eai.safe_ui.v1', root: {
+      kind: 'stack', direction: 'column', gap: 'md', children: [
+        { kind: 'heading', level: 1, text: 'Fleet', componentId: 'fleet-heading' },
+        { kind: 'table', fixtureCollection: 'vehicles', columns: [{ field: 'name', label: 'Car' }] },
+        { kind: 'stat', label: 'First', value: { kind: 'fixture', collection: 'vehicles', field: 'name', rowIndex: 0 } },
+        { kind: 'input', id: 'search', label: 'Search', inputType: 'text' },
+        { kind: 'button', label: 'Book', actionId: 'book-car', componentId: 'fleet-button' },
+        { kind: 'view-link', label: 'Fleet', targetViewId: 'fleet-view' },
+      ],
+    } };
+    accepted.digests.appDefinition = demoArtifactDigest(accepted.appDefinition);
+    expect(resolveGeneratedDemoRuntime(accepted, 'fleet-demo')).toMatchObject({ status: 'ready' });
+    const badRoots: unknown[] = [
+      { kind: 'text', text: 'Unsafe', href: 'https://example.invalid' },
+      { kind: 'html', value: '<script>unsafe</script>' },
+      { kind: 'text', text: 'x'.repeat(501) },
+      { kind: 'button', label: 'Go', actionId: 'external' },
+      { kind: 'view-link', label: 'Go', targetViewId: 'external-view' },
+      { kind: 'stat', label: 'Secret', value: { kind: 'fixture', collection: 'vehicles', field: 'secret', rowIndex: 0 } },
+      { kind: 'table', fixtureCollection: 'vehicles', columns: Array(13).fill({ field: 'name', label: 'Car' }) },
+      { kind: 'stack', direction: 'column', gap: 'md', children: Array(17).fill({ kind: 'text', text: 'x' }) },
+      { kind: 'stack', direction: 'column', gap: 'md', children: [
+        { kind: 'text', text: 'one', componentId: 'fleet-heading' },
+        { kind: 'text', text: 'two', componentId: 'fleet-heading' },
+      ] },
+      { kind: 'text', text: 'unreviewed', componentId: 'other-component' },
+    ];
+    for (const root of badRoots) {
+      const changed = JSON.parse(JSON.stringify(accepted));
+      changed.appDefinition.views[0].safeUi.root = root;
+      changed.digests.appDefinition = demoArtifactDigest(changed.appDefinition);
+      expect(resolveGeneratedDemoRuntime(changed, 'fleet-demo')).toMatchObject({ status: 'invalid' });
+    }
+    const missing = JSON.parse(JSON.stringify(accepted));
+    delete missing.appDefinition.views[0].safeUi;
+    missing.digests.appDefinition = demoArtifactDigest(missing.appDefinition);
+    expect(resolveGeneratedDemoRuntime(missing, 'fleet-demo')).toMatchObject({ status: 'invalid' });
   });
 });

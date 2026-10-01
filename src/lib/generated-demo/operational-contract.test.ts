@@ -11,6 +11,8 @@ function artifact(): GeneratedDemoArtifact {
     businessCard: { description: 'Fleet', goal: 'Read cars', audience: 'Staff', outcome: 'Fleet view' },
     workflow: { steps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }] },
     views: [{ id: 'fleet-view', title: 'Fleet', componentIds: ['fleet-table'],
+      safeUi: { version: 'eai.safe_ui.v1' as const,
+        root: { kind: 'heading' as const, level: 1 as const, text: 'Fleet' } },
       dataBindings: [{ componentId: 'fleet-table', fixtureCollection: 'vehicles', objectTypeSlug: 'vehicle' }] }],
     entryPath: 'src/generated/app.tsx' as const,
   };
@@ -164,7 +166,8 @@ describe('reviewed operational binding', () => {
     const accepted = artifact();
     accepted.appDefinition.views.push({ id: 'booking-view', title: 'Booking', componentIds: ['booking-table'],
       dataBindings: [{ componentId: 'booking-table', fixtureCollection: 'bookings', objectTypeSlug: 'booking' }],
-      trustedLayout: { columns: 1, slots: [{ componentId: 'booking-table', kind: 'read-table', title: 'Bookings' }] } });
+      trustedLayout: { columns: 1, slots: [{ componentId: 'booking-table', kind: 'read-table', title: 'Bookings' }] },
+      safeUi: { version: 'eai.safe_ui.v1', root: { kind: 'heading', level: 1, text: 'Bookings' } } });
     accepted.appDefinition.views[0].trustedLayout = { columns: 1,
       slots: [{ componentId: 'fleet-table', kind: 'read-table', title: 'Fleet' }] };
     accepted.appDefinition.workflow.steps.push({ id: 'booking', title: 'Booking', viewId: 'booking-view' });

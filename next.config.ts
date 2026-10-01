@@ -1,26 +1,14 @@
 import type { NextConfig } from "next";
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 const isProdOrTest = process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test';
 
 // Support deployment to a subpath (e.g., /my-app)
 const basePath = process.env.APP_BASE_PATH || '';
-// SECURITY: Inline only a mode bit into Edge middleware, never the accepted source or fixtures.
-const generatedDemoArtifact = JSON.parse(
-  readFileSync(join(process.cwd(), 'src/eai.config/generated-demo.json'), 'utf8'),
-);
 
 const nextConfig: NextConfig = {
   output: 'standalone',
   basePath: basePath || undefined,
   assetPrefix: basePath || undefined,
-  env: {
-    EAI_GENERATED_DEMO_V2:
-      generatedDemoArtifact?.schemaVersion === 'eai.generated_app_artifact.v2'
-        ? 'true'
-        : 'false',
-  },
   transpilePackages: ['@enterpriseaigroup/client', '@enterpriseaigroup/core', '@enterpriseaigroup/platform-sdk'],
   compress: true,
   turbopack: {

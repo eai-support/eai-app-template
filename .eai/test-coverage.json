@@ -149,13 +149,12 @@
         },
         {
           "id": "generated-demo-app-runtime",
-          "description": "Accepted v2 app source and sample fixtures render in a workflow-linked, opaque-origin demo. Bounded operational v1/v2 reads and selected creates remain disabled unless their explicit platform runtime gates are enabled after browser security qualification. V3 binds up to four accepted view/component IDs to reviewed Object Types and requires matching trusted read-table slots. The primary operational view renders authorized rows in those declarative host-owned slots; arbitrary generated code remains a separate sample-only preview. Enabled reads use tenant-bound user OBO and accepted scalar projection; selected v2 creates use a trusted host form with same-origin actor-authorized write and readback. No operational rows, write authority, or credentials enter generated code; denied live reads fail closed without sample substitution. Readiness exposes exact digests, source compilation rejects unbound files, and production browser isolation must be qualified before enabling either gate.",
+          "description": "Accepted v2 source remains inert provenance. The hosted sample preview renders only bounded safeUi components from the reviewed artifact, with local simulated actions and no arbitrary source execution or iframe route. Bounded operational v1/v2 reads and selected creates remain disabled unless their explicit platform runtime gates are enabled after browser security qualification. V3 binds up to four accepted view/component IDs to reviewed Object Types and requires matching trusted read-table slots. The primary operational view renders authorized rows only in host-owned slots. Enabled reads use tenant-bound user OBO and accepted scalar projection; selected v2 creates use a trusted host form with same-origin actor-authorized write and readback. Denied live reads fail closed without sample substitution. Readiness exposes exact digests, source compilation rejects unbound files, and production browser isolation must be qualified before enabling either gate.",
           "owned_paths": [
             "next.config.ts",
             "src/app/layout.tsx",
             "src/app/page.tsx",
             "src/app/home-client.tsx",
-            "src/app/eai-demo-frame/**",
             "src/app/api/eai/generated-operational/**",
             "src/app/api/eai/readiness/route.ts",
             "src/middleware.ts",
@@ -175,8 +174,6 @@
             "src/app/page.test.tsx",
             "src/app/home-client.test.tsx",
             "src/app/api/eai/readiness/route.test.ts",
-            "src/components/generated-demo/demo-app.test.tsx",
-            "src/lib/generated-demo/frame-boundary.test.ts",
             "src/lib/generated-demo/runtime-contract.test.ts",
             "src/lib/generated-demo/operational-contract.test.ts",
             "src/lib/generated-demo/operational-bridge.test.ts",

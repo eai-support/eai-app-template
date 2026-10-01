@@ -114,22 +114,31 @@ describe('Home routing bootstrap', () => {
   it('selects a valid v2 demo before the v1 workflow runtime', async () => {
     const artifact = {
       digests: { sourceBundle: 'source-sha', previewFixtures: 'fixture-sha' },
+      sourceBundle: { files: [{ path: 'src/generated/app.tsx', content: 'PRIVATE_SOURCE' }] },
+      objectTypeDefinitions: [{ privateField: 'PRIVATE_SCHEMA' }],
+      previewFixtures: { collections: { vehicles: [{ name: 'Sample car' }] }, actions: {} },
       appDefinition: {
+        appName: 'Fleet Demo',
+        businessCard: { description: 'PRIVATE_BRIEF' },
         workflow: { steps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }] },
-        views: [{ id: 'fleet-view', title: 'Fleet', componentIds: [] }],
+        views: [{ id: 'fleet-view', title: 'Fleet', componentIds: [],
+          safeUi: { version: 'eai.safe_ui.v1', root: { kind: 'heading', level: 1, text: 'Fleet' } } }],
       },
-    } as never;
+    };
     jest
       .mocked(getGeneratedDemoRuntime)
-      .mockReturnValue({ status: 'ready', artifact });
+      .mockReturnValue({ status: 'ready', artifact: artifact as never });
     const element = await Home();
     expect(element.props.generatedDemo).toEqual({
+      appName: 'Fleet Demo',
       sourceDigest: 'source-sha',
       fixtureDigest: 'fixture-sha',
+      previewFixtures: artifact.previewFixtures,
       workflowViews: ['fleet-view'],
       workflowSteps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }],
-      trustedViews: [{ id: 'fleet-view', title: 'Fleet' }],
+      trustedViews: [{ id: 'fleet-view', title: 'Fleet', safeUi: artifact.appDefinition.views[0].safeUi }],
     });
+    expect(JSON.stringify(element.props.generatedDemo)).not.toMatch(/PRIVATE_SOURCE|PRIVATE_SCHEMA|PRIVATE_BRIEF/);
     expect(element.props.generatedDemo).not.toBe(artifact);
     expect(getGeneratedWorkflowRuntime).not.toHaveBeenCalled();
   });
