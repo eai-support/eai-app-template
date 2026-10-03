@@ -30,6 +30,7 @@
       "EAI_PRODUCT_SLUG",
       "EAI_ENVIRONMENT",
       "EAI_CONFIG_HASH",
+      "EAI_DEPLOYMENT_ID",
       "TENANT_KEYS",
       "ENTRA_TENANT_NAME",
       "ENTRA_TENANT_ID",
@@ -136,6 +137,7 @@
           "x-eai-app-key": "${EAI_PRODUCT_SLUG}",
           "x-eai-environment": "${EAI_ENVIRONMENT}",
           "x-eai-config-hash": "${EAI_CONFIG_HASH}",
+          "x-eai-deployment-id": "${EAI_DEPLOYMENT_ID}",
           "authorization": "Bearer ${EAI_READINESS_PROBE_TOKEN}"
         },
         "requiresSecret": "EAI_READINESS_PROBE_TOKEN",

@@ -26,6 +26,7 @@ describe('eai.runtime.json', () => {
         'AUTH_URL',
         'EAI_ENVIRONMENT',
         'EAI_CONFIG_HASH',
+        'EAI_DEPLOYMENT_ID',
       ]),
     );
     expect(contract.secrets.required).toEqual(
@@ -38,7 +39,10 @@ describe('eai.runtime.json', () => {
       expect.arrayContaining(['EAI_READINESS_PROBE_TOKEN']),
     );
     expect(contract.secrets.optional).not.toEqual(
-      expect.arrayContaining(['EAI_SERVICE_CLIENT_SECRET', 'OBO_CLIENT_SECRET']),
+      expect.arrayContaining([
+        'EAI_SERVICE_CLIENT_SECRET',
+        'OBO_CLIENT_SECRET',
+      ]),
     );
     expect(contract.secrets.declarations.required).toEqual(
       expect.arrayContaining([
@@ -100,6 +104,7 @@ describe('eai.runtime.json', () => {
           expectedStatus: 200,
           headers: expect.objectContaining({
             'x-eai-readiness-probe': 'tenantinfra',
+            'x-eai-deployment-id': '${EAI_DEPLOYMENT_ID}',
             authorization: 'Bearer ${EAI_READINESS_PROBE_TOKEN}',
           }),
           requiresSecret: 'EAI_READINESS_PROBE_TOKEN',

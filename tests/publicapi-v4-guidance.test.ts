@@ -22,6 +22,8 @@ const EXCLUDED_DIRECTORIES = new Set([
   'node_modules',
 ]);
 const EXCLUDED_FILES = new Set(['package-lock.json']);
+const LEGACY_API_GUIDANCE =
+  /(?:PublicAPI|ResourceAPI).{0,160}(?:\s|\/)V[123]\b|(?:\s|\/)V[123]\b.{0,160}(?:PublicAPI|ResourceAPI)/i;
 
 function repositoryGuidanceFiles(directory = ROOT): string[] {
   return readdirSync(directory).flatMap((entry) => {
@@ -53,15 +55,28 @@ describe('PublicAPI V4 repository guidance', () => {
     const violations = files.flatMap((path) => {
       const lines = readFileSync(path, 'utf8').split(/\r?\n/);
       return lines.flatMap((line, index) =>
-        /(?:PublicAPI|ResourceAPI).{0,160}\bV[123]\b|\bV[123]\b.{0,160}(?:PublicAPI|ResourceAPI)/i.test(
-          line,
-        )
+        LEGACY_API_GUIDANCE.test(line)
           ? [`${relative(ROOT, path)}:${index + 1}`]
           : [],
       );
     });
 
     expect(violations).toEqual([]);
+  });
+
+  it('distinguishes API versions from versioned contract asset filenames', () => {
+    expect(
+      LEGACY_API_GUIDANCE.test(
+        'mid/PublicAPI/src/app/contracts/object-type-routing-v1.json',
+      ),
+    ).toBe(false);
+    expect(
+      LEGACY_API_GUIDANCE.test(
+        'mid/ResourceAPI/src/contracts/resource-action-v2.schema.json',
+      ),
+    ).toBe(false);
+    expect(LEGACY_API_GUIDANCE.test(`PublicAPI V${3} endpoint`)).toBe(true);
+    expect(LEGACY_API_GUIDANCE.test(`/v${2}/ResourceAPI endpoint`)).toBe(true);
   });
 
   it('keeps direct EAI PublicAPI command examples on V4 paths', () => {
