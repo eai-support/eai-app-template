@@ -1,4 +1,4 @@
-# Cuts an immutable release tag for every main commit that passed CI.
+# Cuts an immutable release tag for reviewed template main commits that passed CI.
 #
 # Consumers (eai-cli `linked-sources.json`, Admin-Portal generated-app export)
 # pin to these releases instead of tracking the main branch, so a template
@@ -36,11 +36,13 @@ concurrency:
 jobs:
   release:
     name: Tag reviewed template revision
-    # Only a green CI run on main is releasable; a manual dispatch is an
-    # explicit override for minor/major cuts.
+    # Generated repositories inherit this workflow; only the template's
+    # immutable repository identity may publish template release tags.
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      github.repository == 'eai-support/eai-app-template' &&
+      github.repository_id == '1205696460' &&
+      (github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
 
     steps:

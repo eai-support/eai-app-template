@@ -11,12 +11,14 @@
             ".eai/test-coverage.json",
             ".specify-pro/specs/3503-eai-managed-deploy/**",
             ".github/workflows/eai-app.yml",
+            ".github/workflows/release.yml",
             "scripts/source-unknown-deployment-evidence.mjs",
             "src/lib/platform/readiness.ts",
             "src/app/api/eai/readiness/route.ts"
           ],
           "required_repo_tests": [
             "tests/source-unknown-deployment-evidence.test.mjs",
+            "tests/next-release-version.test.mjs",
             "src/lib/platform/readiness.test.ts",
             "src/app/api/eai/readiness/route.test.ts"
           ],
