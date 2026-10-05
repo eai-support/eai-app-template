@@ -29,6 +29,35 @@ const workflowPath = join(repoRoot, '.github/workflows/eai-app.yml');
 const readmePath = join(repoRoot, 'README.md');
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 
+function handoffBinding(sourceMode = 'source-unknown') {
+  return {
+    sourceMode, tenantId: 'company-1', appScopeTenantId: 'company-1', targetTenantId: 'hosting-1',
+    appKey: 'permit-app', environment: 'preview', operationId: 'operation-1',
+    commitSha: 'a'.repeat(40), configHash: `sha256:${'b'.repeat(64)}`,
+    workflowPath: '.github/workflows/eai-app.yml', ref: 'refs/heads/main', workflowRunId: '123',
+    workflowBlobSha: 'c'.repeat(40), collectorDigest: `sha256:${'d'.repeat(64)}`,
+    artifactDigest: `sha256:${'e'.repeat(64)}`, imageDigest: `sha256:${'f'.repeat(64)}`,
+    repositoryId: 77, repo: { owner: 'customer', name: 'permit-app' },
+    imageArtifact: { id: 88, name: 'eai-generated-app-image', archiveDigest: `sha256:${'e'.repeat(64)}` },
+  };
+}
+
+function handoffReceipt(status, binding = handoffBinding()) {
+  const pending = status === 'handoff_pending';
+  const deploymentId = 'deployment-1';
+  const requestId = 'sealed-admin-request-1';
+  return {
+    status, requiresTenantInfra: pending, deploymentRequestId: pending ? requestId : deploymentId,
+    ...(pending ? {} : { deploymentId }),
+    deploymentRequest: {
+      ...structuredClone(binding), status, requiresTenantInfra: pending, requestId,
+      ...(binding.sourceMode === 'eai-cli-generated' ? { sourceOperationId: binding.operationId } : {}),
+      ...(pending ? {} : { deploymentId }),
+      handoff: { backend: 'TenantInfra', status: pending ? 'pending' : 'configured' },
+    },
+  };
+}
+
 function writeFixtureApp(root) {
   mkdirSync(join(root, '.next/standalone'), { recursive: true });
   mkdirSync(join(root, '.next/static'), { recursive: true });
@@ -519,6 +548,15 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
     workflow.indexOf('  handoff:'),
   );
   const handoffJob = workflow.slice(workflow.indexOf('  handoff:'));
+  const collectorSource = readFileSync(evidenceScript, 'utf8');
+  const validatorStart = collectorSource.indexOf('function validateHandoffReceipt(');
+  const validatorEnd = collectorSource.indexOf('\nfunction assertHandoffSubmitted', validatorStart);
+  assert.ok(handoffJob.replace(/^ {10}/gm, '').includes(collectorSource.slice(validatorStart, validatorEnd)),
+    'clean OIDC job must enforce the same receipt validator as the controlled collector tests');
+  assert.match(buildJob, /github_environment: \$\{\{ steps\.dispatch-binding\.outputs\.github_environment \}\}/);
+  assert.match(handoffJob, /environment:\n      name: \$\{\{ needs\.build\.outputs\.github_environment \}\}/);
+  assert.match(handoffJob, /DEPLOY_ENVIRONMENT: \$\{\{ needs\.build\.outputs\.deployment_environment \}\}/);
+  assert.doesNotMatch(handoffJob, /DEPLOY_ENVIRONMENT:.*inputs\.|name:.*inputs\.|github_environment\s*\|\|/);
   assert.match(
     workflow,
     /^run-name: EAI deploy \$\{\{ inputs\.app_key \}\} \(\$\{\{ inputs\.operation_id \}\}\)$/m,
@@ -771,7 +809,7 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.doesNotMatch(handoffJob, /--output \.eai-build\/evidence/);
   assert.match(
     handoffJob,
-    /const responsePath = '\.eai-build\/evidence\/workflow-evidence-response\.json'/,
+    /readBoundedJson\('\.eai-build\/evidence\/workflow-evidence-response\.json'\)/,
   );
   assert.match(handoffJob, /fs\.constants\.O_NOFOLLOW/);
   assert.match(handoffJob, /Deployment handoff response grew during verification/);
@@ -1800,25 +1838,34 @@ test('CLI dispatch rejects an incomplete or malformed signed grant before the bu
       commit,
     ];
     runEvidenceScript(args);
-    const demoArgs = [...args];
-    demoArgs[demoArgs.indexOf('--environment') + 1] = 'demo';
-    runEvidenceScript(demoArgs);
+    const outputPath = join(workDir, 'dispatch-outputs');
+    for (const environment of ['preview', 'dev', 'test', 'prod']) {
+      writeFileSync(outputPath, '');
+      const selected = [...args, '--github-output', outputPath];
+      selected[selected.indexOf('--environment') + 1] = environment;
+      runEvidenceScript(selected);
+      assert.equal(readFileSync(outputPath, 'utf8'),
+        `deployment_environment=${environment}\ngithub_environment=eai-generated-${environment}\n`);
+    }
     for (const [flag, invalidValue, message] of [
       ['--operation-id', '../other', /safe operationId path segment/],
       ['--nonce', 'short', /exact signed nonce/],
       ['--expected-config-hash', 'not-a-hash', /approved sha256 config hash/],
       ['--environment', 'production', /approved deployment environment/],
+      ['--environment', 'demo', /GitHub deployment requires preview, dev, test, or prod/],
       ['--app-key', 'other/app', /canonical app key/],
       ['--app-key', '1other', /canonical app key/],
       ['--app-key', 'Other', /canonical app key/],
     ]) {
-      const altered = [...args];
+      writeFileSync(outputPath, '');
+      const altered = [...args, '--github-output', outputPath];
       altered[altered.indexOf(flag) + 1] = invalidValue;
       const result = spawnSync(process.execPath, [evidenceScript, ...altered], {
         encoding: 'utf8',
       });
       assert.equal(result.status, 1);
       assert.match(result.stderr, message);
+      assert.equal(readFileSync(outputPath, 'utf8'), '', 'rejected dispatch must not select an OIDC environment');
     }
   } finally {
     rmSync(workDir, { recursive: true, force: true });
@@ -4284,93 +4331,84 @@ syncBuiltinESMExports();
   }
 });
 
-test('assert-evidence-accepted accepts persisted evidence with accepted or deferred handoff', () => {
-  const workDir = mkdtempSync(join(tmpdir(), 'eai-source-unknown-handoff-'));
+test('handoff accepts only exact bound TenantInfra lifecycle and retains pending for same-operation recovery', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-bound-handoff-'));
+  const responsePath = join(workDir, 'response.json');
+  const bindingPath = join(workDir, 'binding.json');
+  const run = () => spawnSync(process.execPath, [evidenceScript, 'assert-evidence-accepted',
+    '--response', responsePath, '--binding', bindingPath], { encoding: 'utf8' });
   try {
-    for (const status of ['accepted', 'handoff_pending']) {
+    for (const sourceMode of ['source-unknown', 'eai-cli-generated']) {
+      const binding = handoffBinding(sourceMode);
+      writeFileSync(bindingPath, JSON.stringify(binding));
       for (const nested of [false, true]) {
-        const responsePath = join(
-          workDir,
-          `deployment-response-${status}.json`,
-        );
-        const response = {
-          status,
-          deploymentRequestId: 'source-unknown-deploy-1',
-          requiresTenantInfra: status === 'handoff_pending',
-        };
-        writeFileSync(
-          responsePath,
-          JSON.stringify(nested ? { response } : response),
-        );
-
-        const stdout = runEvidenceScript([
-          'assert-evidence-accepted',
-          '--response',
-          responsePath,
-        ]);
-        assert.match(stdout, new RegExp(`^${status} source-unknown-deploy-1`));
+        const pending = handoffReceipt('handoff_pending', binding);
+        writeFileSync(responsePath, JSON.stringify(nested ? { response: pending } : pending));
+        const deferred = run();
+        assert.equal(deferred.status, 1);
+        assert.match(deferred.stdout, /^handoff_pending sealed-admin-request-1/);
+        assert.match(deferred.stderr, /handoff remains pending/);
+        assert.deepEqual(JSON.parse(readFileSync(responsePath, 'utf8')), nested ? { response: pending } : pending);
+        for (const status of ['awaiting-runtime', 'accepted', 'queued', 'running', 'deployed-awaiting-readiness', 'active']) {
+          const receipt = handoffReceipt(status, binding);
+          writeFileSync(responsePath, JSON.stringify(nested ? { response: receipt } : receipt));
+          const accepted = run();
+          assert.equal(accepted.status, 0, accepted.stderr);
+          assert.match(accepted.stdout, new RegExp(`^${status} deployment-1`));
+        }
       }
     }
-  } finally {
-    rmSync(workDir, { recursive: true, force: true });
-  }
+  } finally { rmSync(workDir, { recursive: true, force: true }); }
 });
 
-test('assert-evidence-accepted rejects unknown states and unpersisted pending handoff', () => {
-  const workDir = mkdtempSync(
-    join(tmpdir(), 'eai-source-unknown-handoff-bad-'),
-  );
+test('handoff rejects crossed source, artifact, scope and false configured or terminal receipts', () => {
+  const workDir = mkdtempSync(join(tmpdir(), 'eai-bound-handoff-bad-'));
+  const responsePath = join(workDir, 'response.json');
+  const bindingPath = join(workDir, 'binding.json');
+  const binding = handoffBinding('eai-cli-generated');
+  const run = (receipt) => {
+    writeFileSync(responsePath, JSON.stringify({ response: receipt }));
+    return spawnSync(process.execPath, [evidenceScript, 'assert-evidence-accepted',
+      '--response', responsePath, '--binding', bindingPath], { encoding: 'utf8' });
+  };
   try {
-    const responsePath = join(workDir, 'deployment-response-bad.json');
-    for (const response of [
-      {
-        status: 'deployed',
-        deploymentRequestId: 'request',
-        requiresTenantInfra: false,
-      },
-      {
-        status: 'failed',
-        deploymentRequestId: 'request',
-        requiresTenantInfra: true,
-      },
-      {
-        status: 'handoff_pending',
-        deploymentRequestId: 'request',
-        requiresTenantInfra: false,
-      },
-      {
-        status: 'handoff_pending',
-        deploymentRequestId: 'request',
-        requiresTenantInfra: 'true',
-      },
-      { status: 'handoff_pending', requiresTenantInfra: true },
-      {
-        status: 'handoff_pending',
-        deploymentRequestId: ' ',
-        requiresTenantInfra: true,
-      },
-      {},
-    ]) {
-      writeFileSync(responsePath, JSON.stringify({ response }));
-      const result = spawnSync(
-        process.execPath,
-        [
-          evidenceScript,
-          'assert-evidence-accepted',
-          '--response',
-          responsePath,
-        ],
-        { encoding: 'utf8' },
-      );
-      assert.equal(result.status, 1);
-      assert.match(
-        result.stderr,
-        /Expected accepted evidence or a persisted pending handoff/,
-      );
+    writeFileSync(bindingPath, JSON.stringify(binding));
+    for (const key of ['sourceMode', 'tenantId', 'appScopeTenantId', 'targetTenantId', 'appKey',
+      'environment', 'operationId', 'sourceOperationId', 'commitSha', 'configHash', 'workflowPath',
+      'ref', 'workflowRunId', 'workflowBlobSha', 'collectorDigest', 'artifactDigest', 'imageDigest', 'repositoryId']) {
+      for (const remove of [false, true]) {
+        const receipt = handoffReceipt('accepted', binding);
+        if (remove) delete receipt.deploymentRequest[key];
+        else receipt.deploymentRequest[key] = 'crossed';
+        assert.equal(run(receipt).status, 1, `${key}/${remove}`);
+      }
     }
-  } finally {
-    rmSync(workDir, { recursive: true, force: true });
-  }
+    for (const mutate of [
+      (r) => { r.deploymentRequest.repo.owner = 'other'; },
+      (r) => { r.deploymentRequest.imageArtifact.archiveDigest = `sha256:${'0'.repeat(64)}`; },
+      (r) => { r.deploymentRequest.imageArtifact.id = 89; },
+      (r) => { r.deploymentRequest.status = 'active'; },
+      (r) => { r.requiresTenantInfra = true; },
+      (r) => { r.deploymentRequest.requiresTenantInfra = true; },
+      (r) => { r.deploymentRequest.handoff.backend = 'other'; },
+      (r) => { r.deploymentRequest.handoff.status = 'pending'; },
+      (r) => { delete r.deploymentId; },
+      (r) => { r.deploymentRequestId = 'other'; },
+      (r) => { r.deploymentRequest.deploymentId = 'other'; },
+      (r) => { r.deploymentId = ' '; },
+    ]) {
+      const receipt = handoffReceipt('accepted', binding); mutate(receipt);
+      assert.equal(run(receipt).status, 1);
+    }
+    for (const status of ['configured', 'failed', 'failed-readiness', 'recovery-blocked', 'cancelled', 'rolled-back', 'disabled']) {
+      const receipt = handoffReceipt(status, binding);
+      const result = run(receipt); assert.equal(result.status, 1, status);
+      assert.match(result.stderr, /has not accepted/);
+    }
+    for (const receipt of [{ status: 'accepted' }, {}, { deploymentRequest: [] }]) assert.equal(run(receipt).status, 1);
+    const pending = handoffReceipt('handoff_pending', binding);
+    pending.deploymentRequestId = 'other'; assert.equal(run(pending).status, 1);
+  } finally { rmSync(workDir, { recursive: true, force: true }); }
 });
 
 test('clean handoff validates bounded responses without a repository checkout', () => {
@@ -4391,31 +4429,36 @@ test('clean handoff validates bounded responses without a repository checkout', 
     responseDirectory,
     'workflow-evidence-response.json',
   );
+  const binding = handoffBinding();
+  const bindingEnv = { SOURCE_MODE: binding.sourceMode, TENANT_ID: binding.tenantId,
+    TARGET_TENANT_ID: binding.targetTenantId, APP_KEY: binding.appKey,
+    DEPLOY_ENVIRONMENT: binding.environment, OPERATION_ID: binding.operationId,
+    SOURCE_COMMIT_SHA: binding.commitSha, CONFIG_HASH: binding.configHash,
+    GITHUB_REPOSITORY: 'customer/permit-app', GITHUB_REF: binding.ref,
+    GITHUB_RUN_ID: binding.workflowRunId, GITHUB_REPOSITORY_ID: String(binding.repositoryId) };
   const run = (env = process.env) =>
     spawnSync(process.execPath, ['-e', script], {
       cwd: workDir,
       encoding: 'utf8',
-      env,
+      env: { ...env, ...bindingEnv },
     });
   try {
     mkdirSync(responseDirectory, { recursive: true });
-    for (const response of [
-      {
-        status: 'accepted',
-        deploymentRequestId: 'source-unknown-deploy-1',
-        requiresTenantInfra: false,
-      },
-      {
-        response: {
-          status: 'handoff_pending',
-          deploymentRequestId: 'source-unknown-deploy-1',
-          requiresTenantInfra: true,
-        },
-      },
-    ]) {
+    writeFileSync(join(responseDirectory, 'source-unknown-deployment-evidence.json'), JSON.stringify(binding));
+    for (const response of [handoffReceipt('accepted', binding), { response: handoffReceipt('awaiting-runtime', binding) }]) {
       writeFileSync(responsePath, JSON.stringify(response));
-      assert.equal(run().status, 0);
+      const result = run(); assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /runtime readiness remains a separate check/);
     }
+    const pending = handoffReceipt('handoff_pending', binding);
+    writeFileSync(responsePath, JSON.stringify(pending));
+    const deferred = run(); assert.equal(deferred.status, 1);
+    assert.match(deferred.stderr, /handoff remains pending/);
+    assert.deepEqual(JSON.parse(readFileSync(responsePath, 'utf8')), pending);
+    const crossed = handoffReceipt('accepted', binding);
+    crossed.deploymentRequest.targetTenantId = 'other';
+    writeFileSync(responsePath, JSON.stringify(crossed));
+    assert.equal(run().status, 1);
 
     writeFileSync(responsePath, 'x');
     truncateSync(responsePath, 1024 * 1024 + 1);
