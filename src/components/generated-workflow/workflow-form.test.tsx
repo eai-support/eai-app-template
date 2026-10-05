@@ -276,6 +276,47 @@ describe('GeneratedWorkflowForm', () => {
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('reopens a completed submission as its read-only receipt', async () => {
+    window.history.replaceState(null, '', '/?submission=completed-1');
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        submission: {
+          status: 'completed',
+          currentStep: 0,
+          formData: { request: { details: 'Saved response' } },
+        },
+      }),
+    });
+
+    render(
+      <GeneratedWorkflowForm
+        appKey='rates-review'
+        binding={binding}
+        snapshot={{
+          steps: [{ id: 'request', title: 'Request', fields: [] }],
+        }}
+      />,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Submitted' }),
+    ).toBeVisible();
+    expect(
+      screen.getByText('Thank you. Your response has been received.'),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Submit' }),
+    ).not.toBeInTheDocument();
+    expect(window.location.search).toBe('?submission=completed-1');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/eai/workflow-submissions/completed-1',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   it('renders the exported company brand snapshot', async () => {
     render(
       <GeneratedWorkflowForm
