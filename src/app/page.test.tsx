@@ -5,8 +5,12 @@ import { getAccessToken } from '@enterpriseaigroup/core/server';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
+import { getGeneratedDemoRuntime } from '@/lib/generated-demo/runtime';
 jest.mock('@/lib/generated-workflow/runtime', () => ({
   getGeneratedWorkflowRuntime: jest.fn(() => ({ status: 'unconfigured' })),
+}));
+jest.mock('@/lib/generated-demo/runtime', () => ({
+  getGeneratedDemoRuntime: jest.fn(() => ({ status: 'unconfigured' })),
 }));
 import {
   resolvePublicApiBaseUrl,
@@ -66,6 +70,9 @@ describe('Home routing bootstrap', () => {
     jest
       .mocked(getGeneratedWorkflowRuntime)
       .mockReturnValue({ status: 'unconfigured' });
+    jest
+      .mocked(getGeneratedDemoRuntime)
+      .mockReturnValue({ status: 'unconfigured' });
   });
 
   it('passes the configured assistant to the browser without its server tenant context', async () => {
@@ -102,6 +109,47 @@ describe('Home routing bootstrap', () => {
     expect(getAccessToken).not.toHaveBeenCalled();
     expect(headers).not.toHaveBeenCalled();
     expect(resolvePublicApiBaseUrl).not.toHaveBeenCalled();
+  });
+
+  it('selects a valid v2 demo before the v1 workflow runtime', async () => {
+    const artifact = {
+      digests: { sourceBundle: 'source-sha', previewFixtures: 'fixture-sha' },
+      sourceBundle: { files: [{ path: 'src/generated/app.tsx', content: 'PRIVATE_SOURCE' }] },
+      objectTypeDefinitions: [{ privateField: 'PRIVATE_SCHEMA' }],
+      previewFixtures: { collections: { vehicles: [{ name: 'Sample car' }] }, actions: {} },
+      appDefinition: {
+        appName: 'Fleet Demo',
+        businessCard: { description: 'PRIVATE_BRIEF' },
+        workflow: { steps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }] },
+        views: [{ id: 'fleet-view', title: 'Fleet', componentIds: [],
+          safeUi: { version: 'eai.safe_ui.v1', root: { kind: 'heading', level: 1, text: 'Fleet' } } }],
+      },
+    };
+    jest
+      .mocked(getGeneratedDemoRuntime)
+      .mockReturnValue({ status: 'ready', artifact: artifact as never });
+    const element = await Home();
+    expect(element.props.generatedDemo).toEqual({
+      appName: 'Fleet Demo',
+      sourceDigest: 'source-sha',
+      fixtureDigest: 'fixture-sha',
+      previewFixtures: artifact.previewFixtures,
+      workflowViews: ['fleet-view'],
+      workflowSteps: [{ id: 'fleet', title: 'Fleet', viewId: 'fleet-view' }],
+      trustedViews: [{ id: 'fleet-view', title: 'Fleet', safeUi: artifact.appDefinition.views[0].safeUi }],
+    });
+    expect(JSON.stringify(element.props.generatedDemo)).not.toMatch(/PRIVATE_SOURCE|PRIVATE_SCHEMA|PRIVATE_BRIEF/);
+    expect(element.props.generatedDemo).not.toBe(artifact);
+    expect(getGeneratedWorkflowRuntime).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the v2 artifact is invalid', async () => {
+    jest
+      .mocked(getGeneratedDemoRuntime)
+      .mockReturnValue({ status: 'invalid', errors: ['digest mismatch'] });
+    const element = await Home();
+    expect(element.props.runtimeError).toBe('DEMO_ARTIFACT_INVALID');
+    expect(getGeneratedWorkflowRuntime).not.toHaveBeenCalled();
   });
 
   it('redirects to the resolved app host when routing requires correction', async () => {

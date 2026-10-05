@@ -148,6 +148,70 @@
           ]
         },
         {
+          "id": "generated-demo-app-runtime",
+          "description": "Accepted v2 source remains inert provenance. The hosted sample preview renders only bounded safeUi components from the reviewed artifact, with local simulated actions and no arbitrary source execution or iframe route. Bounded operational v1/v2 reads and selected creates remain disabled unless their explicit platform runtime gates are enabled after browser security qualification. V3 binds up to four accepted view/component IDs to reviewed Object Types and requires matching trusted read-table slots. The primary operational view renders authorized rows only in host-owned slots. Enabled reads use tenant-bound user OBO and accepted scalar projection; selected v2 creates use a trusted host form with same-origin actor-authorized write and readback. Denied live reads fail closed without sample substitution. Readiness exposes exact digests, source compilation rejects unbound files, and production browser isolation must be qualified before enabling either gate.",
+          "owned_paths": [
+            "next.config.ts",
+            "src/app/layout.tsx",
+            "src/app/page.tsx",
+            "src/app/home-client.tsx",
+            "src/app/api/eai/generated-operational/**",
+            "src/app/api/eai/readiness/route.ts",
+            "src/middleware.ts",
+            "src/components/generated-demo/**",
+            "src/lib/generated-demo/**",
+            "src/generated/**",
+            "src/eai.config/generated-demo.json",
+            "src/eai.config/generated-operational.json",
+            "scripts/validate-generated-demo.cjs",
+            "tests/generated-demo-isolation.test.mjs"
+          ],
+          "config_keys": [
+            "EAI_GENERATED_OPERATIONAL_READ_ENABLED",
+            "EAI_GENERATED_OPERATIONAL_CREATE_ENABLED"
+          ],
+          "required_repo_tests": [
+            "src/app/page.test.tsx",
+            "src/app/home-client.test.tsx",
+            "src/app/api/eai/readiness/route.test.ts",
+            "src/lib/generated-demo/runtime-contract.test.ts",
+            "src/lib/generated-demo/operational-contract.test.ts",
+            "src/lib/generated-demo/operational-bridge.test.ts",
+            "src/lib/generated-demo/operational-read.test.ts",
+            "src/lib/generated-demo/operational-create.test.ts",
+            "src/app/api/eai/generated-operational/route.test.ts",
+            "src/app/api/eai/generated-operational/create/route.test.ts",
+            "scripts/validate-generated-demo.test.ts",
+            "npm run check:generated-demo",
+            "npm run test:generated-demo-isolation"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["ncb-sugar-hit"],
+          "required_deployed_contracts": [
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/ncb/ncb-boundaries.spec.ts"
+            }
+          ]
+        },
+        {
+          "id": "source-unknown-handoff-workflow",
+          "description": "The source-unknown app workflow builds customer source without deployment credentials and submits digest-checked evidence from a separate no-checkout OIDC job.",
+          "owned_paths": [
+            ".github/workflows/ci.yml",
+            ".github/workflows/eai-app.yml",
+            "scripts/source-unknown-deployment-evidence.mjs",
+            "tests/source-unknown-deployment-evidence.test.mjs",
+            "tests/locked-cli-install-smoke.test.mjs"
+          ],
+          "required_repo_tests": [
+            "tests/source-unknown-deployment-evidence.test.mjs",
+            "tests/locked-cli-install-smoke.test.mjs"
+          ],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": []
+        },
+        {
           "id": "eai-app-template-nextjs-runtime-dependencies",
           "description": "Root Next.js dependency and lockfile changes are validated by the repository's stable CI gate.",
           "ci_only": true,

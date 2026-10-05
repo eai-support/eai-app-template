@@ -14,10 +14,11 @@ const PUBLIC_ROUTES = [
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const requestHeaders = new Headers(request.headers);
 
   // Skip public routes
   if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
-    return NextResponse.next();
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   // Protect API routes
@@ -31,7 +32,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

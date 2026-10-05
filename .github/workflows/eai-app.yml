@@ -59,7 +59,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: eai-app-source-unknown-${{ inputs.app_key }}-${{ inputs.environment }}-${{ github.ref }}
@@ -70,41 +69,39 @@ env:
   EAI_WORKFLOW_PATH: .github/workflows/eai-app.yml
 
 jobs:
-  build-and-handoff:
+  build-source:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      config_hash: ${{ steps.evidence.outputs.config_hash }}
+      artifact_digest: ${{ steps.evidence.outputs.artifact_digest }}
+      image_digest: ${{ steps.evidence.outputs.image_digest }}
+      template_version: ${{ steps.evidence.outputs.template_version }}
+      base_template_sha: ${{ steps.evidence.outputs.base_template_sha }}
+      schema_digest: ${{ steps.evidence.outputs.schema_digest }}
+      validator_digest: ${{ steps.evidence.outputs.validator_digest }}
     env:
       APP_KEY: ${{ inputs.app_key }}
       TENANT_ID: ${{ inputs.tenant_id }}
-      OPERATION_ID: ${{ inputs.operation_id }}
-      NONCE: ${{ inputs.nonce }}
       DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
-      RELEASE_CHANNEL: ${{ inputs.release_channel }}
-      BASE_URL_PUBLIC_API: ${{ inputs.publicapi_base_url || secrets.EAI_PUBLIC_API_URL }}
-      EAI_ACCESS_TOKEN: ${{ secrets.EAI_ACCESS_TOKEN }}
-
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Configure npm for GitHub Packages
-        run: |
-          echo "@enterpriseaigroup:registry=https://npm.pkg.github.com" >> .npmrc
-          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
-
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install Linux native CSS bindings
         run: npm install --no-save lightningcss-linux-x64-gnu@1.30.2 @tailwindcss/oxide-linux-x64-gnu@4.1.18
-
-      - name: Install EAI CLI
-        run: npm install -g @enterpriseai/cli
 
       - name: Build object types
         run: npm run build:object-types
@@ -116,7 +113,7 @@ jobs:
         run: node scripts/source-unknown-deployment-evidence.mjs prepare-image-context
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build OCI image archive
         run: |
@@ -142,7 +139,7 @@ jobs:
             --environment "$DEPLOY_ENVIRONMENT"
 
       - name: Upload immutable build evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: eai-source-unknown-build-${{ github.run_id }}
           if-no-files-found: error
@@ -152,20 +149,129 @@ jobs:
             .eai-build/eai-app-image.oci.tar
             .eai-build/evidence/source-unknown-deployment-evidence.json
 
+  submit-handoff:
+    needs: build-source
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      id-token: write
+    env:
+      APP_KEY: ${{ inputs.app_key }}
+      TENANT_ID: ${{ inputs.tenant_id }}
+      OPERATION_ID: ${{ inputs.operation_id }}
+      NONCE: ${{ inputs.nonce }}
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+      RELEASE_CHANNEL: ${{ inputs.release_channel }}
+      BASE_URL_PUBLIC_API: ${{ inputs.publicapi_base_url || secrets.EAI_PUBLIC_API_URL }}
+      CONFIG_HASH: ${{ needs.build-source.outputs.config_hash }}
+      ARTIFACT_DIGEST: ${{ needs.build-source.outputs.artifact_digest }}
+      IMAGE_DIGEST: ${{ needs.build-source.outputs.image_digest }}
+      TEMPLATE_VERSION: ${{ needs.build-source.outputs.template_version }}
+      BASE_TEMPLATE_SHA: ${{ needs.build-source.outputs.base_template_sha }}
+      SCHEMA_DIGEST: ${{ needs.build-source.outputs.schema_digest }}
+      VALIDATOR_DIGEST: ${{ needs.build-source.outputs.validator_digest }}
+      EAI_CLI_INSTALL_DIR: /tmp/eai-cli-3.18.4
+    steps:
+      - name: Download exact build evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: eai-source-unknown-build-${{ github.run_id }}
+          path: .eai-build
+
+      - name: Verify immutable build evidence
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+          const env = process.env;
+          const sha256 = async (path) => {
+            const hash = crypto.createHash('sha256');
+            for await (const chunk of fs.createReadStream(path)) hash.update(chunk);
+            return 'sha256:' + hash.digest('hex');
+          };
+          const limits = new Map([
+            ['.eai-build/eai-app-build.tar.gz', 1024 * 1024 * 1024],
+            ['.eai-build/eai-app-image.oci.tar', 2 * 1024 * 1024 * 1024],
+            ['.eai-build/evidence/source-unknown-deployment-evidence.json', 128 * 1024],
+          ]);
+          for (const [path, limit] of limits) {
+            const size = fs.statSync(path).size;
+            if (size < 1 || size > limit) throw new Error('Build evidence exceeds the accepted size range.');
+          }
+          const artifactDigest = await sha256('.eai-build/eai-app-build.tar.gz');
+          const imageDigest = await sha256('.eai-build/eai-app-image.oci.tar');
+          const evidence = JSON.parse(fs.readFileSync('.eai-build/evidence/source-unknown-deployment-evidence.json', 'utf8'));
+          const digest = /^sha256:[a-f0-9]{64}$/;
+          const provenance = evidence.schemaProvenance;
+          if (evidence.contract !== 'source-unknown-app-template-deployment-handoff' ||
+              evidence.sourceMode !== 'source-unknown' ||
+              evidence.appKey !== env.APP_KEY || evidence.tenantId !== env.TENANT_ID ||
+              evidence.environment !== env.DEPLOY_ENVIRONMENT ||
+              evidence.repository !== env.GITHUB_REPOSITORY ||
+              evidence.workflowPath !== env.EAI_WORKFLOW_PATH ||
+              evidence.ref !== env.GITHUB_REF || evidence.branch !== env.GITHUB_REF_NAME ||
+              evidence.commitSha !== env.GITHUB_SHA ||
+              String(evidence.workflowRun?.id) !== env.GITHUB_RUN_ID ||
+              String(evidence.workflowRun?.attempt) !== env.GITHUB_RUN_ATTEMPT ||
+              evidence.artifact?.path !== '.eai-build/eai-app-build.tar.gz' ||
+              evidence.image?.path !== '.eai-build/eai-app-image.oci.tar' ||
+              evidence.image?.format !== 'oci-archive' ||
+              evidence.handoff?.expectedStatus !== 'handoff_pending' ||
+              evidence.artifact?.digest !== artifactDigest ||
+              evidence.image?.digest !== imageDigest ||
+              evidence.image?.bytes !== fs.statSync('.eai-build/eai-app-image.oci.tar').size ||
+              ![env.CONFIG_HASH, env.ARTIFACT_DIGEST, env.IMAGE_DIGEST,
+                env.SCHEMA_DIGEST, env.VALIDATOR_DIGEST].every(value => digest.test(value || '')) ||
+              evidence.configHash !== env.CONFIG_HASH ||
+              evidence.artifact.digest !== env.ARTIFACT_DIGEST ||
+              evidence.image.digest !== env.IMAGE_DIGEST ||
+              provenance?.templateVersion !== env.TEMPLATE_VERSION ||
+              provenance?.baseTemplateSha !== env.BASE_TEMPLATE_SHA ||
+              provenance?.schemaDigest !== env.SCHEMA_DIGEST ||
+              provenance?.validatorDigest !== env.VALIDATOR_DIGEST ||
+              !/^[a-f0-9]{40}$/.test(env.BASE_TEMPLATE_SHA || '')) {
+            throw new Error('Build artifact does not match the immutable workflow run and source evidence.');
+          }
+          NODE
+
+      - name: Set up trusted Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install immutable EAI CLI dependency closure
+        run: |
+          set -euo pipefail
+          curl -fsSLo /tmp/eai-cli-3.18.4.tgz \
+            https://registry.npmjs.org/@enterpriseai/cli/-/cli-3.18.4.tgz
+          node -e "const fs=require('node:fs');const crypto=require('node:crypto');const actual=crypto.createHash('sha512').update(fs.readFileSync('/tmp/eai-cli-3.18.4.tgz')).digest('base64');if(actual!=='Djls3yYBJy89r7LB7eQ20PURHpf4f9Hhv98quZdJROg7n6v3lKhgAiPsru2F2OyyDfWcWwCYaRPmgSb+xwq9Xg==')process.exit(1)"
+          mkdir -p "$EAI_CLI_INSTALL_DIR"
+          tar -xzf /tmp/eai-cli-3.18.4.tgz --strip-components=1 --no-same-owner -C "$EAI_CLI_INSTALL_DIR"
+          curl -fsSLo "$EAI_CLI_INSTALL_DIR/package-lock.json" \
+            https://raw.githubusercontent.com/eai-support/eai/0fb7e80e009ce316cbe2f0f4f22da53188c83098/package-lock.json
+          node -e "const fs=require('node:fs');const crypto=require('node:crypto');const actual=crypto.createHash('sha256').update(fs.readFileSync(process.argv[1])).digest('hex');if(actual!=='e2441c521657059410667136da2411a70865d90ef31375df53be4f1764a3054b')process.exit(1)" "$EAI_CLI_INSTALL_DIR/package-lock.json"
+          npm ci --prefix "$EAI_CLI_INSTALL_DIR" --omit=dev --ignore-scripts --no-audit --no-fund
+
       - name: Request GitHub OIDC token
         id: github-oidc
         env:
           AUDIENCE: api://enterprise-ai-publicapi/source-unknown
         run: |
-          response="$(curl -fsSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}")"
+          set -euo pipefail
+          separator='?'
+          case "$ACTIONS_ID_TOKEN_REQUEST_URL" in *'?'*) separator='&' ;; esac
+          response="$(curl -fsSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}${separator}audience=${AUDIENCE}")"
           token="$(node -e "let s=''; process.stdin.on('data', d => s += d); process.stdin.on('end', () => process.stdout.write(JSON.parse(s).value));" <<< "$response")"
           echo "::add-mask::$token"
           echo "token=$token" >> "$GITHUB_OUTPUT"
 
       - name: Submit workflow evidence
+        env:
+          EAI_ACCESS_TOKEN: ${{ secrets.EAI_ACCESS_TOKEN }}
         run: |
+          set -euo pipefail
           mkdir -p .eai-build/evidence
-          eai app workflow-evidence "$APP_KEY" \
+          node "$EAI_CLI_INSTALL_DIR/dist/index.js" app workflow-evidence "$APP_KEY" \
             --tenant-id "$TENANT_ID" \
             --repo "$GITHUB_REPOSITORY" \
             --operation-id "$OPERATION_ID" \
@@ -175,22 +281,37 @@ jobs:
             --workflow "$EAI_WORKFLOW_PATH" \
             --ref "$GITHUB_REF" \
             --commit "$GITHUB_SHA" \
-            --config-hash "${{ steps.evidence.outputs.config_hash }}" \
-            --artifact-digest "${{ steps.evidence.outputs.artifact_digest }}" \
-            --image-digest "${{ steps.evidence.outputs.image_digest }}" \
-            --template-version "${{ steps.evidence.outputs.template_version }}" \
-            --base-template-sha "${{ steps.evidence.outputs.base_template_sha }}" \
-            --schema-digest "${{ steps.evidence.outputs.schema_digest }}" \
-            --validator-digest "${{ steps.evidence.outputs.validator_digest }}" \
+            --config-hash "$CONFIG_HASH" \
+            --artifact-digest "$ARTIFACT_DIGEST" \
+            --image-digest "$IMAGE_DIGEST" \
+            --template-version "$TEMPLATE_VERSION" \
+            --base-template-sha "$BASE_TEMPLATE_SHA" \
+            --schema-digest "$SCHEMA_DIGEST" \
+            --validator-digest "$VALIDATOR_DIGEST" \
             --workflow-run-id "$GITHUB_RUN_ID" \
             --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
             --github-oidc-token "${{ steps.github-oidc.outputs.token }}" \
             --format json \
-            | tee .eai-build/evidence/workflow-evidence-response.json
+            > /tmp/eai-workflow-evidence-response.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const payload = JSON.parse(fs.readFileSync('/tmp/eai-workflow-evidence-response.json', 'utf8'));
+          if (!payload?.response || typeof payload.response !== 'object') {
+            throw new Error('Workflow evidence response is invalid.');
+          }
+          fs.writeFileSync('.eai-build/evidence/workflow-evidence-response.json',
+            JSON.stringify({response: {
+              status: payload.response.status,
+              operationId: payload.response.operationId,
+            }}) + '\n');
+          NODE
 
       - name: Request deployment handoff
+        env:
+          EAI_ACCESS_TOKEN: ${{ secrets.EAI_ACCESS_TOKEN }}
         run: |
-          eai app deploy-source-unknown "$APP_KEY" \
+          set -euo pipefail
+          node "$EAI_CLI_INSTALL_DIR/dist/index.js" app deploy-source-unknown "$APP_KEY" \
             --tenant-id "$TENANT_ID" \
             --operation-id "$OPERATION_ID" \
             --environment "$DEPLOY_ENVIRONMENT" \
@@ -199,22 +320,43 @@ jobs:
             --ref "$GITHUB_REF" \
             --commit "$GITHUB_SHA" \
             --workflow-run-id "$GITHUB_RUN_ID" \
-            --config-hash "${{ steps.evidence.outputs.config_hash }}" \
-            --artifact-digest "${{ steps.evidence.outputs.artifact_digest }}" \
-            --image-digest "${{ steps.evidence.outputs.image_digest }}" \
+            --config-hash "$CONFIG_HASH" \
+            --artifact-digest "$ARTIFACT_DIGEST" \
+            --image-digest "$IMAGE_DIGEST" \
             --target-kind tenantinfra \
             --release-channel "$RELEASE_CHANNEL" \
             --format json \
-            | tee .eai-build/evidence/deployment-handoff-response.json
+            > /tmp/eai-deployment-handoff-response.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const payload = JSON.parse(fs.readFileSync('/tmp/eai-deployment-handoff-response.json', 'utf8'));
+          if (!payload?.response || typeof payload.response !== 'object') {
+            throw new Error('Deployment handoff response is invalid.');
+          }
+          const response = payload.response;
+          fs.writeFileSync('.eai-build/evidence/deployment-handoff-response.json', JSON.stringify({response: {
+            status: response.status,
+            requiresTenantInfra: response.requiresTenantInfra,
+            deploymentRequestId: response.deploymentRequestId,
+          }}) + '\n');
+          NODE
 
       - name: Assert TenantInfra handoff submitted
         run: |
-          node scripts/source-unknown-deployment-evidence.mjs assert-handoff-submitted \
-            --response .eai-build/evidence/deployment-handoff-response.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const payload = JSON.parse(fs.readFileSync('.eai-build/evidence/deployment-handoff-response.json', 'utf8'));
+          const response = payload?.response && typeof payload.response === 'object'
+            ? payload.response : payload;
+          if (!['handoff_pending', 'accepted'].includes(response?.status) ||
+              (response.status === 'handoff_pending' && response.requiresTenantInfra !== true)) {
+            throw new Error('TenantInfra deployment handoff was not submitted.');
+          }
+          NODE
 
       - name: Upload handoff responses
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: eai-source-unknown-handoff-${{ github.run_id }}
           if-no-files-found: ignore
