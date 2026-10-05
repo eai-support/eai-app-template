@@ -154,7 +154,7 @@
         },
         {
           "id": "generated-workflow-anonymous-container-runtime",
-          "description": "Generated NCB apps render an immutable workflow snapshot, use an ACA managed-identity BFF for anonymous submissions and files, and expose semantic readiness proof.",
+          "description": "Generated NCB apps render an immutable workflow snapshot, use an ACA managed-identity BFF for anonymous submissions and files, and expose semantic readiness proof. Completed responses remain read-only under their original signed browser capability and issuer-verified workflow binding after an app update; all mutations retain the current workflow guard.",
           "owned_paths": [
             "next.config.ts",
             "src/app/globals.css",

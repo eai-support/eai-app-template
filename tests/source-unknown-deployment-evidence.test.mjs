@@ -904,6 +904,60 @@ test('reusable workflow compatibility keeps manual same-repository OIDC authorit
   assert.match(readme, /`actions: read`, `attestations: write`, and `id-token: write`/);
 });
 
+test('local CLI dispatch binds direct DEV tunnel, original template and numeric repository', () => {
+  const root = mkdtempSync(join(tmpdir(), 'eai-cli-local-dispatch-'));
+  try {
+    writeFixtureApp(root);
+    mkdirSync(join(root, '.eai'), { recursive: true });
+    const operationId = `cli-managed-${'a'.repeat(32)}`;
+    writeFileSync(join(root, '.eai/cli-managed-source-operation.json'), JSON.stringify({
+      schemaVersion: 'eai.cli_managed_source_operation.v1',
+      sourceMode: 'eai-cli-generated', operationId, environment: 'dev',
+      templateCommitSha: 'b'.repeat(40),
+    }));
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.com',
+      'commit', '--allow-empty', '-m', 'fixture'], { cwd: root });
+    const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    const expiry = new Date(Date.now() + 45 * 60 * 1000).toISOString().replace('Z', '+00:00');
+    const args = ['validate-dispatch', '--root', root, '--app-key', 'rates-review',
+      '--tenant-id', 'tenant-parent', '--target-tenant-id', 'hosting-tenant',
+      '--operation-id', operationId, '--nonce', 'c'.repeat(64),
+      '--environment', 'dev', '--expected-config-hash', configHash(root),
+      '--commit', commit, '--workflow-sha', commit,
+      '--source-mode', 'eai-cli-generated', '--public-api-url',
+      'https://careful-8000.eai.devtunnels.ms', '--local-e2e-tunnel', 'true',
+      '--local-e2e-expires-at', expiry, '--github-event-name', 'workflow_dispatch',
+      '--reusable-call', 'false', '--repository-id', '12345'];
+    runEvidenceScript(args);
+    for (const [key, value] of [
+      ['--public-api-url', 'https://attacker.example'],
+      ['--environment', 'test'],
+      ['--reusable-call', 'true'],
+      ['--github-event-name', 'push'],
+      ['--repository-id', '0'],
+      ['--local-e2e-expires-at', '2000-01-01T00:00:00+00:00'],
+      ['--source-mode', 'source-unknown'],
+    ]) {
+      const mutated = [...args];
+      mutated[mutated.indexOf(key) + 1] = value;
+      const result = spawnSync(process.execPath, [evidenceScript, ...mutated], { encoding: 'utf8' });
+      assert.equal(result.status, 1, `${key}=${value} must fail`);
+    }
+    const partial = [...args];
+    partial[partial.indexOf('--local-e2e-tunnel') + 1] = 'false';
+    assert.equal(spawnSync(process.execPath, [evidenceScript, ...partial], { encoding: 'utf8' }).status, 1);
+    const workflow = readFileSync(workflowPath, 'utf8');
+    const directInputs = workflow.slice(workflow.indexOf('  workflow_dispatch:'), workflow.indexOf('  workflow_call:'));
+    const reusableInputs = workflow.slice(workflow.indexOf('  workflow_call:'), workflow.indexOf('\npermissions:'));
+    assert.match(directInputs, /local_e2e_tunnel:/);
+    assert.match(directInputs, /local_e2e_expires_at:/);
+    assert.doesNotMatch(reusableInputs, /local_e2e_tunnel:|local_e2e_expires_at:/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('source commit is resolved before checkout for direct and reusable calls', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   const stepStart = workflow.indexOf('      - name: Validate workflow invocation');
@@ -1183,7 +1237,7 @@ test('OIDC response parser bounds unknown-length input before token retention', 
     workflow.indexOf('name: Assert evidence accepted'),
   );
   const scriptMatch = oidcStep.match(
-    /bounded_response_reader='\n([\s\S]*?)\n\s{10}'\n\s{10}case/,
+    /bounded_response_reader='\n([\s\S]*?)\n\s{10}'\n\s{10}audience=/,
   );
   assert.ok(scriptMatch, 'expected inline bounded OIDC response parser');
   const parser = scriptMatch[1];
@@ -1217,7 +1271,7 @@ test('handoff response writer bounds unknown-length input and creates no-follow 
     workflow.indexOf('name: Assert evidence accepted'),
   );
   const scriptMatch = oidcStep.match(
-    /bounded_response_reader='\n([\s\S]*?)\n\s{10}'\n\s{10}case/,
+    /bounded_response_reader='\n([\s\S]*?)\n\s{10}'\n\s{10}audience=/,
   );
   assert.ok(scriptMatch, 'expected inline bounded response reader');
   const parser = scriptMatch[1];
