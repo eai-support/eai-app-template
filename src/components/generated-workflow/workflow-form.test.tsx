@@ -9,6 +9,24 @@ import {
 import { GeneratedWorkflowForm } from './workflow-form';
 import type { GeneratedAppRuntimeBinding } from '@/lib/generated-workflow/runtime-contract';
 
+const mockTemplateFormFill = jest.fn();
+jest.mock('@enterpriseaigroup/core', () => ({
+  TemplateFormFill: (props: {
+    documentTemplates?: Array<{ id: string; title: string }>;
+    businessRequest?: Record<string, string>;
+  }) => {
+    mockTemplateFormFill(props);
+    return (
+      <div
+        data-testid='template-form-fill'
+        data-template-id={props.documentTemplates?.[0]?.id}
+      >
+        {props.documentTemplates?.[0]?.title}
+      </div>
+    );
+  },
+}));
+
 const binding: GeneratedAppRuntimeBinding = {
   schemaVersion: 'eai.generated_app_runtime_binding.v1',
   workflowTemplate: {
@@ -420,6 +438,112 @@ describe('GeneratedWorkflowForm', () => {
         ),
       }),
     );
+  });
+
+  it('hosts the AI document creation field and skips it in required validation', async () => {
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.endsWith('/workflow-submissions'))
+        return {
+          ok: true,
+          status: 201,
+          json: async () => ({ submissionId: 'submission-1' }),
+        };
+      if (url.endsWith('/document-template/extract-placeholders'))
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            placeholders: [],
+            sections: [],
+            conditionalKeys: [],
+          }),
+        };
+      return { ok: true, status: 200, json: async () => ({ success: true }) };
+    }) as jest.Mock;
+    mockTemplateFormFill.mockClear();
+    render(
+      <GeneratedWorkflowForm
+        appKey='resume-builder'
+        binding={binding}
+        snapshot={{
+          steps: [
+            {
+              id: 'details',
+              title: 'About you',
+              fields: [
+                {
+                  id: 'fullName',
+                  label: 'Full name',
+                  type: 'text',
+                  required: true,
+                },
+              ],
+            },
+            {
+              id: 'document',
+              title: 'Resume',
+              fields: [
+                {
+                  id: 'resumeDocument',
+                  label: 'Your resume',
+                  type: 'smart_block',
+                  blockType: 'document-creation',
+                  templateId: 'resume-template',
+                  required: true,
+                },
+                {
+                  id: 'coaching',
+                  label: 'Career coaching activity',
+                  type: 'smart_block',
+                },
+                {
+                  id: 'unbound',
+                  label: 'Unbound document',
+                  type: 'smart_block',
+                  blockType: 'document-creation',
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    fireEvent.change(await screen.findByLabelText(/Full name/), {
+      target: { value: 'Alex Respondent' },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+
+    const documentBlock = await screen.findByTestId('template-form-fill');
+    expect(documentBlock).toHaveAttribute(
+      'data-template-id',
+      'resume-template',
+    );
+    expect(documentBlock).toHaveTextContent('Your resume');
+    expect(screen.getAllByTestId('template-form-fill')).toHaveLength(1);
+    expect(screen.getByText('Career coaching activity')).toBeVisible();
+    expect(screen.getByText('Unbound document')).toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(mockTemplateFormFill).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        businessRequest: { fullName: 'Alex Respondent' },
+        tenantId: 'resume-builder',
+      }),
+    );
+    await waitFor(() =>
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/eai/document-template/extract-placeholders',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ templateId: 'resume-template' }),
+        }),
+      ),
+    );
+
+    const submit = screen.getByRole('button', { name: 'Submit' });
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+    await waitFor(() => expect(screen.getByText('Submitted')).toBeVisible());
   });
 
   it('fails visibly when a canonical block has no runtime adapter', async () => {

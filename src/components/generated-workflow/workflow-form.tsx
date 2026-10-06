@@ -25,6 +25,10 @@ import {
   validateSubmissionFile,
   validateSubmissionFileCollection,
 } from '@/lib/generated-workflow/submission-files';
+import {
+  documentCreationAnswers,
+  isDocumentCreationField,
+} from '@/lib/generated-workflow/document-creation';
 import { validateFieldValue } from '@/lib/generated-workflow/field-validation';
 import { GeneratedWorkflowFieldInput } from './field-input';
 import {
@@ -34,6 +38,14 @@ import {
 
 const WorkflowAssistant = dynamic(() =>
   import('./workflow-assistant').then((module) => module.WorkflowAssistant),
+);
+// Loaded only when a step binds a document template; it is browser-only.
+const DocumentCreationBlock = dynamic(
+  () =>
+    import('./document-creation-block').then(
+      (module) => module.DocumentCreationBlock,
+    ),
+  { ssr: false },
 );
 
 interface GeneratedWorkflowFormProps {
@@ -186,6 +198,10 @@ export function GeneratedWorkflowForm({
   useEffect(() => {
     formDataRef.current = formData;
   }, [formData]);
+  const documentAnswers = useMemo(
+    () => documentCreationAnswers(formData),
+    [formData],
+  );
 
   const startSubmission = useCallback(async () => {
     const response = await fetch(submissionEndpoint(), {
@@ -654,6 +670,17 @@ export function GeneratedWorkflowForm({
                   const stepId = currentStep.id ?? '';
                   const fieldId = field.id ?? '';
                   const key = fieldKey(stepId, fieldId);
+                  if (isDocumentCreationField(field)) {
+                    return (
+                      <DocumentCreationBlock
+                        key={key}
+                        field={field}
+                        answers={documentAnswers}
+                        // TemplateFormFill only needs a non-empty marker; the BFF resolves the workspace server-side.
+                        tenantId={appKey}
+                      />
+                    );
+                  }
                   if (field.type === 'smart_block') {
                     return (
                       <div

@@ -8,6 +8,17 @@ import {
   type ClientBlockExtension,
 } from './eai.blocks';
 
+// @enterpriseaigroup/core >= 3 builds an ESM-only rehype sanitizer when its
+// config entry loads. Jest cannot load those packages, and these registry
+// tests never render rich text, so stand in an inert pipeline.
+jest.mock('unified', () => {
+  const processor = { use: () => processor };
+  return { unified: () => processor };
+});
+jest.mock('rehype-parse', () => ({}));
+jest.mock('rehype-sanitize', () => ({}));
+jest.mock('rehype-stringify', () => ({}));
+
 function makeBlock(testId: string): ComponentType<unknown> {
   return (() =>
     createElement('div', { 'data-testid': testId }, testId)) as ComponentType<unknown>;

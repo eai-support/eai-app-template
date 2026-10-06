@@ -13,6 +13,10 @@ export interface GeneratedWorkflowField {
   acceptedFileExtensions?: string[];
   replaces?: string[];
   validation?: FieldValidation;
+  /** Guided activity rendered by a `smart_block` field, e.g. `document-creation`. */
+  blockType?: string;
+  /** Document template bound to a `document-creation` smart_block field. */
+  templateId?: string;
 }
 
 /** JSON-safe output kinds declared by a canonical guided block. */

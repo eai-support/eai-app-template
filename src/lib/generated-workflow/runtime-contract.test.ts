@@ -1,6 +1,7 @@
 import {
   generatedWorkflowSnapshotDigest,
   resolveGeneratedWorkflowRuntime,
+  validateGeneratedWorkflowSnapshot,
   type GeneratedAppRuntimeBinding,
   type GeneratedWorkflowSnapshot,
 } from './runtime-contract';
@@ -138,6 +139,57 @@ describe('generated workflow runtime contract', () => {
       status: 'invalid',
       errors: ['workflow snapshot digest does not match runtimeBinding.'],
     });
+  });
+
+  it('accepts an AI document creation smart_block field and binds it into the digest', () => {
+    const documentSnapshot: GeneratedWorkflowSnapshot = {
+      steps: [
+        ...snapshot.steps,
+        {
+          id: 'document',
+          title: 'Your resume',
+          fields: [
+            {
+              id: 'resumeDocument',
+              label: 'Your resume',
+              type: 'smart_block',
+              blockType: 'document-creation',
+              templateId: 'resume-template',
+            },
+          ],
+        },
+      ],
+    };
+    const documentBinding = binding();
+    documentBinding.workflowTemplate.digest =
+      generatedWorkflowSnapshotDigest(documentSnapshot);
+
+    expect(validateGeneratedWorkflowSnapshot(documentSnapshot)).toBe(true);
+    expect(
+      resolveGeneratedWorkflowRuntime({
+        appKey: 'rates-review',
+        config: { tenantId: 'tenant-a', runtimeBinding: documentBinding },
+        snapshot: documentSnapshot,
+      }),
+    ).toMatchObject({
+      status: 'ready',
+      runtime: { snapshot: documentSnapshot },
+    });
+    // The template binding is part of the signed source; swapping it is drift.
+    expect(
+      resolveGeneratedWorkflowRuntime({
+        appKey: 'rates-review',
+        config: { tenantId: 'tenant-a', runtimeBinding: documentBinding },
+        snapshot: {
+          steps: documentSnapshot.steps.map((step) => ({
+            ...step,
+            fields: step.fields?.map((field) =>
+              field.templateId ? { ...field, templateId: 'other' } : field,
+            ),
+          })),
+        },
+      }),
+    ).toMatchObject({ status: 'invalid' });
   });
 
   it('preserves the base template fallback when no runtime binding is exported', () => {

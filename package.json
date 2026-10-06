@@ -64,7 +64,7 @@
     "diagnose:resource-storage": "node scripts/diagnose-resource-storage.mjs"
   },
   "dependencies": {
-    "@enterpriseaigroup/core": "1.0.129",
+    "@enterpriseaigroup/core": "3.1.2",
     "@enterpriseaigroup/demo": "*",
     "@eslint/eslintrc": "^3",
     "@hookform/resolvers": "^5.0.1",
@@ -164,6 +164,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
+    "jszip": "^3.10.2",
     "playwright": "^1.57.0",
     "postcss-cli": "^11.0.1"
   },
