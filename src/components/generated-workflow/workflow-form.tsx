@@ -234,10 +234,17 @@ export function GeneratedWorkflowForm({
               assistantMessages?: WorkflowAssistantMessage[];
             };
           };
-          if (
-            !payload.submission ||
-            payload.submission.status !== 'in_progress'
-          ) {
+          if (!payload.submission) {
+            throw new Error(
+              'Could not resume this form. Please reload and try again.',
+            );
+          }
+          if (payload.submission.status === 'completed') {
+            setSubmissionId(resumeId);
+            setSubmitState('submitted');
+            return;
+          }
+          if (payload.submission.status !== 'in_progress') {
             throw new Error(
               'Could not resume this form. Please reload and try again.',
             );

@@ -92,12 +92,36 @@ smoke tests pass.
 The readiness smoke test remains authenticated. The deploy-doctor process and
 the deployed runtime must receive matching values for
 `EAI_READINESS_PROBE_TOKEN`, `NEXT_PUBLIC_EAI_TENANT_ID`, `EAI_PRODUCT_SLUG`,
-`EAI_ENVIRONMENT`, and `EAI_CONFIG_HASH`. Inject the probe token through the
-operator or CI secret environment; do not put it on the command line or commit
-it. The CLI resolves the contract's `${ENV_NAME}` header values only in memory,
-sends them to the declared endpoint, and does not include them in output. If a
-required value is absent, doctor does not send an unauthenticated request and
-reports missing probe configuration instead of PublicAPI authorization failure.
+`EAI_ENVIRONMENT`, `EAI_CONFIG_HASH`, and the server-only
+`EAI_DEPLOYMENT_ID`. TenantInfra sends the exact active deployment ID with its
+authenticated readiness probe. Inject the probe token through the operator or
+CI secret environment; do not put it on the command line or commit it. The CLI
+resolves the contract's `${ENV_NAME}` header values only in memory, sends them
+to the declared endpoint, and does not include them in output. If a required
+value is absent, doctor does not send an unauthenticated request and reports
+missing probe configuration instead of PublicAPI authorization failure.
+
+### Managed deployment workflow invocation
+
+The EAI CLI starts `.github/workflows/eai-app.yml` with `workflow_dispatch`.
+Existing reusable callers can keep using `workflow_call` when the caller is in
+the same repository, was started manually with `workflow_dispatch`, and uses
+the same source ref as the canonical EAI workflow. PublicAPI verifies the
+signed GitHub caller and callee workflow claims, ref, and source SHA before it
+accepts the handoff. Cross-repository and cross-ref reusable calls fail.
+The direct CLI dispatch supplies the server-approved `config_hash`. A reusable
+caller can omit that newer input: the called workflow derives the exact
+checked-out configuration digest before application work. If the reusable
+caller supplies `config_hash`, it must match that digest.
+The reusable schema's `eai_reusable_call` input is an internal trigger marker;
+leave its default value unchanged. Direct dispatch does not expose that input.
+
+The reusable caller must grant `contents: read`, `packages: read`,
+`actions: read`, `attestations: write`, and `id-token: write`. GitHub can reduce
+permissions through a reusable workflow call, but the called workflow cannot
+add a permission that its caller did not grant. Deprecated
+`EAI_ACCESS_TOKEN` and `EAI_PUBLIC_API_URL` secrets are accepted as unused
+compatibility declarations; they do not authorize a deployment.
 
 ## Workspace Data Access
 

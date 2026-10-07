@@ -1,5 +1,5 @@
 const mockPlatformFetch = jest.fn();
-const mockHasSubmissionSession = jest.fn();
+const mockGetSubmissionSessionDigest = jest.fn();
 
 jest.mock('./platform', () => {
   class GeneratedWorkflowPlatformUnavailableError extends Error {}
@@ -11,8 +11,8 @@ jest.mock('./platform', () => {
 });
 
 jest.mock('./submission-session', () => ({
-  hasSubmissionSession: (...args: unknown[]) =>
-    mockHasSubmissionSession(...args),
+  getSubmissionSessionDigest: (...args: unknown[]) =>
+    mockGetSubmissionSessionDigest(...args),
 }));
 
 import { GeneratedWorkflowPlatformUnavailableError } from './platform';
@@ -31,7 +31,9 @@ const runtime = {
 describe('submission ownership reads', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockHasSubmissionSession.mockReturnValue(true);
+    mockGetSubmissionSessionDigest.mockReturnValue(
+      runtime.binding.workflowTemplate.digest,
+    );
   });
 
   it('returns null only for a missing or unowned submission', async () => {
@@ -44,6 +46,134 @@ describe('submission ownership reads', () => {
         submissionId: 'submission-1',
       }),
     ).resolves.toBeNull();
+  });
+
+  it('does not contact the platform without a verified browser capability', async () => {
+    mockGetSubmissionSessionDigest.mockReturnValue(null);
+    await expect(
+      readOwnedSubmission({
+        request: {} as never,
+        runtime: runtime as never,
+        submissionId: 'submission-1',
+      }),
+    ).resolves.toBeNull();
+    expect(mockPlatformFetch).not.toHaveBeenCalled();
+  });
+
+  it('reads an archived completed response with its original capability and preserves values and chat history', async () => {
+    const originalDigest = `sha256:${'b'.repeat(64)}`;
+    mockGetSubmissionSessionDigest.mockReturnValue(originalDigest);
+    const submission = {
+      id: 'submission-1',
+      status: 'completed',
+      currentStep: 2,
+      formData: {
+        name: 'Test respondent',
+        incident: 'Test incident',
+        optionalNote: 'Synthetic note',
+      },
+      assistantMessages: [
+        { role: 'user', content: 'What happens next?' },
+        { role: 'assistant', content: 'Review your incident.' },
+        { role: 'user', content: 'Can I add a note?' },
+        { role: 'assistant', content: 'Yes, the note is optional.' },
+      ],
+      workflowTemplateDigest: originalDigest,
+    };
+    mockPlatformFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ submission }),
+    });
+    const stored = await readOwnedSubmission({
+      request: {} as never,
+      runtime: runtime as never,
+      submissionId: 'submission-1',
+    });
+    expect(stored).toMatchObject({
+      id: submission.id,
+      status: submission.status,
+      formData: submission.formData,
+      assistantMessages: submission.assistantMessages,
+    });
+    expect(mockPlatformFetch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        init: {
+          headers: { 'X-EAI-Submission-Workflow-Digest': originalDigest },
+        },
+      }),
+    );
+  });
+
+  it.each(['in_progress', 'abandoned', undefined])(
+    'does not resume an old %s response for editing',
+    async (status) => {
+      const originalDigest = `sha256:${'b'.repeat(64)}`;
+      mockGetSubmissionSessionDigest.mockReturnValue(originalDigest);
+      mockPlatformFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          submission: {
+            id: 'submission-1',
+            status,
+            workflowTemplateDigest: originalDigest,
+          },
+        }),
+      });
+      await expect(
+        readOwnedSubmission({
+          request: {} as never,
+          runtime: runtime as never,
+          submissionId: 'submission-1',
+        }),
+      ).resolves.toBeNull();
+    },
+  );
+
+  it.each([undefined, `sha256:${'c'.repeat(64)}`])(
+    'rejects a response that does not match the signed capability digest',
+    async (workflowTemplateDigest) => {
+      mockPlatformFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          submission: {
+            id: 'submission-1',
+            status: 'completed',
+            workflowTemplateDigest,
+          },
+        }),
+      });
+      await expect(
+        readOwnedSubmission({
+          request: {} as never,
+          runtime: runtime as never,
+          submissionId: 'submission-1',
+        }),
+      ).resolves.toBeNull();
+    },
+  );
+
+  it('preserves a current workflow in-progress response', async () => {
+    mockPlatformFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        submission: {
+          id: 'submission-1',
+          status: 'in_progress',
+          workflowTemplateDigest: runtime.binding.workflowTemplate.digest,
+        },
+      }),
+    });
+    await expect(
+      readOwnedSubmission({
+        request: {} as never,
+        runtime: runtime as never,
+        submissionId: 'submission-1',
+      }),
+    ).resolves.toMatchObject({ status: 'in_progress' });
   });
 
   it.each([429, 500, 503])(

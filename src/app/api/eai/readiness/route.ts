@@ -49,6 +49,42 @@ function runtimeAppKey(): string | undefined {
   return process.env.EAI_PRODUCT_SLUG || process.env.EAI_APP_KEY;
 }
 
+function runtimeDeploymentId(): string | undefined {
+  const deploymentId = process.env.EAI_DEPLOYMENT_ID;
+  return deploymentId && deploymentId.trim() === deploymentId
+    ? deploymentId
+    : undefined;
+}
+
+function runtimeDeploymentBinding() {
+  const binding = {
+    tenantId: runtimeTenantId(),
+    appKey: runtimeAppKey(),
+    environment: process.env.EAI_ENVIRONMENT,
+    configHash: process.env.EAI_CONFIG_HASH,
+    deploymentId: runtimeDeploymentId(),
+    runtimeIdentity: {
+      clientId: process.env.AZURE_CLIENT_ID,
+      principalId: process.env.EAI_RUNTIME_PRINCIPAL_ID,
+    },
+  };
+  const identifiers = [
+    binding.tenantId,
+    binding.appKey,
+    binding.environment,
+    binding.configHash,
+    binding.deploymentId,
+    binding.runtimeIdentity.clientId,
+    binding.runtimeIdentity.principalId,
+  ];
+  return identifiers.every(
+    (value) =>
+      typeof value === 'string' && value.length > 0 && value.trim() === value,
+  )
+    ? binding
+    : undefined;
+}
+
 function validateTenantInfraProbe(request: Request): Response | null {
   const headers = request.headers;
 
@@ -68,7 +104,8 @@ function validateTenantInfraProbe(request: Request): Response | null {
     requireHeader(headers, 'x-eai-tenant-id', runtimeTenantId()) &&
     requireHeader(headers, 'x-eai-app-key', runtimeAppKey()) &&
     requireHeader(headers, 'x-eai-environment', process.env.EAI_ENVIRONMENT) &&
-    requireHeader(headers, 'x-eai-config-hash', process.env.EAI_CONFIG_HASH);
+    requireHeader(headers, 'x-eai-config-hash', process.env.EAI_CONFIG_HASH) &&
+    requireHeader(headers, 'x-eai-deployment-id', runtimeDeploymentId());
 
   if (!scopeMatches) {
     return probeFailure('tenant_assignment_invalid', 403);
@@ -118,15 +155,17 @@ async function generatedWorkflowPlatformCheck(
   }
 }
 
-/** Returns authenticated deployment checks plus bound workflow proof when configured. */
+/** Returns runtime-owned deployment binding only to authenticated, exact-scope probes. */
 export async function GET(request: Request): Promise<Response> {
   const probeFailureResponse = validateTenantInfraProbe(request);
   if (probeFailureResponse) {
     return probeFailureResponse;
   }
 
-  const readiness = evaluateRuntimeReadiness();
   const workflowRuntime = getGeneratedWorkflowRuntime();
+  const readiness = evaluateRuntimeReadiness(process.env, {
+    requireWorkflowAssignment: workflowRuntime.status !== 'unconfigured',
+  });
   const platformCheck = await generatedWorkflowPlatformCheck(workflowRuntime);
   const checks = platformCheck
     ? [...readiness.checks, platformCheck]
@@ -139,6 +178,7 @@ export async function GET(request: Request): Promise<Response> {
   ).sort();
   const platformReadiness = {
     ...readiness,
+    deploymentBinding: runtimeDeploymentBinding(),
     ok: checks.every((check) => check.ok),
     checks,
     failureCategories,

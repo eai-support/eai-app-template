@@ -57,7 +57,9 @@ function decodeSession(value: string | undefined): SubmissionSession | null {
     if (
       typeof decoded.submissionId !== 'string' ||
       typeof decoded.workflowDigest !== 'string' ||
+      !/^sha256:[a-f0-9]{64}$/.test(decoded.workflowDigest) ||
       typeof decoded.expiresAt !== 'number' ||
+      !Number.isFinite(decoded.expiresAt) ||
       decoded.expiresAt <= Date.now()
     ) {
       return null;
@@ -128,13 +130,17 @@ export function hasSubmissionSession(
   submissionId: string,
   workflowDigest: string,
 ): boolean {
+  return getSubmissionSessionDigest(request, submissionId) === workflowDigest;
+}
+
+/** Returns only the original digest from an unexpired, submission-bound capability; writes still require the current digest. */
+export function getSubmissionSessionDigest(
+  request: NextRequest,
+  submissionId: string,
+): string | null {
   const session = decodeSession(
     request.cookies.get(submissionCookieName(submissionId))?.value ??
       request.cookies.get(LEGACY_COOKIE_NAME)?.value,
   );
-  return Boolean(
-    session &&
-    session.submissionId === submissionId &&
-    session.workflowDigest === workflowDigest,
-  );
+  return session?.submissionId === submissionId ? session.workflowDigest : null;
 }

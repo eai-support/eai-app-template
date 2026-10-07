@@ -37,6 +37,7 @@
     "eslint": "eslint .",
     "test": "jest",
     "test:source-unknown-evidence": "node --test tests/source-unknown-deployment-evidence.test.mjs",
+    "eai:config:hash": "node scripts/source-unknown-deployment-evidence.mjs config-hash",
     "test:ai-workspace-guidance": "node --test tests/ai-workspace-guidance.test.mjs",
     "test:object-types-generator": "node --test tests/generate-object-types-json.test.mjs",
     "test:release-version": "node --test tests/next-release-version.test.mjs",

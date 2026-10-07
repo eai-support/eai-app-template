@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 
 import { generatedWorkflowPlatformFetch } from './platform';
 import { GeneratedWorkflowPlatformUnavailableError } from './platform';
-import { hasSubmissionSession } from './submission-session';
+import { getSubmissionSessionDigest } from './submission-session';
 import type { GeneratedWorkflowRuntime } from './runtime-contract';
 
 /** Minimal facade response exposed to the anonymous resume UI. */
@@ -51,29 +51,32 @@ export async function readOwnedSubmission(args: {
   submissionId: string;
 }): Promise<StoredSubmission | null> {
   const { request, runtime, submissionId } = args;
-  if (
-    !hasSubmissionSession(
-      request,
-      submissionId,
-      runtime.binding.workflowTemplate.digest,
-    )
-  ) {
-    return null;
-  }
+  const workflowDigest = getSubmissionSessionDigest(request, submissionId);
+  if (!workflowDigest) return null;
   const response = await generatedWorkflowPlatformFetch({
     tenantId: runtime.tenantId,
     appKey: runtime.appKey,
     path: `/submissions/${encodeURIComponent(submissionId)}`,
+    init: { headers: { 'X-EAI-Submission-Workflow-Digest': workflowDigest } },
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new SubmissionReadUpstreamError(response.status);
   const payload = (await response.json()) as {
-    submission?: Partial<StoredSubmission>;
+    submission?: Partial<StoredSubmission> & {
+      workflowTemplateDigest?: unknown;
+    };
   };
   const stored = payload.submission ?? {};
   if (typeof stored.id !== 'string' || stored.id !== submissionId) {
     throw new SubmissionReadUpstreamError(502);
   }
+  // SECURITY: A retained response must match the original signed browser capability, not just this app.
+  if (stored.workflowTemplateDigest !== workflowDigest) return null;
+  if (
+    workflowDigest !== runtime.binding.workflowTemplate.digest &&
+    stored.status !== 'completed'
+  )
+    return null;
   return {
     id: submissionId,
     status: stored.status,
