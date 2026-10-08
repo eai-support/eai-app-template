@@ -17,7 +17,6 @@ import {
   readSync,
   realpathSync,
   rmSync,
-  renameSync,
   symlinkSync,
   truncateSync,
   writeFileSync,
@@ -39,7 +38,7 @@ const runtimeAppKeyPattern = /^[a-z][a-z0-9-]{1,62}$/;
 const controlledRoutingProofs = new WeakMap();
 const managedReviewPath =
   '/api/platform/generated-apps/managed-review/workflow';
-// SECURITY: exact pairs reflect trusted Portal routing; TEST regional Portal cells deliberately share the AU gateway and Portal.
+// SECURITY: TEST Portal currently exports through AU; the additional official TEST API pairs retain collector dispatch compatibility, not live regional adoption proof.
 const trustedRoutingPairs = [
   [
     'https://dev-api.au.myenterprise.ai/public',
@@ -47,6 +46,14 @@ const trustedRoutingPairs = [
   ],
   [
     'https://test-api.au.myenterprise.ai/public',
+    'https://test-admin-portal.myenterprise.ai',
+  ],
+  [
+    'https://test-api.ca.myenterprise.ai/public',
+    'https://test-admin-portal.myenterprise.ai',
+  ],
+  [
+    'https://test-api.eu.myenterprise.ai/public',
     'https://test-admin-portal.myenterprise.ai',
   ],
   [
@@ -445,6 +452,13 @@ function validateControlledConfigReceipts(proof, configPaths, candidateRoot) {
       boundedString(configPaths[name]),
       'Controlled qualification requires explicit independent source-config paths.',
     );
+  }
+  assert.notEqual(
+    resolve(configPaths.publicApi),
+    resolve(configPaths.portal),
+    'Independent source-config receipts require distinct resolved paths.',
+  );
+  for (const name of ['publicApi', 'portal']) {
     const bytes = readProtectedRoutingBytes(
       configPaths[name],
       candidateRoot,
@@ -534,13 +548,12 @@ function readControlledRoutingProof(inputPath, candidateRoot, configPaths) {
   const evidence = secureUrl(proof.evidenceBaseUrl);
   const callback = secureUrl(proof.managedReviewCallbackUrl, managedReviewPath);
   assert.ok(
-    /^[a-z0-9]{1,64}-8000\.aue[0-9]*\.devtunnels\.ms$/.test(
-      evidence.hostname,
-    ) && ['/', '/public', '/public/'].includes(evidence.pathname),
+    /^[a-z0-9-]+-8000\.[a-z0-9-]+\.devtunnels\.ms$/.test(evidence.hostname) &&
+      ['/', '/public', '/public/'].includes(evidence.pathname),
     'Controlled evidence destination must be the local port-8000 HTTPS tunnel.',
   );
   assert.ok(
-    /^[a-z0-9]{1,64}-3010\.aue[0-9]*\.devtunnels\.ms$/.test(callback.hostname),
+    /^[a-z0-9-]+-3010\.[a-z0-9-]+\.devtunnels\.ms$/.test(callback.hostname),
     'Controlled callback must be the local port-3010 HTTPS tunnel.',
   );
   validateControlledConfigReceipts(proof, configPaths, candidateRoot);
@@ -5879,11 +5892,16 @@ test('legacy four-file evidence repair admits no fixtures and rejects canonical 
   );
 });
 
-function controlledTunnelFixture(t) {
+function controlledTunnelFixture(
+  t,
+  {
+    evidenceBaseUrl = 'https://ownerrun-8000.aue01.devtunnels.ms',
+    callbackBaseUrl = 'https://ownerrun-3010.aue.devtunnels.ms',
+  } = {},
+) {
   const fixture = exportedFixture({
-    EVIDENCE_BASE_URL: 'https://ownerrun-8000.aue01.devtunnels.ms',
-    MANAGED_REVIEW_CALLBACK_URL:
-      'https://ownerrun-3010.aue.devtunnels.ms' + managedReviewPath,
+    EVIDENCE_BASE_URL: evidenceBaseUrl,
+    MANAGED_REVIEW_CALLBACK_URL: callbackBaseUrl + managedReviewPath,
   });
   const candidateRoot = contextFixture(
     t,
@@ -5901,10 +5919,8 @@ function controlledTunnelFixture(t) {
     portal: join(realpathSync(externalDirectory), 'portal.json'),
   };
   const safeConfig = {
-    ADMIN_PORTAL_PUBLIC_API_BASE_URL:
-      'https://ownerrun-8000.aue01.devtunnels.ms',
-    ADMIN_PORTAL_WORKFLOW_CALLBACK_BASE_URL:
-      'https://ownerrun-3010.aue.devtunnels.ms',
+    ADMIN_PORTAL_PUBLIC_API_BASE_URL: evidenceBaseUrl,
+    ADMIN_PORTAL_WORKFLOW_CALLBACK_BASE_URL: callbackBaseUrl,
   };
   for (const path of Object.values(configPaths))
     writeFileSync(path, JSON.stringify(safeConfig, null, 2) + '\n', {
@@ -5920,9 +5936,8 @@ function controlledTunnelFixture(t) {
     generatedOperationSha256: digest(
       regularBytes(join(candidateRoot, '.eai/generated-source-operation.json')),
     ),
-    evidenceBaseUrl: 'https://ownerrun-8000.aue01.devtunnels.ms',
-    managedReviewCallbackUrl:
-      'https://ownerrun-3010.aue.devtunnels.ms' + managedReviewPath,
+    evidenceBaseUrl,
+    managedReviewCallbackUrl: callbackBaseUrl + managedReviewPath,
     sourceConfigSha256: {
       publicApi: digest(regularBytes(configPaths.publicApi)),
       portal: digest(regularBytes(configPaths.portal)),
@@ -6651,3 +6666,106 @@ test('opened controlled input rejects a swapped parent directory before acceptin
   assert.equal(result.signal, null);
   assert.equal(result.status, 0, result.stderr);
 });
+
+for (const alias of [false, true]) {
+  test(
+    'independent service config paths reject ' +
+      (alias ? 'normalized aliases' : 'the same file'),
+    (t) => {
+      const f = controlledTunnelFixture(t);
+      if (!supportsControlledRouting()) {
+        assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+        return;
+      }
+      f.configPaths.portal = alias
+        ? dirname(f.configPaths.publicApi) + '/./public-api.json'
+        : f.configPaths.publicApi;
+      assert.throws(
+        () =>
+          readControlledRoutingProof(
+            f.inputPath,
+            f.candidateRoot,
+            f.configPaths,
+          ),
+        /distinct resolved paths/,
+      );
+    },
+  );
+}
+
+for (const [name, routing] of [
+  [
+    'hyphenated tunnel names',
+    {
+      evidenceBaseUrl: 'https://owner-run-name-8000.aue01.devtunnels.ms',
+      callbackBaseUrl: 'https://owner-run-name-3010.aue.devtunnels.ms',
+    },
+  ],
+  [
+    'a valid non-AUE tunnel region',
+    {
+      evidenceBaseUrl: 'https://owner-run-8000.use1.devtunnels.ms',
+      callbackBaseUrl: 'https://owner-run-3010.use1.devtunnels.ms',
+    },
+  ],
+]) {
+  test('independently bound controlled inputs admit ' + name, (t) => {
+    const f = controlledTunnelFixture(t, routing);
+    if (!supportsControlledRouting()) {
+      assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+      return;
+    }
+    assert.equal(
+      resolveDeploymentWorkflowContext(f.candidateRoot, {
+        controlledRoutingInputPath: f.inputPath,
+        controlledRoutingConfigPaths: f.configPaths,
+      }).context,
+      'admin-portal-generated',
+    );
+  });
+}
+
+for (const [name, routing] of [
+  [
+    'a hostile tunnel suffix',
+    {
+      evidenceBaseUrl:
+        'https://owner-run-8000.use1.devtunnels.ms.attacker.example',
+    },
+  ],
+  [
+    'an invalid tunnel region label',
+    { evidenceBaseUrl: 'https://owner-run-8000.bad_region.devtunnels.ms' },
+  ],
+  [
+    'a wrong evidence tunnel port',
+    { evidenceBaseUrl: 'https://owner-run-8001.use1.devtunnels.ms' },
+  ],
+  [
+    'a wrong callback tunnel port',
+    { callbackBaseUrl: 'https://owner-run-3000.use1.devtunnels.ms' },
+  ],
+  [
+    'a callback tunnel suffix',
+    {
+      callbackBaseUrl:
+        'https://owner-run-3010.use1.devtunnels.ms.attacker.example',
+    },
+  ],
+]) {
+  test('even independently matching controlled configs reject ' + name, (t) => {
+    const f = controlledTunnelFixture(t, routing);
+    if (!supportsControlledRouting()) {
+      assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+      return;
+    }
+    assert.throws(
+      () =>
+        resolveDeploymentWorkflowContext(f.candidateRoot, {
+          controlledRoutingInputPath: f.inputPath,
+          controlledRoutingConfigPaths: f.configPaths,
+        }),
+      /port-(?:8000|3010) HTTPS tunnel/,
+    );
+  });
+}
