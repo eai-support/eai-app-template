@@ -3,6 +3,11 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   cpSync,
+  chmodSync,
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
+  openSync,
   existsSync,
   linkSync,
   lstatSync,
@@ -28,6 +33,33 @@ const canonicalDigest =
 const generatedDigest =
   '77d4951b3e6852ead73cef8b9e8901e3de774f9aca70f71cc0c932c13903ff32';
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const runtimeAppKeyPattern = /^[a-z][a-z0-9-]{1,62}$/;
+const controlledRoutingProofs = new WeakMap();
+const managedReviewPath =
+  '/api/platform/generated-apps/managed-review/workflow';
+// SECURITY: exact pairs reflect trusted Portal routing; TEST regional Portal cells deliberately share the AU gateway and Portal.
+const trustedRoutingPairs = [
+  [
+    'https://dev-api.au.myenterprise.ai/public',
+    'https://dev-admin-portal.myenterprise.ai',
+  ],
+  [
+    'https://test-api.au.myenterprise.ai/public',
+    'https://test-admin-portal.myenterprise.ai',
+  ],
+  [
+    'https://api.au.myenterprise.ai/public',
+    'https://admin-portal.myenterprise.ai',
+  ],
+  [
+    'https://api.eu.myenterprise.ai/public',
+    'https://admin-portal.eu.myenterprise.ai',
+  ],
+  [
+    'https://api.ca.myenterprise.ai/public',
+    'https://admin-portal.ca.myenterprise.ai',
+  ],
+].map(([evidence, portal]) => [evidence, portal + managedReviewPath]);
 const record = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const boundedString = (value) =>
@@ -164,8 +196,7 @@ function validateGeneratedManifest(manifest, workflow) {
   assert.equal(manifest.sourceMode, 'admin-portal-generated');
   assert.ok(
     typeof manifest.appKey === 'string' &&
-      /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(manifest.appKey) &&
-      manifest.appKey.length <= 128,
+      runtimeAppKeyPattern.test(manifest.appKey),
   );
   assert.ok(
     boundedString(manifest.appName) &&
@@ -231,7 +262,8 @@ function quotedBinding(workflow, name) {
   return value;
 }
 
-function secureUrl(value, suffix) {
+function secureUrl(value, exactPath) {
+  assert.ok(boundedString(value));
   const parsed = new URL(value);
   assert.ok(
     parsed.protocol === 'https:' &&
@@ -239,14 +271,195 @@ function secureUrl(value, suffix) {
       !parsed.password &&
       !parsed.search &&
       !parsed.hash &&
-      parsed.hostname !== 'public-api.invalid',
-    'Workflow destination must be configured HTTPS.',
+      !parsed.port &&
+      !value.slice('https://'.length).split('/')[0].includes(':'),
+    'Workflow destination must be credential-free HTTPS without an explicit port.',
   );
-  if (suffix)
-    assert.ok(
-      parsed.pathname.endsWith(suffix),
+  if (exactPath)
+    assert.equal(
+      parsed.pathname,
+      exactPath,
       'Wrong managed-review destination.',
     );
+  return parsed;
+}
+
+/** SECURITY: the explicit local override is owner-run controlled qualification only, never repository-derived destination trust or live authorization. */
+function readProtectedRoutingBytes(inputPath, candidateRoot) {
+  assert.ok(
+    process.platform !== 'win32' && typeof process.getuid === 'function',
+    'Controlled local routing requires POSIX owner protection.',
+  );
+  assert.ok(
+    isAbsolute(inputPath),
+    'Controlled routing input must be an absolute external path.',
+  );
+  const path = resolve(inputPath);
+  assert.equal(
+    realpathSync(path),
+    path,
+    'Controlled routing input must not traverse symlinks.',
+  );
+  const root = realpathSync(candidateRoot);
+  const within = relative(root, path);
+  assert.ok(
+    within === '..' || within.startsWith('../') || isAbsolute(within),
+    'Controlled routing input must be outside the candidate repository.',
+  );
+  const parent = lstatSync(dirname(path));
+  assert.ok(
+    parent.isDirectory() &&
+      !parent.isSymbolicLink() &&
+      parent.uid === process.getuid() &&
+      (parent.mode & 0o777) === 0o700,
+    'Controlled routing parent must be owner-protected 0700.',
+  );
+  const fd = openSync(
+    path,
+    fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK,
+  );
+  try {
+    const before = fstatSync(fd);
+    assert.ok(
+      before.isFile() &&
+        before.nlink === 1 &&
+        before.uid === process.getuid() &&
+        (before.mode & 0o777) === 0o600 &&
+        before.size > 0 &&
+        before.size <= 8192,
+      'Controlled routing input must be a bounded owner-only single-link file.',
+    );
+    const bytes = readFileSync(fd);
+    const after = fstatSync(fd);
+    assert.ok(
+      after.isFile() &&
+        after.uid === before.uid &&
+        after.mode === before.mode &&
+        after.nlink === before.nlink &&
+        after.dev === before.dev &&
+        after.ino === before.ino &&
+        after.size === before.size &&
+        after.mtimeMs === before.mtimeMs &&
+        after.ctimeMs === before.ctimeMs &&
+        bytes.length === before.size,
+      'Controlled routing bytes changed during the protected read.',
+    );
+    return bytes;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function readControlledRoutingProof(inputPath, candidateRoot) {
+  const bytes = readProtectedRoutingBytes(inputPath, candidateRoot);
+  const proof = JSON.parse(bytes.toString('utf8'));
+  keys(
+    proof,
+    [
+      'schemaVersion',
+      'mode',
+      'appKey',
+      'tenantId',
+      'operationId',
+      'workflowSha256',
+      'generatedOperationSha256',
+      'evidenceBaseUrl',
+      'managedReviewCallbackUrl',
+      'sourceConfigSha256',
+    ],
+    'controlled routing input',
+  );
+  assert.equal(
+    bytes.toString('utf8'),
+    JSON.stringify(proof, null, 2) + '\n',
+    'Controlled routing input must retain canonical owner-written JSON.',
+  );
+  assert.equal(proof.schemaVersion, 'eai.template_controlled_routing.v1');
+  assert.equal(proof.mode, 'owner-controlled-qualification-only');
+  assert.ok(
+    runtimeAppKeyPattern.test(proof.appKey) &&
+      boundedString(proof.tenantId) &&
+      boundedString(proof.operationId),
+  );
+  for (const field of ['workflowSha256', 'generatedOperationSha256'])
+    assert.ok(/^[a-f0-9]{64}$/.test(proof[field]));
+  keys(
+    proof.sourceConfigSha256,
+    ['publicApi', 'portal'],
+    'independent source-config receipt digests',
+  );
+  assert.deepEqual(Object.keys(proof.sourceConfigSha256).sort(), [
+    'portal',
+    'publicApi',
+  ]);
+  assert.ok(
+    Object.values(proof.sourceConfigSha256).every((x) =>
+      /^[a-f0-9]{64}$/.test(x),
+    ),
+  );
+  const evidence = secureUrl(proof.evidenceBaseUrl);
+  const callback = secureUrl(proof.managedReviewCallbackUrl, managedReviewPath);
+  assert.ok(
+    /^[a-z0-9]{1,64}-8000\.aue[0-9]*\.devtunnels\.ms$/.test(
+      evidence.hostname,
+    ) && ['/', '/public', '/public/'].includes(evidence.pathname),
+    'Controlled evidence destination must be the local port-8000 HTTPS tunnel.',
+  );
+  assert.ok(
+    /^[a-z0-9]{1,64}-3010\.aue[0-9]*\.devtunnels\.ms$/.test(callback.hostname),
+    'Controlled callback must be the local port-3010 HTTPS tunnel.',
+  );
+  const handle = Object.freeze({});
+  controlledRoutingProofs.set(handle, {
+    proof,
+    path: inputPath,
+    candidateRoot,
+    bytesSha256: digest(bytes),
+  });
+  return handle;
+}
+
+function validateTrustedRouting(
+  evidenceUrl,
+  callbackUrl,
+  manifest,
+  workflowBytes,
+  operation,
+  operationBytes,
+  controlledProof,
+) {
+  secureUrl(evidenceUrl);
+  secureUrl(callbackUrl, managedReviewPath);
+  if (controlledProof !== undefined) {
+    const captured = controlledRoutingProofs.get(controlledProof);
+    assert.ok(captured, 'Unrecognized controlled routing proof.');
+    assert.equal(
+      digest(readProtectedRoutingBytes(captured.path, captured.candidateRoot)),
+      captured.bytesSha256,
+      'Controlled routing proof changed after capture.',
+    );
+    const proof = captured.proof;
+    assert.equal(proof.appKey, manifest.appKey);
+    assert.equal(proof.tenantId, operation.tenantId);
+    assert.equal(proof.operationId, operation.operationId);
+    assert.equal(proof.workflowSha256, digest(workflowBytes));
+    assert.ok(
+      Buffer.isBuffer(operationBytes),
+      'Controlled routing requires raw generated-operation bytes.',
+    );
+    assert.equal(proof.generatedOperationSha256, digest(operationBytes));
+    assert.equal(proof.evidenceBaseUrl, evidenceUrl);
+    assert.equal(proof.managedReviewCallbackUrl, callbackUrl);
+    return;
+  }
+  const normalizedEvidence = evidenceUrl.replace(/\/$/, '');
+  assert.ok(
+    trustedRoutingPairs.some(
+      ([evidence, callback]) =>
+        evidence === normalizedEvidence && callback === callbackUrl,
+    ),
+    'Generated workflow destinations must match one exact trusted Portal cell pair.',
+  );
 }
 
 /** SECURITY: only declared generator inputs may vary; every remaining workflow byte must retain the reviewed OIDC, validation and handoff contract. */
@@ -255,6 +468,8 @@ function validateGeneratedWorkflow(
   workflowBytes,
   fixtureBytes,
   operation,
+  controlledProof,
+  operationBytes,
 ) {
   assert.equal(
     digest(fixtureBytes),
@@ -275,6 +490,7 @@ function validateGeneratedWorkflow(
     'generated source operation',
   );
   assert.equal(operation.schemaVersion, 'eai.generated_source_operation.v1');
+  assert.ok(runtimeAppKeyPattern.test(operation.appKey));
   assert.equal(operation.appKey, manifest.appKey);
   assert.ok(/^sha256:[a-f0-9]{64}$/.test(operation.configHash));
   assert.ok(
@@ -313,10 +529,14 @@ function validateGeneratedWorkflow(
     workflow,
     'EAI_MANAGED_REVIEW_CALLBACK_URL',
   );
-  secureUrl(evidenceUrl);
-  secureUrl(
+  validateTrustedRouting(
+    evidenceUrl,
     callbackUrl,
-    '/api/platform/generated-apps/managed-review/workflow',
+    manifest,
+    workflowBytes,
+    operation,
+    operationBytes,
+    controlledProof,
   );
   assert.equal(
     quotedBinding(workflow, 'EAI_GITHUB_OIDC_AUDIENCE'),
@@ -360,7 +580,10 @@ function validateGeneratedWorkflow(
 }
 
 /** INVARIANT: exported NCB workflows are validated separately; the original collector controls always run against exact canonical workflow bytes. */
-function resolveDeploymentWorkflowContext(root) {
+function resolveDeploymentWorkflowContext(
+  root,
+  { controlledRoutingInputPath } = {},
+) {
   const actual = regularBytes(join(root, canonicalWorkflowRelativePath));
   const manifestPath = join(root, '.eai-manifest.json');
   if (!existsSync(manifestPath)) {
@@ -398,14 +621,21 @@ function resolveDeploymentWorkflowContext(root) {
     canonicalDigest,
     'Canonical source-unknown workflow fixture drifted.',
   );
-  const operation = JSON.parse(
-    regularBytes(join(root, '.eai/generated-source-operation.json')),
+  const operationBytes = regularBytes(
+    join(root, '.eai/generated-source-operation.json'),
   );
+  const operation = JSON.parse(operationBytes);
+  const controlledProof =
+    controlledRoutingInputPath === undefined
+      ? undefined
+      : readControlledRoutingProof(controlledRoutingInputPath, root);
   validateGeneratedWorkflow(
     manifest,
     actual,
     regularBytes(join(root, fixtureDirectory, 'generated-eai-app.yml')),
     operation,
+    controlledProof,
+    operationBytes,
   );
   return { context: 'admin-portal-generated', workflowPath: canonicalPath };
 }
@@ -414,7 +644,7 @@ const evidenceScript = join(
   repoRoot,
   'scripts/source-unknown-deployment-evidence.mjs',
 );
-const { workflowPath } = resolveDeploymentWorkflowContext(repoRoot);
+const { workflowPath } = resolveDeploymentWorkflowContext(repoRoot, { controlledRoutingInputPath: process.env.EAI_TEMPLATE_CONTROLLED_ROUTING_INPUT });
 const readmePath = join(repoRoot, 'README.md');
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 
@@ -5103,9 +5333,9 @@ function exportedFixture(overrides = {}) {
     TARGET_TENANT_ID: 'customer-tenant-1',
     APP_KEY: 'incident-intake',
     MANAGED_REVIEW_OWNER: 'eai-generated-apps',
-    EVIDENCE_BASE_URL: 'https://dev-api.example/public',
+    EVIDENCE_BASE_URL: 'https://dev-api.au.myenterprise.ai/public',
     MANAGED_REVIEW_CALLBACK_URL:
-      'https://dev-portal.example/api/platform/generated-apps/managed-review/workflow',
+      'https://dev-admin-portal.myenterprise.ai/api/platform/generated-apps/managed-review/workflow',
     ...overrides,
   };
   let workflow = generated.toString('utf8');
@@ -5185,7 +5415,10 @@ test('template context requires byte-identical canonical workflow', (t) => {
 test('repository workflow is validated against its actual declared context', () => {
   assert.ok(
     ['template', 'cli', 'admin-portal-generated'].includes(
-      resolveDeploymentWorkflowContext(root).context,
+      resolveDeploymentWorkflowContext(root, {
+        controlledRoutingInputPath:
+          process.env.EAI_TEMPLATE_CONTROLLED_ROUTING_INPUT,
+      }).context,
     ),
   );
 });
@@ -5368,7 +5601,7 @@ for (const [name, before, after] of [
   ],
   [
     'trusted callback',
-    'https://dev-portal.example/api/platform/generated-apps/managed-review/workflow',
+    'https://dev-admin-portal.myenterprise.ai/api/platform/generated-apps/managed-review/workflow',
     'http://attacker.example/callback',
   ],
 ])
@@ -5454,7 +5687,10 @@ test('inline synthetic generated input retains repository and actual normalized 
   } else {
     assert.ok(
       ['template', 'cli'].includes(
-        resolveDeploymentWorkflowContext(root).context,
+        resolveDeploymentWorkflowContext(root, {
+          controlledRoutingInputPath:
+            process.env.EAI_TEMPLATE_CONTROLLED_ROUTING_INPUT,
+        }).context,
       ),
     );
     assert.equal(
@@ -5487,4 +5723,533 @@ test('legacy four-file evidence repair admits no fixtures and rejects canonical 
     () => resolveDeploymentWorkflowContext(directory),
     /canonical digest/,
   );
+});
+
+function controlledTunnelFixture(t) {
+  const fixture = exportedFixture({
+    EVIDENCE_BASE_URL: 'https://ownerrun-8000.aue01.devtunnels.ms',
+    MANAGED_REVIEW_CALLBACK_URL:
+      'https://ownerrun-3010.aue.devtunnels.ms' + managedReviewPath,
+  });
+  const candidateRoot = contextFixture(
+    t,
+    fixture.manifest,
+    fixture.workflow,
+    fixture.operation,
+  );
+  const externalDirectory = mkdtempSync(
+    join(tmpdir(), 'eai-controlled-routing-'),
+  );
+  t.after(() => rmSync(externalDirectory, { recursive: true, force: true }));
+  const inputPath = join(realpathSync(externalDirectory), 'owner-routing.json');
+  const proof = {
+    schemaVersion: 'eai.template_controlled_routing.v1',
+    mode: 'owner-controlled-qualification-only',
+    appKey: fixture.manifest.appKey,
+    tenantId: fixture.operation.tenantId,
+    operationId: fixture.operation.operationId,
+    workflowSha256: digest(fixture.workflow),
+    generatedOperationSha256: digest(
+      regularBytes(join(candidateRoot, '.eai/generated-source-operation.json')),
+    ),
+    evidenceBaseUrl: 'https://ownerrun-8000.aue01.devtunnels.ms',
+    managedReviewCallbackUrl:
+      'https://ownerrun-3010.aue.devtunnels.ms' + managedReviewPath,
+    sourceConfigSha256: { publicApi: 'a'.repeat(64), portal: 'b'.repeat(64) },
+  };
+  writeFileSync(inputPath, JSON.stringify(proof, null, 2) + '\n', {
+    mode: 0o600,
+  });
+  return { fixture, candidateRoot, externalDirectory, inputPath, proof };
+}
+
+function supportsControlledRouting() {
+  return process.platform !== 'win32' && typeof process.getuid === 'function';
+}
+
+function assertControlledRoutingUnsupported(inputPath, candidateRoot) {
+  assert.throws(
+    () => readControlledRoutingProof(inputPath, candidateRoot),
+    /POSIX owner protection/,
+  );
+}
+
+test('canonical app keys admit the exact generated-runtime boundaries', () => {
+  for (const appKey of ['ab', 'a'.repeat(63), 'a--']) {
+    const fixture = exportedFixture({ APP_KEY: appKey });
+    validateGeneratedWorkflow(
+      fixture.manifest,
+      fixture.workflow,
+      generated,
+      fixture.operation,
+    );
+  }
+});
+
+for (const appKey of ['a', '1app', 'a'.repeat(64), 'Aapp', 'bad_key', '']) {
+  test(
+    'rejects generated-runtime-invalid app key ' + JSON.stringify(appKey),
+    () => {
+      const fixture = exportedFixture({ APP_KEY: appKey });
+      assert.throws(() =>
+        validateGeneratedWorkflow(
+          fixture.manifest,
+          fixture.workflow,
+          generated,
+          fixture.operation,
+        ),
+      );
+    },
+  );
+}
+
+test('source operation independently rejects a noncanonical app key', () => {
+  const fixture = exportedFixture();
+  fixture.operation.appKey = '1app';
+  assert.throws(() =>
+    validateGeneratedWorkflow(
+      fixture.manifest,
+      fixture.workflow,
+      generated,
+      fixture.operation,
+    ),
+  );
+});
+
+test('every trusted deployed Portal cell pair is explicit and exact', () => {
+  for (const [evidence, callback] of trustedRoutingPairs) {
+    for (const ending of ['', '/']) {
+      const fixture = exportedFixture({
+        EVIDENCE_BASE_URL: evidence + ending,
+        MANAGED_REVIEW_CALLBACK_URL: callback,
+      });
+      validateGeneratedWorkflow(
+        fixture.manifest,
+        fixture.workflow,
+        generated,
+        fixture.operation,
+      );
+    }
+  }
+});
+
+for (const [name, inputs] of [
+  [
+    'hostile evidence host',
+    { EVIDENCE_BASE_URL: 'https://attacker.example/public' },
+  ],
+  [
+    'suffix evidence host',
+    {
+      EVIDENCE_BASE_URL:
+        'https://dev-api.au.myenterprise.ai.attacker.example/public',
+    },
+  ],
+  [
+    'subdomain evidence host',
+    { EVIDENCE_BASE_URL: 'https://evil.dev-api.au.myenterprise.ai/public' },
+  ],
+  [
+    'evidence credentials',
+    {
+      EVIDENCE_BASE_URL:
+        'https://user:password@dev-api.au.myenterprise.ai/public',
+    },
+  ],
+  [
+    'evidence explicit default port',
+    { EVIDENCE_BASE_URL: 'https://dev-api.au.myenterprise.ai:443/public' },
+  ],
+  [
+    'evidence alternate port',
+    { EVIDENCE_BASE_URL: 'https://dev-api.au.myenterprise.ai:8443/public' },
+  ],
+  [
+    'evidence wrong path',
+    { EVIDENCE_BASE_URL: 'https://dev-api.au.myenterprise.ai/attacker' },
+  ],
+  [
+    'evidence query',
+    {
+      EVIDENCE_BASE_URL:
+        'https://dev-api.au.myenterprise.ai/public?redirect=attacker',
+    },
+  ],
+  [
+    'evidence fragment',
+    { EVIDENCE_BASE_URL: 'https://dev-api.au.myenterprise.ai/public#attacker' },
+  ],
+  [
+    'hostile callback host',
+    {
+      MANAGED_REVIEW_CALLBACK_URL:
+        'https://attacker.example' + managedReviewPath,
+    },
+  ],
+  [
+    'callback path suffix',
+    {
+      MANAGED_REVIEW_CALLBACK_URL:
+        'https://dev-admin-portal.myenterprise.ai/evil' + managedReviewPath,
+    },
+  ],
+  [
+    'callback query',
+    {
+      MANAGED_REVIEW_CALLBACK_URL:
+        'https://dev-admin-portal.myenterprise.ai' +
+        managedReviewPath +
+        '?redirect=attacker',
+    },
+  ],
+  [
+    'callback explicit port',
+    {
+      MANAGED_REVIEW_CALLBACK_URL:
+        'https://dev-admin-portal.myenterprise.ai:443' + managedReviewPath,
+    },
+  ],
+  [
+    'cross-environment evidence',
+    { EVIDENCE_BASE_URL: 'https://api.au.myenterprise.ai/public' },
+  ],
+  [
+    'cross-region callback',
+    {
+      EVIDENCE_BASE_URL: 'https://api.au.myenterprise.ai/public',
+      MANAGED_REVIEW_CALLBACK_URL:
+        'https://admin-portal.eu.myenterprise.ai' + managedReviewPath,
+    },
+  ],
+]) {
+  test('rejects recomputed-manifest workflow with ' + name, () => {
+    const fixture = exportedFixture(inputs);
+    assert.throws(() =>
+      validateGeneratedWorkflow(
+        fixture.manifest,
+        fixture.workflow,
+        generated,
+        fixture.operation,
+      ),
+    );
+  });
+}
+
+test('local tunnel destinations never fall back to repository-derived trust', (t) => {
+  const f = controlledTunnelFixture(t);
+  assert.throws(
+    () => resolveDeploymentWorkflowContext(f.candidateRoot),
+    /exact trusted Portal cell pair/,
+  );
+});
+
+test('explicit owner-controlled tunnel qualification binds raw operation and workflow without claiming live authority', (t) => {
+  const f = controlledTunnelFixture(t);
+  if (!supportsControlledRouting()) {
+    assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+    return;
+  }
+  assert.equal(
+    resolveDeploymentWorkflowContext(f.candidateRoot, {
+      controlledRoutingInputPath: f.inputPath,
+    }).context,
+    'admin-portal-generated',
+  );
+});
+
+for (const [name, mutate] of [
+  [
+    'wrong app',
+    (p) => {
+      p.appKey = 'different-app';
+    },
+  ],
+  [
+    'wrong tenant',
+    (p) => {
+      p.tenantId = 'different-tenant';
+    },
+  ],
+  [
+    'wrong operation',
+    (p) => {
+      p.operationId = 'source-different';
+    },
+  ],
+  [
+    'workflow bytes drift',
+    (p) => {
+      p.workflowSha256 = '0'.repeat(64);
+    },
+  ],
+  [
+    'operation bytes drift',
+    (p) => {
+      p.generatedOperationSha256 = '0'.repeat(64);
+    },
+  ],
+  [
+    'extra input fields',
+    (p) => {
+      p.actorAuthorization = true;
+    },
+  ],
+  [
+    'noncontrolled mode',
+    (p) => {
+      p.mode = 'live-authorized';
+    },
+  ],
+  [
+    'missing source config',
+    (p) => {
+      delete p.sourceConfigSha256;
+    },
+  ],
+  [
+    'malformed source digest',
+    (p) => {
+      p.sourceConfigSha256.portal = '';
+    },
+  ],
+  [
+    'hostile local authority',
+    (p) => {
+      p.evidenceBaseUrl = 'https://attacker.example/public';
+    },
+  ],
+  [
+    'wrong tunnel port',
+    (p) => {
+      p.evidenceBaseUrl = 'https://ownerrun-8001.aue.devtunnels.ms';
+    },
+  ],
+  [
+    'wrong callback tunnel port',
+    (p) => {
+      p.managedReviewCallbackUrl =
+        'https://ownerrun-3000.aue.devtunnels.ms' + managedReviewPath;
+    },
+  ],
+  [
+    'different local evidence URL',
+    (p) => {
+      p.evidenceBaseUrl = 'https://otherowner-8000.aue.devtunnels.ms';
+    },
+  ],
+]) {
+  test('controlled tunnel input rejects ' + name, (t) => {
+    const f = controlledTunnelFixture(t);
+    mutate(f.proof);
+    writeFileSync(f.inputPath, JSON.stringify(f.proof, null, 2) + '\n');
+    if (!supportsControlledRouting()) {
+      assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+      return;
+    }
+    assert.throws(() =>
+      resolveDeploymentWorkflowContext(f.candidateRoot, {
+        controlledRoutingInputPath: f.inputPath,
+      }),
+    );
+  });
+}
+
+for (const [name, alter] of [
+  [
+    'missing input',
+    (f) => {
+      rmSync(f.inputPath);
+    },
+  ],
+  [
+    'candidate-repository input',
+    (f) => {
+      const inside = join(realpathSync(f.candidateRoot), 'owner-routing.json');
+      writeFileSync(inside, JSON.stringify(f.proof, null, 2) + '\n', {
+        mode: 0o600,
+      });
+      f.inputPath = inside;
+    },
+  ],
+  [
+    'symlink input',
+    (f) => {
+      const link = join(realpathSync(f.externalDirectory), 'symlink.json');
+      symlinkSync(f.inputPath, link);
+      f.inputPath = link;
+    },
+  ],
+  [
+    'hardlink input',
+    (f) => {
+      linkSync(
+        f.inputPath,
+        join(realpathSync(f.externalDirectory), 'hardlink.json'),
+      );
+    },
+  ],
+  [
+    'unsafe file permissions',
+    (f) => {
+      chmodSync(f.inputPath, 0o644);
+    },
+  ],
+  [
+    'unsafe parent permissions',
+    (f) => {
+      chmodSync(f.externalDirectory, 0o755);
+    },
+  ],
+  [
+    'oversized input',
+    (f) => {
+      writeFileSync(f.inputPath, ' '.repeat(8193));
+    },
+  ],
+  [
+    'malformed input',
+    (f) => {
+      writeFileSync(f.inputPath, '{');
+    },
+  ],
+  [
+    'duplicate JSON fields',
+    (f) => {
+      writeFileSync(
+        f.inputPath,
+        '{"mode":"owner-controlled-qualification-only",' +
+          JSON.stringify(f.proof).slice(1),
+      );
+    },
+  ],
+]) {
+  test('controlled tunnel input rejects ' + name, (t) => {
+    const f = controlledTunnelFixture(t);
+    if (!supportsControlledRouting()) {
+      assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+      return;
+    }
+    alter(f);
+    assert.throws(() =>
+      readControlledRoutingProof(f.inputPath, f.candidateRoot),
+    );
+  });
+}
+
+test('controlled proof rejects changed input bytes after admission', (t) => {
+  const f = controlledTunnelFixture(t);
+  if (!supportsControlledRouting()) {
+    assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+    return;
+  }
+  const handle = readControlledRoutingProof(f.inputPath, f.candidateRoot);
+  const operationBytes = regularBytes(
+    join(f.candidateRoot, '.eai/generated-source-operation.json'),
+  );
+  f.proof.operationId = 'source-changed';
+  writeFileSync(f.inputPath, JSON.stringify(f.proof, null, 2) + '\n');
+  assert.throws(
+    () =>
+      validateGeneratedWorkflow(
+        f.fixture.manifest,
+        f.fixture.workflow,
+        generated,
+        f.fixture.operation,
+        handle,
+        operationBytes,
+      ),
+    /changed after capture/,
+  );
+});
+
+test('caller cannot fabricate an opaque controlled routing admission', () => {
+  const f = exportedFixture();
+  assert.throws(
+    () =>
+      validateGeneratedWorkflow(
+        f.manifest,
+        f.workflow,
+        generated,
+        f.operation,
+        {},
+      ),
+    /Unrecognized controlled routing proof/,
+  );
+});
+
+for (const permissions of ['input', 'parent']) {
+  test(
+    'controlled proof rejects changed ' +
+      permissions +
+      ' permissions after admission',
+    (t) => {
+      const f = controlledTunnelFixture(t);
+      if (!supportsControlledRouting()) {
+        assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+        return;
+      }
+      const handle = readControlledRoutingProof(f.inputPath, f.candidateRoot);
+      const operationBytes = regularBytes(
+        join(f.candidateRoot, '.eai/generated-source-operation.json'),
+      );
+      chmodSync(
+        permissions === 'input' ? f.inputPath : f.externalDirectory,
+        permissions === 'input' ? 0o644 : 0o755,
+      );
+      assert.throws(
+        () =>
+          validateGeneratedWorkflow(
+            f.fixture.manifest,
+            f.fixture.workflow,
+            generated,
+            f.fixture.operation,
+            handle,
+            operationBytes,
+          ),
+        /owner/,
+      );
+    },
+  );
+}
+
+test('controlled input rejects a different effective filesystem owner', (t) => {
+  const f = controlledTunnelFixture(t);
+  if (!supportsControlledRouting()) {
+    assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+    return;
+  }
+  const uid = process.getuid();
+  t.mock.method(process, 'getuid', () => uid + 1);
+  assert.throws(
+    () => readControlledRoutingProof(f.inputPath, f.candidateRoot),
+    /owner-protected/,
+  );
+});
+
+test('non-regular owner input fails without blocking on a FIFO', (t) => {
+  const f = controlledTunnelFixture(t);
+  if (!supportsControlledRouting()) {
+    assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+    return;
+  }
+  rmSync(f.inputPath);
+  execFileSync('mkfifo', [f.inputPath]);
+  chmodSync(f.inputPath, 0o600);
+  const program = `import assert from 'node:assert/strict';
+    import {closeSync,constants as fsConstants,fstatSync,lstatSync,openSync,readFileSync,realpathSync} from 'node:fs';
+    import {dirname,isAbsolute,relative,resolve} from 'node:path';
+    ${readProtectedRoutingBytes.toString()}
+    assert.throws(() => readProtectedRoutingBytes(${JSON.stringify(f.inputPath)}, ${JSON.stringify(f.candidateRoot)}), /bounded owner-only single-link file/);`;
+  const result = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', program],
+    { timeout: 2000, encoding: 'utf8' },
+  );
+  assert.equal(
+    result.error,
+    undefined,
+    'FIFO rejection must complete within its bounded child deadline.',
+  );
+  assert.equal(result.signal, null);
+  assert.equal(result.status, 0, result.stderr);
 });

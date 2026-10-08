@@ -13,6 +13,7 @@
             ".github/workflows/eai-app.yml",
             ".github/workflows/release.yml",
             "tests/fixtures/source-unknown/**",
+            "tests/source-unknown-deployment-evidence.test.mjs",
             "scripts/source-unknown-deployment-evidence.mjs",
             "src/lib/platform/readiness.ts",
             "src/app/api/eai/readiness/route.ts"
