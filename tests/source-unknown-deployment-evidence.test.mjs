@@ -14,8 +14,10 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readSync,
   realpathSync,
   rmSync,
+  renameSync,
   symlinkSync,
   truncateSync,
   writeFileSync,
@@ -284,11 +286,83 @@ function secureUrl(value, exactPath) {
   return parsed;
 }
 
+function controlledReadFlags(constants = fsConstants) {
+  for (const name of ['O_NOFOLLOW', 'O_NONBLOCK']) {
+    assert.ok(
+      Number.isSafeInteger(constants[name]) && constants[name] > 0,
+      `Controlled secure reads require ${name} support.`,
+    );
+  }
+  assert.ok(
+    Number.isSafeInteger(constants.O_RDONLY) && constants.O_RDONLY >= 0,
+    'Controlled secure reads require O_RDONLY support.',
+  );
+  return constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+}
+
+function snapshotControlledDirectories(directory) {
+  const identities = [];
+  let current = resolve(directory);
+  while (true) {
+    const status = lstatSync(current);
+    assert.ok(
+      status.isDirectory() && !status.isSymbolicLink(),
+      'Controlled input ancestors must remain no-follow directories.',
+    );
+    identities.push({
+      path: current,
+      dev: status.dev,
+      ino: status.ino,
+      uid: status.uid,
+      mode: status.mode,
+    });
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return identities;
+}
+
+function assertControlledDirectories(identities) {
+  for (const identity of identities) {
+    const status = lstatSync(identity.path);
+    assert.ok(
+      status.isDirectory() &&
+        !status.isSymbolicLink() &&
+        status.dev === identity.dev &&
+        status.ino === identity.ino &&
+        status.uid === identity.uid &&
+        status.mode === identity.mode,
+      'Controlled input parent chain changed during its bound read.',
+    );
+  }
+}
+
+function controlledFileMatches(actual, expected) {
+  return (
+    actual.isFile() &&
+    !actual.isSymbolicLink() &&
+    actual.nlink === 1 &&
+    actual.dev === expected.dev &&
+    actual.ino === expected.ino &&
+    actual.uid === expected.uid &&
+    actual.mode === expected.mode &&
+    actual.size === expected.size &&
+    actual.mtimeMs === expected.mtimeMs &&
+    actual.ctimeMs === expected.ctimeMs
+  );
+}
+
 /** SECURITY: the explicit local override is owner-run controlled qualification only, never repository-derived destination trust or live authorization. */
-function readProtectedRoutingBytes(inputPath, candidateRoot) {
+function readProtectedRoutingBytes(inputPath, candidateRoot, maxBytes = 8192) {
   assert.ok(
     process.platform !== 'win32' && typeof process.getuid === 'function',
     'Controlled local routing requires POSIX owner protection.',
+  );
+  const flags = controlledReadFlags();
+  assert.ok(
+    Number.isSafeInteger(maxBytes) && maxBytes > 0 && maxBytes <= 512 * 1024,
+    'Controlled input byte limit is invalid.',
   );
   assert.ok(
     isAbsolute(inputPath),
@@ -306,42 +380,51 @@ function readProtectedRoutingBytes(inputPath, candidateRoot) {
     within === '..' || within.startsWith('../') || isAbsolute(within),
     'Controlled routing input must be outside the candidate repository.',
   );
-  const parent = lstatSync(dirname(path));
+  const ancestors = snapshotControlledDirectories(dirname(path));
+  const parent = ancestors[0];
   assert.ok(
-    parent.isDirectory() &&
-      !parent.isSymbolicLink() &&
-      parent.uid === process.getuid() &&
-      (parent.mode & 0o777) === 0o700,
+    parent.uid === process.getuid() && (parent.mode & 0o777) === 0o700,
     'Controlled routing parent must be owner-protected 0700.',
   );
-  const fd = openSync(
-    path,
-    fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK,
-  );
+  const before = lstatSync(path);
+  const fd = openSync(path, flags);
   try {
-    const before = fstatSync(fd);
+    const opened = fstatSync(fd);
+    assertControlledDirectories(ancestors);
     assert.ok(
-      before.isFile() &&
-        before.nlink === 1 &&
-        before.uid === process.getuid() &&
-        (before.mode & 0o777) === 0o600 &&
-        before.size > 0 &&
-        before.size <= 8192,
+      opened.isFile() &&
+        opened.nlink === 1 &&
+        opened.uid === process.getuid() &&
+        (opened.mode & 0o777) === 0o600 &&
+        opened.size > 0 &&
+        opened.size <= maxBytes,
       'Controlled routing input must be a bounded owner-only single-link file.',
     );
-    const bytes = readFileSync(fd);
-    const after = fstatSync(fd);
     assert.ok(
-      after.isFile() &&
-        after.uid === before.uid &&
-        after.mode === before.mode &&
-        after.nlink === before.nlink &&
-        after.dev === before.dev &&
-        after.ino === before.ino &&
-        after.size === before.size &&
-        after.mtimeMs === before.mtimeMs &&
-        after.ctimeMs === before.ctimeMs &&
-        bytes.length === before.size,
+      controlledFileMatches(opened, before) &&
+        controlledFileMatches(lstatSync(path), opened),
+      'Controlled routing leaf changed before its bound read.',
+    );
+    const bytes = Buffer.alloc(opened.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const count = readSync(fd, bytes, offset, bytes.length - offset, offset);
+      assert.ok(
+        count > 0,
+        'Controlled routing input shrank during its bounded read.',
+      );
+      offset += count;
+    }
+    assert.equal(
+      readSync(fd, Buffer.alloc(1), 0, 1, offset),
+      0,
+      'Controlled routing input grew during its bounded read.',
+    );
+    const after = fstatSync(fd);
+    assertControlledDirectories(ancestors);
+    assert.ok(
+      controlledFileMatches(after, opened) &&
+        controlledFileMatches(lstatSync(path), opened),
       'Controlled routing bytes changed during the protected read.',
     );
     return bytes;
@@ -350,7 +433,58 @@ function readProtectedRoutingBytes(inputPath, candidateRoot) {
   }
 }
 
-function readControlledRoutingProof(inputPath, candidateRoot) {
+function validateControlledConfigReceipts(proof, configPaths, candidateRoot) {
+  keys(
+    configPaths,
+    ['publicApi', 'portal'],
+    'explicit independent source-config paths',
+  );
+  assert.deepEqual(Object.keys(configPaths).sort(), ['portal', 'publicApi']);
+  for (const name of ['publicApi', 'portal']) {
+    assert.ok(
+      boundedString(configPaths[name]),
+      'Controlled qualification requires explicit independent source-config paths.',
+    );
+    const bytes = readProtectedRoutingBytes(
+      configPaths[name],
+      candidateRoot,
+      512 * 1024,
+    );
+    assert.equal(
+      digest(bytes),
+      proof.sourceConfigSha256[name],
+      'Independent source-config receipt digest does not match.',
+    );
+    let config;
+    try {
+      config = JSON.parse(bytes.toString('utf8'));
+      assert.ok(record(config));
+      const evidence = secureUrl(config.ADMIN_PORTAL_PUBLIC_API_BASE_URL);
+      const callback = secureUrl(
+        config.ADMIN_PORTAL_WORKFLOW_CALLBACK_BASE_URL,
+      );
+      assert.equal(callback.pathname, '/');
+      assert.ok(['/', '/public', '/public/'].includes(evidence.pathname));
+    } catch {
+      throw new Error(
+        'Independent source-config receipt has invalid preferred routing fields.',
+      );
+    }
+    assert.equal(
+      config.ADMIN_PORTAL_PUBLIC_API_BASE_URL,
+      proof.evidenceBaseUrl,
+      'Independent evidence destination does not match.',
+    );
+    assert.equal(
+      config.ADMIN_PORTAL_WORKFLOW_CALLBACK_BASE_URL.replace(/\/$/, '') +
+        managedReviewPath,
+      proof.managedReviewCallbackUrl,
+      'Independent callback destination does not match.',
+    );
+  }
+}
+
+function readControlledRoutingProof(inputPath, candidateRoot, configPaths) {
   const bytes = readProtectedRoutingBytes(inputPath, candidateRoot);
   const proof = JSON.parse(bytes.toString('utf8'));
   keys(
@@ -409,11 +543,13 @@ function readControlledRoutingProof(inputPath, candidateRoot) {
     /^[a-z0-9]{1,64}-3010\.aue[0-9]*\.devtunnels\.ms$/.test(callback.hostname),
     'Controlled callback must be the local port-3010 HTTPS tunnel.',
   );
+  validateControlledConfigReceipts(proof, configPaths, candidateRoot);
   const handle = Object.freeze({});
   controlledRoutingProofs.set(handle, {
     proof,
     path: inputPath,
     candidateRoot,
+    configPaths: Object.freeze({ ...configPaths }),
     bytesSha256: digest(bytes),
   });
   return handle;
@@ -439,6 +575,11 @@ function validateTrustedRouting(
       'Controlled routing proof changed after capture.',
     );
     const proof = captured.proof;
+    validateControlledConfigReceipts(
+      proof,
+      captured.configPaths,
+      captured.candidateRoot,
+    );
     assert.equal(proof.appKey, manifest.appKey);
     assert.equal(proof.tenantId, operation.tenantId);
     assert.equal(proof.operationId, operation.operationId);
@@ -582,7 +723,7 @@ function validateGeneratedWorkflow(
 /** INVARIANT: exported NCB workflows are validated separately; the original collector controls always run against exact canonical workflow bytes. */
 function resolveDeploymentWorkflowContext(
   root,
-  { controlledRoutingInputPath } = {},
+  { controlledRoutingInputPath, controlledRoutingConfigPaths } = {},
 ) {
   const actual = regularBytes(join(root, canonicalWorkflowRelativePath));
   const manifestPath = join(root, '.eai-manifest.json');
@@ -628,7 +769,11 @@ function resolveDeploymentWorkflowContext(
   const controlledProof =
     controlledRoutingInputPath === undefined
       ? undefined
-      : readControlledRoutingProof(controlledRoutingInputPath, root);
+      : readControlledRoutingProof(
+          controlledRoutingInputPath,
+          root,
+          controlledRoutingConfigPaths,
+        );
   validateGeneratedWorkflow(
     manifest,
     actual,
@@ -644,7 +789,14 @@ const evidenceScript = join(
   repoRoot,
   'scripts/source-unknown-deployment-evidence.mjs',
 );
-const { workflowPath } = resolveDeploymentWorkflowContext(repoRoot, { controlledRoutingInputPath: process.env.EAI_TEMPLATE_CONTROLLED_ROUTING_INPUT });
+const selectedControlledRoutingConfigPaths = {
+  publicApi: process.env.EAI_TEMPLATE_CONTROLLED_PUBLICAPI_CONFIG,
+  portal: process.env.EAI_TEMPLATE_CONTROLLED_PORTAL_CONFIG,
+};
+const { workflowPath } = resolveDeploymentWorkflowContext(repoRoot, {
+  controlledRoutingInputPath: process.env.EAI_TEMPLATE_CONTROLLED_ROUTING_INPUT,
+  controlledRoutingConfigPaths: selectedControlledRoutingConfigPaths,
+});
 const readmePath = join(repoRoot, 'README.md');
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 
@@ -5418,6 +5570,7 @@ test('repository workflow is validated against its actual declared context', () 
       resolveDeploymentWorkflowContext(root, {
         controlledRoutingInputPath:
           process.env.EAI_TEMPLATE_CONTROLLED_ROUTING_INPUT,
+        controlledRoutingConfigPaths: selectedControlledRoutingConfigPaths,
       }).context,
     ),
   );
@@ -5690,6 +5843,7 @@ test('inline synthetic generated input retains repository and actual normalized 
         resolveDeploymentWorkflowContext(root, {
           controlledRoutingInputPath:
             process.env.EAI_TEMPLATE_CONTROLLED_ROUTING_INPUT,
+          controlledRoutingConfigPaths: selectedControlledRoutingConfigPaths,
         }).context,
       ),
     );
@@ -5742,6 +5896,20 @@ function controlledTunnelFixture(t) {
   );
   t.after(() => rmSync(externalDirectory, { recursive: true, force: true }));
   const inputPath = join(realpathSync(externalDirectory), 'owner-routing.json');
+  const configPaths = {
+    publicApi: join(realpathSync(externalDirectory), 'public-api.json'),
+    portal: join(realpathSync(externalDirectory), 'portal.json'),
+  };
+  const safeConfig = {
+    ADMIN_PORTAL_PUBLIC_API_BASE_URL:
+      'https://ownerrun-8000.aue01.devtunnels.ms',
+    ADMIN_PORTAL_WORKFLOW_CALLBACK_BASE_URL:
+      'https://ownerrun-3010.aue.devtunnels.ms',
+  };
+  for (const path of Object.values(configPaths))
+    writeFileSync(path, JSON.stringify(safeConfig, null, 2) + '\n', {
+      mode: 0o600,
+    });
   const proof = {
     schemaVersion: 'eai.template_controlled_routing.v1',
     mode: 'owner-controlled-qualification-only',
@@ -5755,12 +5923,22 @@ function controlledTunnelFixture(t) {
     evidenceBaseUrl: 'https://ownerrun-8000.aue01.devtunnels.ms',
     managedReviewCallbackUrl:
       'https://ownerrun-3010.aue.devtunnels.ms' + managedReviewPath,
-    sourceConfigSha256: { publicApi: 'a'.repeat(64), portal: 'b'.repeat(64) },
+    sourceConfigSha256: {
+      publicApi: digest(regularBytes(configPaths.publicApi)),
+      portal: digest(regularBytes(configPaths.portal)),
+    },
   };
   writeFileSync(inputPath, JSON.stringify(proof, null, 2) + '\n', {
     mode: 0o600,
   });
-  return { fixture, candidateRoot, externalDirectory, inputPath, proof };
+  return {
+    fixture,
+    candidateRoot,
+    externalDirectory,
+    inputPath,
+    proof,
+    configPaths,
+  };
 }
 
 function supportsControlledRouting() {
@@ -5952,6 +6130,7 @@ test('explicit owner-controlled tunnel qualification binds raw operation and wor
   assert.equal(
     resolveDeploymentWorkflowContext(f.candidateRoot, {
       controlledRoutingInputPath: f.inputPath,
+      controlledRoutingConfigPaths: f.configPaths,
     }).context,
     'admin-portal-generated',
   );
@@ -6049,6 +6228,7 @@ for (const [name, mutate] of [
     assert.throws(() =>
       resolveDeploymentWorkflowContext(f.candidateRoot, {
         controlledRoutingInputPath: f.inputPath,
+        controlledRoutingConfigPaths: f.configPaths,
       }),
     );
   });
@@ -6131,7 +6311,7 @@ for (const [name, alter] of [
     }
     alter(f);
     assert.throws(() =>
-      readControlledRoutingProof(f.inputPath, f.candidateRoot),
+      readControlledRoutingProof(f.inputPath, f.candidateRoot, f.configPaths),
     );
   });
 }
@@ -6142,7 +6322,11 @@ test('controlled proof rejects changed input bytes after admission', (t) => {
     assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
     return;
   }
-  const handle = readControlledRoutingProof(f.inputPath, f.candidateRoot);
+  const handle = readControlledRoutingProof(
+    f.inputPath,
+    f.candidateRoot,
+    f.configPaths,
+  );
   const operationBytes = regularBytes(
     join(f.candidateRoot, '.eai/generated-source-operation.json'),
   );
@@ -6188,7 +6372,11 @@ for (const permissions of ['input', 'parent']) {
         assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
         return;
       }
-      const handle = readControlledRoutingProof(f.inputPath, f.candidateRoot);
+      const handle = readControlledRoutingProof(
+        f.inputPath,
+        f.candidateRoot,
+        f.configPaths,
+      );
       const operationBytes = regularBytes(
         join(f.candidateRoot, '.eai/generated-source-operation.json'),
       );
@@ -6221,7 +6409,8 @@ test('controlled input rejects a different effective filesystem owner', (t) => {
   const uid = process.getuid();
   t.mock.method(process, 'getuid', () => uid + 1);
   assert.throws(
-    () => readControlledRoutingProof(f.inputPath, f.candidateRoot),
+    () =>
+      readControlledRoutingProof(f.inputPath, f.candidateRoot, f.configPaths),
     /owner-protected/,
   );
 });
@@ -6236,8 +6425,12 @@ test('non-regular owner input fails without blocking on a FIFO', (t) => {
   execFileSync('mkfifo', [f.inputPath]);
   chmodSync(f.inputPath, 0o600);
   const program = `import assert from 'node:assert/strict';
-    import {closeSync,constants as fsConstants,fstatSync,lstatSync,openSync,readFileSync,realpathSync} from 'node:fs';
+    import {closeSync,constants as fsConstants,fstatSync,lstatSync,openSync,readSync,realpathSync} from 'node:fs';
     import {dirname,isAbsolute,relative,resolve} from 'node:path';
+    ${controlledReadFlags.toString()}
+    ${snapshotControlledDirectories.toString()}
+    ${assertControlledDirectories.toString()}
+    ${controlledFileMatches.toString()}
     ${readProtectedRoutingBytes.toString()}
     assert.throws(() => readProtectedRoutingBytes(${JSON.stringify(f.inputPath)}, ${JSON.stringify(f.candidateRoot)}), /bounded owner-only single-link file/);`;
   const result = spawnSync(
@@ -6250,6 +6443,211 @@ test('non-regular owner input fails without blocking on a FIFO', (t) => {
     undefined,
     'FIFO rejection must complete within its bounded child deadline.',
   );
+  assert.equal(result.signal, null);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+for (const flag of ['O_NOFOLLOW', 'O_NONBLOCK']) {
+  test('protected reads reject missing or invalid ' + flag + ' support', () => {
+    for (const value of [undefined, 0, -1, 1.5])
+      assert.throws(
+        () => controlledReadFlags({ ...fsConstants, [flag]: value }),
+        /require.*support/,
+      );
+  });
+}
+
+for (const name of ['publicApi', 'portal']) {
+  test(
+    'independent ' + name + ' config rejects invented receipt digests',
+    (t) => {
+      const f = controlledTunnelFixture(t);
+      if (!supportsControlledRouting()) {
+        assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+        return;
+      }
+      f.proof.sourceConfigSha256[name] = '0'.repeat(64);
+      writeFileSync(f.inputPath, JSON.stringify(f.proof, null, 2) + '\n');
+      assert.throws(
+        () =>
+          readControlledRoutingProof(
+            f.inputPath,
+            f.candidateRoot,
+            f.configPaths,
+          ),
+        /receipt digest/,
+      );
+    },
+  );
+
+  test(
+    'independent ' +
+      name +
+      ' config rejects stale bytes after opaque admission',
+    (t) => {
+      const f = controlledTunnelFixture(t);
+      if (!supportsControlledRouting()) {
+        assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+        return;
+      }
+      const handle = readControlledRoutingProof(
+        f.inputPath,
+        f.candidateRoot,
+        f.configPaths,
+      );
+      writeFileSync(
+        f.configPaths[name],
+        JSON.stringify({
+          ADMIN_PORTAL_PUBLIC_API_BASE_URL:
+            'https://changed-8000.aue.devtunnels.ms',
+        }),
+      );
+      assert.throws(
+        () =>
+          validateGeneratedWorkflow(
+            f.fixture.manifest,
+            f.fixture.workflow,
+            generated,
+            f.fixture.operation,
+            handle,
+            regularBytes(
+              join(f.candidateRoot, '.eai/generated-source-operation.json'),
+            ),
+          ),
+        /receipt digest/,
+      );
+    },
+  );
+
+  for (const key of [
+    'ADMIN_PORTAL_PUBLIC_API_BASE_URL',
+    'ADMIN_PORTAL_WORKFLOW_CALLBACK_BASE_URL',
+  ]) {
+    test(
+      'independent ' +
+        name +
+        ' config rejects wrong preferred ' +
+        key +
+        ' despite recomputed digest',
+      (t) => {
+        const f = controlledTunnelFixture(t);
+        if (!supportsControlledRouting()) {
+          assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+          return;
+        }
+        const config = JSON.parse(regularBytes(f.configPaths[name]));
+        config[key] = key.endsWith('API_BASE_URL')
+          ? 'https://other-8000.aue.devtunnels.ms'
+          : 'https://other-3010.aue.devtunnels.ms';
+        writeFileSync(f.configPaths[name], JSON.stringify(config));
+        f.proof.sourceConfigSha256[name] = digest(
+          regularBytes(f.configPaths[name]),
+        );
+        writeFileSync(f.inputPath, JSON.stringify(f.proof, null, 2) + '\n');
+        assert.throws(
+          () =>
+            readControlledRoutingProof(
+              f.inputPath,
+              f.candidateRoot,
+              f.configPaths,
+            ),
+          /Independent.*destination/,
+        );
+      },
+    );
+  }
+}
+
+test('controlled qualification cannot infer independent config paths from the proof', (t) => {
+  const f = controlledTunnelFixture(t);
+  if (!supportsControlledRouting()) {
+    assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+    return;
+  }
+  assert.throws(
+    () => readControlledRoutingProof(f.inputPath, f.candidateRoot),
+    /explicit independent source-config paths/,
+  );
+});
+
+test('malformed protected config never exposes its private content in parser errors', (t) => {
+  const f = controlledTunnelFixture(t);
+  if (!supportsControlledRouting()) {
+    assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+    return;
+  }
+  const bytes = Buffer.from('not-json-private-sentinel-do-not-emit');
+  writeFileSync(f.configPaths.portal, bytes);
+  f.proof.sourceConfigSha256.portal = digest(bytes);
+  writeFileSync(f.inputPath, JSON.stringify(f.proof, null, 2) + '\n');
+  assert.throws(
+    () =>
+      readControlledRoutingProof(f.inputPath, f.candidateRoot, f.configPaths),
+    (error) =>
+      error.message ===
+        'Independent source-config receipt has invalid preferred routing fields.' &&
+      !String(error).includes('private-sentinel'),
+  );
+});
+
+test('independent configs have a separate bounded limit without widening the proof cap', (t) => {
+  const f = controlledTunnelFixture(t);
+  if (!supportsControlledRouting()) {
+    assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+    return;
+  }
+  const config = JSON.parse(regularBytes(f.configPaths.portal));
+  config.controlledPadding = 'x'.repeat(9000);
+  writeFileSync(f.configPaths.portal, JSON.stringify(config));
+  f.proof.sourceConfigSha256.portal = digest(
+    regularBytes(f.configPaths.portal),
+  );
+  writeFileSync(f.inputPath, JSON.stringify(f.proof, null, 2) + '\n');
+  readControlledRoutingProof(f.inputPath, f.candidateRoot, f.configPaths);
+  writeFileSync(f.configPaths.portal, 'x'.repeat(512 * 1024 + 1));
+  assert.throws(
+    () =>
+      readControlledRoutingProof(f.inputPath, f.candidateRoot, f.configPaths),
+    /bounded owner-only/,
+  );
+});
+
+test('opened controlled input rejects a swapped parent directory before accepting bytes', (t) => {
+  const f = controlledTunnelFixture(t);
+  if (!supportsControlledRouting()) {
+    assertControlledRoutingUnsupported(f.inputPath, f.candidateRoot);
+    return;
+  }
+  const originalParent = dirname(f.inputPath);
+  const movedParent = originalParent + '-moved';
+  const hostileParent = realpathSync(
+    mkdtempSync(join(tmpdir(), 'eai-controlled-parent-swap-')),
+  );
+  t.after(() => {
+    rmSync(movedParent, { recursive: true, force: true });
+    rmSync(hostileParent, { recursive: true, force: true });
+  });
+  writeFileSync(
+    join(hostileParent, 'owner-routing.json'),
+    regularBytes(f.inputPath),
+    { mode: 0o600 },
+  );
+  const program = `import assert from 'node:assert/strict';
+    import {closeSync,constants as fsConstants,fstatSync,lstatSync,openSync as nativeOpen,readSync,realpathSync,renameSync,symlinkSync} from 'node:fs';
+    import {dirname,isAbsolute,relative,resolve} from 'node:path';
+    const openSync = (path, flags) => { renameSync(${JSON.stringify(originalParent)}, ${JSON.stringify(movedParent)}); symlinkSync(${JSON.stringify(hostileParent)}, ${JSON.stringify(originalParent)}); return nativeOpen(path, flags); };
+    ${controlledReadFlags.toString()}
+    ${snapshotControlledDirectories.toString()}
+    ${assertControlledDirectories.toString()}
+    ${controlledFileMatches.toString()}
+    ${readProtectedRoutingBytes.toString()}
+    assert.throws(() => readProtectedRoutingBytes(${JSON.stringify(f.inputPath)}, ${JSON.stringify(f.candidateRoot)}), /parent chain changed/);`;
+  const result = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', program],
+    { timeout: 2000, encoding: 'utf8' },
+  );
+  assert.equal(result.error, undefined);
   assert.equal(result.signal, null);
   assert.equal(result.status, 0, result.stderr);
 });
