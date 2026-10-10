@@ -198,8 +198,8 @@ function localE2eBinding(options, mode, environment, root) {
   }
   if (mode === 'source-unknown') {
     const nonce = option(options, 'nonce');
-    const targetTenant = option(options, 'targetTenantId');
     const tenantId = option(options, 'tenantId');
+    const targetTenant = option(options, 'targetTenantId') || tenantId;
     const appKey = option(options, 'appKey');
     const workflowPath = option(options, 'workflow', '.github/workflows/eai-app.yml');
     const ref = option(options, 'ref', process.env.GITHUB_REF || '');

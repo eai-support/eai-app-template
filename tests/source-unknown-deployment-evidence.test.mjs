@@ -1767,6 +1767,9 @@ test('local customer-owned source uses its own exact direct-operation audience',
       '--github-event-name', 'workflow_dispatch', '--reusable-call', 'false',
       '--repository-id', '12345'];
     runEvidenceScript(args);
+    const withoutTarget = [...args];
+    withoutTarget.splice(withoutTarget.indexOf('--target-tenant-id'), 2);
+    runEvidenceScript(withoutTarget);
     for (const [key, value] of [
       ['--public-api-url', 'https://attacker.example'],
       ['--operation-id', `cli-managed-${'a'.repeat(32)}`],
