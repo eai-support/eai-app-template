@@ -88,6 +88,40 @@ function applyTraceRequestHeaders(
   }
 }
 
+function stripInboundProxyHeaders(headers: Headers): void {
+  const connection = headers.get('connection');
+  for (const name of connection?.split(',') ?? []) {
+    const token = name.trim();
+    if (/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(token)) {
+      headers.delete(token);
+    }
+  }
+
+  // SECURITY: Client proxy metadata must not control the upstream redirect host.
+  for (const name of [
+    'connection',
+    'content-length',
+    'forwarded',
+    'host',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'te',
+    'trailer',
+    'transfer-encoding',
+    'upgrade',
+    'x-forwarded-for',
+    'x-forwarded-host',
+    'x-forwarded-port',
+    'x-forwarded-prefix',
+    'x-forwarded-proto',
+    'x-forwarded-server',
+    'x-real-ip',
+  ]) {
+    headers.delete(name);
+  }
+}
+
 function getServerTenantId(): string | undefined {
   return (
     process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
@@ -158,8 +192,8 @@ async function proxyRequest(
 
     // Ensure baseUrl ends with / and path doesn't start with /
     const headers = new Headers(request.headers);
+    stripInboundProxyHeaders(headers);
     headers.delete('cookie');
-    headers.delete('host');
     headers.delete('tenant');
     headers.delete('x-tenant-id');
     applyTraceRequestHeaders(headers, traceContext);
