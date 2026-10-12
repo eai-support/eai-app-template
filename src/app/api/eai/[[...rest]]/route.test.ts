@@ -45,15 +45,19 @@ jest.mock('@/lib/platform/session-resolve', () => {
   };
 });
 
-import { GET } from './route';
+import { GET, POST } from './route';
 import { resourceRoutesBaseUrl } from '@enterpriseaigroup/platform-sdk';
 
-function createRequest(path: string, init?: { headers?: HeadersInit }) {
+function createRequest(
+  path: string,
+  init?: { body?: string; headers?: HeadersInit; method?: string },
+) {
   const url = `https://template.test/api/eai/${path}`;
   return {
     headers: new Headers(init?.headers),
-    method: 'GET',
+    method: init?.method ?? 'GET',
     nextUrl: new URL(url),
+    text: async () => init?.body ?? '',
     url,
   } as never;
 }
@@ -231,5 +235,99 @@ describe('EAI proxy v4 route-family routing', () => {
 
     expect(headers.get('tenant')).toBe('tenant-a');
     expect(headers.get('x-tenant-id')).toBe('tenant-a');
+  });
+
+  it('BP002 strips inbound proxy and hop-by-hop headers without losing server authority', async () => {
+    process.env.EAI_TENANT_ID = 'tenant-a';
+
+    const response = await GET(
+      createRequest('v4/data/resources/tenant-a/task', {
+        headers: {
+          authorization: 'Bearer browser-spoofed',
+          connection: 'keep-alive, x-hop-only, authorization, tenant',
+          'content-length': '999',
+          forwarded: 'host=localhost:3330;proto=http',
+          'proxy-authorization': 'Basic browser-spoofed',
+          tenant: 'spoofed-tenant',
+          te: 'trailers',
+          'x-correlation-id': 'corr-template-2',
+          'x-forwarded-for': '127.0.0.1',
+          'x-forwarded-host': 'localhost:3330',
+          'x-forwarded-port': '3330',
+          'x-forwarded-proto': 'http',
+          'x-hop-only': 'browser-spoofed',
+          'x-request-id': 'req-template-2',
+          'x-tenant-id': 'spoofed-tenant',
+        },
+      }),
+      createContext('v4/data/resources/tenant-a/task'),
+    );
+
+    const [targetUrl, fetchOptions] = (global.fetch as jest.Mock).mock.calls[0];
+    const headers = fetchOptions.headers as Headers;
+
+    expect(targetUrl).toBe(
+      `${resourceRoutesBaseUrl('https://regional-api.example.com/public')}/tenant-a/task`,
+    );
+    for (const name of [
+      'connection',
+      'content-length',
+      'forwarded',
+      'host',
+      'proxy-authorization',
+      'te',
+      'x-forwarded-for',
+      'x-forwarded-host',
+      'x-forwarded-port',
+      'x-forwarded-proto',
+      'x-hop-only',
+    ]) {
+      expect(headers.get(name)).toBeNull();
+    }
+    expect(headers.get('authorization')).toBe('Bearer user-token');
+    expect(headers.get('tenant')).toBe('tenant-a');
+    expect(headers.get('x-tenant-id')).toBe('tenant-a');
+    expect(headers.get('x-request-id')).toBe('req-template-2');
+    expect(headers.get('x-correlation-id')).toBe('corr-template-2');
+    expect(response.status).toBe(200);
+  });
+
+  it('HP006 preserves a JSON Task write while stripping spoofed forwarding metadata', async () => {
+    process.env.EAI_TENANT_ID = 'tenant-a';
+    const body = JSON.stringify({ data: { title: 'Customer task' } });
+
+    await POST(
+      createRequest('v4/data/resources/tenant-a/task', {
+        body,
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer browser-spoofed',
+          'content-length': '999',
+          'content-type': 'application/json',
+          forwarded: 'host=localhost:3330;proto=http',
+          tenant: 'spoofed-tenant',
+          'x-correlation-id': 'corr-template-3',
+          'x-forwarded-host': 'localhost:3330',
+          'x-forwarded-proto': 'http',
+          'x-request-id': 'req-template-3',
+        },
+      }),
+      createContext('v4/data/resources/tenant-a/task'),
+    );
+
+    const [, fetchOptions] = (global.fetch as jest.Mock).mock.calls[0];
+    const headers = fetchOptions.headers as Headers;
+    expect(fetchOptions.method).toBe('POST');
+    expect(fetchOptions.body).toBe(body);
+    expect(headers.get('content-type')).toBe('application/json');
+    expect(headers.get('content-length')).toBeNull();
+    expect(headers.get('forwarded')).toBeNull();
+    expect(headers.get('x-forwarded-host')).toBeNull();
+    expect(headers.get('x-forwarded-proto')).toBeNull();
+    expect(headers.get('authorization')).toBe('Bearer user-token');
+    expect(headers.get('tenant')).toBe('tenant-a');
+    expect(headers.get('x-tenant-id')).toBe('tenant-a');
+    expect(headers.get('x-request-id')).toBe('req-template-3');
+    expect(headers.get('x-correlation-id')).toBe('corr-template-3');
   });
 });
