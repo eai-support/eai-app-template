@@ -24,7 +24,7 @@ test('checks a generated project without Git and excludes dependency/build outpu
     await mkdir(join(root, 'src'));
     await writeFile(join(root, 'src', 'page.tsx'), 'export default 1');
     await mkdir(join(root, 'node_modules'));
-    await writeFile(join(root, 'node_modules', 'CON'), 'ignored dependency');
+    await symlink(join(root, 'src'), join(root, 'node_modules', 'linked-dependency'), 'junction');
     assert.deepEqual(await checkDirectory(root), []);
     const result = spawnSync(process.execPath, [checker, root], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
