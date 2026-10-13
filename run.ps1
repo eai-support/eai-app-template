@@ -58,7 +58,7 @@ $lastHash = if (Test-Path $lastHashFile) { Get-Content $lastHashFile -Raw } else
 
 if (-not (Test-Path "node_modules") -or $currentHash.Trim() -ne $lastHash.Trim()) {
   Write-Host "Installing dependencies..."
-  npm install
+  npm ci
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   Set-Content -Path $lastHashFile -Value $currentHash
 } else {

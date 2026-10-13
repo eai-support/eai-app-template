@@ -95,7 +95,7 @@ fi
 
 if [ ! -d "node_modules" ] || [ "$CURRENT_HASH" != "$LAST_HASH" ]; then
   echo "Installing dependencies..."
-  npm install
+  npm ci
   echo "$CURRENT_HASH" > "$LAST_HASH_FILE"
 else
   echo "Dependencies are up to date."

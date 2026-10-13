@@ -25,7 +25,7 @@ alias.
 ```bash
 git clone https://github.com/eai-support/eai-app-template.git my-app
 cd my-app
-npm install
+npm ci
 cp .env.example .env.local
 ./run.sh dev 3001
 ```
@@ -33,6 +33,10 @@ cp .env.example .env.local
 On Windows, use:
 
 ```bat
+git clone https://github.com/eai-support/eai-app-template.git my-app
+cd my-app
+npm ci
+copy .env.example .env.local
 run.bat dev 3001
 ```
 
@@ -40,6 +44,20 @@ The runner installs missing dependencies, builds the app, stops any process that
 already listens on the chosen port, and restarts the development server on that
 same port. AI agents should use this runner instead of calling `npm run dev`
 directly.
+
+Use Node.js 24 on each machine. After pulling dependency changes, run `npm ci`;
+keep `package-lock.json` committed and never copy `node_modules` or `.next`
+between operating systems. `npm run clean:install` removes those local outputs
+and reinstalls from the existing lockfile. Local `.env.local` values must be
+configured separately on each machine.
+
+`npm run check:portability` rejects control characters, Windows-invalid names,
+case/Unicode collisions, and symlinks, including in projects without Git metadata.
+It also runs before builds. Do not automatically rename conflicting files:
+compare their contents first. Export tools should use filesystem APIs or
+NUL-delimited filename lists rather than newline-separated paths. CI performs
+fresh installs, production builds, and a local `/health` check on Linux, macOS,
+and Windows; this proves local startup, not authenticated platform readiness.
 
 Then connect the project to an EAI workspace:
 
