@@ -228,6 +228,37 @@
           ],
           "required_cross_service_surfaces": [],
           "required_deployed_contracts": []
+        },
+        {
+          "id": "generated-app-cross-platform-portability",
+          "description": "Portable project filenames, lockfile-preserving cleanup and fresh install/build/local health checks on macOS, Windows and Linux.",
+          "ci_only": true,
+          "owned_paths": [
+            ".gitattributes",
+            ".github/workflows/ci.yml",
+            "package.json",
+            "scripts/check-portability.mjs",
+            "scripts/clean.mjs",
+            "scripts/smoke-local-start.mjs",
+            "tests/portability.test.mjs",
+            "run.sh",
+            "run.ps1",
+            "run.bat",
+            "tests/cross-platform-lifecycle.test.mjs",
+            "scripts/start-local-production.mjs"
+          ],
+          "required_repo_tests": [
+            "tests/portability.test.mjs",
+            "tests/cross-platform-lifecycle.test.mjs"
+          ],
+          "required_ci_checks": [
+            "validate",
+            "portability (ubuntu-latest)",
+            "portability (macos-latest)",
+            "portability (windows-latest)"
+          ],
+          "required_cross_service_surfaces": [],
+          "required_deployed_contracts": []
         }
       ]
     }

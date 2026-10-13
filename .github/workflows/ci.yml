@@ -36,6 +36,12 @@ jobs:
           echo "@enterpriseaigroup:registry=https://npm.pkg.github.com" >> .npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> .npmrc
 
+      - name: Validate portable project paths
+        run: node scripts/check-portability.mjs
+
+      - name: Portability regression tests
+        run: npm run test:portability
+
       - name: Install dependencies
         # npm ci can miss optional native bindings used by Tailwind/Next on Ubuntu.
         run: npm install
@@ -72,3 +78,32 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+  portability:
+    name: portability (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      CYPRESS_INSTALL_BINARY: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Validate portable project paths
+        run: node scripts/check-portability.mjs
+      - name: Fresh dependency install
+        run: npm ci
+      - name: Portability regression tests
+        run: npm run test:portability
+      - name: Cross-platform lifecycle tests
+        run: npm run test:cross-platform-lifecycle
+      - name: Production build
+        run: npm run build
+      - name: Local production health check
+        run: npm run test:local-start
