@@ -12,6 +12,8 @@
             ".specify-pro/specs/3503-eai-managed-deploy/**",
             ".github/workflows/eai-app.yml",
             ".github/workflows/release.yml",
+            "scripts/generate-producer-manifest.mjs",
+            "tests/producer-manifest.test.mjs",
             "tests/fixtures/source-unknown/**",
             "tests/source-unknown-deployment-evidence.test.mjs",
             "scripts/source-unknown-deployment-evidence.mjs",
@@ -21,6 +23,7 @@
           "required_repo_tests": [
             "tests/source-unknown-deployment-evidence.test.mjs",
             "tests/next-release-version.test.mjs",
+            "tests/producer-manifest.test.mjs",
             "src/lib/platform/readiness.test.ts",
             "src/app/api/eai/readiness/route.test.ts"
           ],

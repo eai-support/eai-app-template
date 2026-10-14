@@ -1,4 +1,4 @@
-# Cuts an immutable release tag for reviewed template main commits that passed CI.
+# Cuts a version tag for reviewed template main commits that passed CI.
 #
 # Consumers (eai-cli `linked-sources.json`, Admin-Portal generated-app export)
 # pin to these releases instead of tracking the main branch, so a template
@@ -28,6 +28,9 @@ on:
 
 permissions:
   contents: write
+  actions: read
+  id-token: write
+  attestations: write
 
 concurrency:
   group: eai-app-template-release
@@ -41,7 +44,7 @@ jobs:
     if: >-
       github.repository == 'eai-support/eai-app-template' &&
       github.repository_id == '1205696460' &&
-      (github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' ||
       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
 
@@ -53,11 +56,44 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Skip commits that already carry a release tag
-        id: guard
+      - name: Verify exact main commit passed CI
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          HEAD_SHA=$(git rev-parse HEAD)
+          test "$HEAD_SHA" = "$GITHUB_SHA" || {
+            echo 'The workflow identity is not the tested source commit.' >&2
+            exit 1
+          }
+          git fetch origin main --depth=1
+          test "$HEAD_SHA" = "$(git rev-parse refs/remotes/origin/main)" || {
+            echo 'The tested source commit is no longer main.' >&2
+            exit 1
+          }
+          PASSED=$(gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
+            -f head_sha="$HEAD_SHA" -f branch=main -f status=success \
+            --jq '[.workflow_runs[] | select(.event == "push" and .conclusion == "success")] | length')
+          test "$PASSED" -gt 0 || {
+            echo 'No successful main-push CI run exists for the exact source commit.' >&2
+            exit 1
+          }
+
+      - name: Refuse partial release tags
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           EXISTING=$(git tag --points-at HEAD --list 'v*' | head -n1)
           if [ -n "$EXISTING" ]; then
+            IMMUTABLE=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${EXISTING}" --jq .immutable)
+            COMPLETE=$(gh release view "$EXISTING" --json assets \
+              --jq '[.assets[].name] | sort | . == ["producer-manifest.json", "producer-manifest.sigstore.json"]')
+            test "$IMMUTABLE" = 'true' && test "$COMPLETE" = 'true' || {
+              echo "Existing tag ${EXISTING} lacks the complete attested producer release." >&2
+              exit 1
+            }
             echo "::notice::$(git rev-parse --short HEAD) is already released as ${EXISTING}."
             echo "release=false" >> "$GITHUB_OUTPUT"
           else
@@ -73,7 +109,7 @@ jobs:
           echo "previous=${LATEST}" >> "$GITHUB_OUTPUT"
           echo "tag=v${NEXT}" >> "$GITHUB_OUTPUT"
 
-      - name: Push the release tag
+      - name: Prepare the release tag locally
         if: steps.guard.outputs.release == 'true'
         env:
           TAG: ${{ steps.version.outputs.tag }}
@@ -81,13 +117,79 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "Template release $TAG"
+
+      - name: Generate the exact-tree producer manifest
+        if: steps.guard.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          node scripts/generate-producer-manifest.mjs \
+            --tag "$TAG" --out dist/release/producer-manifest.json
+
+      - name: Attest the producer manifest
+        if: steps.guard.outputs.release == 'true'
+        id: attest
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: dist/release/producer-manifest.json
+
+      - name: Verify the attestation before publication
+        if: steps.guard.outputs.release == 'true'
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          set -euo pipefail
+          test -s "$BUNDLE_PATH"
+          SOURCE_SHA=$(git rev-parse HEAD)
+          REPO_ID=$(gh attestation verify dist/release/producer-manifest.json \
+            --repo "$GITHUB_REPOSITORY" --bundle "$BUNDLE_PATH" \
+            --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/heads/main" \
+            --source-digest "$SOURCE_SHA" --source-ref refs/heads/main \
+            --format json \
+            --jq '.[0].verificationResult.signature.certificate.sourceRepositoryIdentifier')
+          test "$REPO_ID" = "$GITHUB_REPOSITORY_ID" || {
+            echo 'Attestation certificate repository ID mismatch.' >&2
+            exit 1
+          }
+          cp "$BUNDLE_PATH" dist/release/producer-manifest.sigstore.json
+
+      - name: Push the release tag
+        if: steps.guard.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git ls-remote origin refs/heads/main | cut -f1)"
           git push origin "refs/tags/$TAG"
 
-      - name: Publish the GitHub release
+      - name: Prepare the GitHub release with all assets
         if: steps.guard.outputs.release == 'true'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
+          files: |
+            dist/release/producer-manifest.json
+            dist/release/producer-manifest.sigstore.json
+          fail_on_unmatched_files: true
           generate_release_notes: true
-          make_latest: true
+          draft: true
+
+      - name: Publish and read back immutable release
+        if: steps.guard.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --draft=false --latest
+          IMMUTABLE=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .immutable)
+          COMPLETE=$(gh release view "$TAG" --json assets \
+            --jq '[.assets[].name] | sort | . == ["producer-manifest.json", "producer-manifest.sigstore.json"]')
+          test "$IMMUTABLE" = 'true' && test "$COMPLETE" = 'true' || {
+            echo "Published release ${TAG} is not immutable with exact manifest assets." >&2
+            exit 1
+          }
