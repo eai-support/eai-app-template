@@ -1040,7 +1040,37 @@ jobs:
           });
           NODE
 
+      - name: Check GitHub attestation availability
+        id: attestation-availability
+        env:
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          EXPECTED_REPOSITORY_ID: ${{ github.repository_id }}
+          EXPECTED_OWNER_ID: ${{ github.repository_owner_id }}
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const { appendFileSync, readFileSync } = require('node:fs');
+          const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+          const repository = event.repository;
+          const owner = repository?.owner;
+          if (!repository || !owner ||
+              !Number.isSafeInteger(repository.id) || repository.id < 1 ||
+              String(repository.id) !== process.env.EXPECTED_REPOSITORY_ID ||
+              repository.full_name !== process.env.EXPECTED_REPOSITORY ||
+              typeof repository.private !== 'boolean' ||
+              !Number.isSafeInteger(owner.id) || owner.id < 1 ||
+              String(owner.id) !== process.env.EXPECTED_OWNER_ID ||
+              !['User', 'Organization'].includes(owner.type) ||
+              owner.login !== process.env.EXPECTED_REPOSITORY.split('/')[0]) {
+            throw new Error('GitHub attestation availability requires exact provider repository metadata.');
+          }
+          // SECURITY: GitHub rejects attestations for personal-account private repositories; OIDC-bound artifact verification remains mandatory.
+          const available = !(repository.private && owner.type === 'User');
+          appendFileSync(process.env.GITHUB_OUTPUT, `available=${available}\n`);
+          NODE
+
       - name: Attest immutable image archive provenance
+        if: ${{ steps.attestation-availability.outputs.available == 'true' }}
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: .eai-build/eai-generated-app-image.tar
