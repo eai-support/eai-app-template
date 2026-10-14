@@ -1754,6 +1754,18 @@ test('local CLI dispatch binds direct DEV tunnel, original template and numeric 
       '--local-e2e-template-commit-sha', 'd'.repeat(40),
       '--local-e2e-predecessor-operation-id', predecessorOperationId];
     runEvidenceScript(successor);
+    runEvidenceScript(['collect', ...successor.slice(1),
+      '--repo', 'customer/rates-review', '--workflow', '.github/workflows/eai-app.yml',
+      '--ref', 'refs/heads/main', '--branch', 'main', '--workflow-run-id', '123456789',
+      '--workflow-run-attempt', '1', '--artifact-id', '987654321',
+      '--artifact-digest', `sha256:${'d'.repeat(64)}`, '--image-digest', `sha256:${'c'.repeat(64)}`]);
+    const collected = JSON.parse(readFileSync(join(root,
+      '.eai-build/evidence/source-unknown-deployment-evidence.json'), 'utf8'));
+    const successorTuple = ['eai.cli-managed-local-e2e-aud.v1',
+      'https://careful-8000.eai.devtunnels.ms', operationId, '12345', 'd'.repeat(40), expiry];
+    assert.equal(collected.localE2e.templateCommitSha, 'd'.repeat(40));
+    assert.equal(collected.localE2e.audience,
+      'api://enterprise-ai-publicapi/eai-cli-generated/local-v1/' + digest(JSON.stringify(successorTuple)));
     writeFileSync(markerPath, JSON.stringify({ ...successorMarker,
       predecessor: { operationId: `cli-managed-${'f'.repeat(32)}` } }));
     assert.equal(spawnSync(process.execPath, [evidenceScript, ...successor], { encoding: 'utf8' }).status, 1);
