@@ -5624,7 +5624,9 @@ syncBuiltinESMExports();
 const root = repoRoot;
 const fixtures = join(root, 'tests/fixtures/source-unknown');
 const canonical = regularBytes(workflowPath);
-const legacyCanonical = regularBytes(join(fixtures, 'eai-app.yml'));
+const legacyCanonical = existsSync(join(fixtures, 'eai-app.yml'))
+  ? regularBytes(join(fixtures, 'eai-app.yml'))
+  : canonical;
 // INVARIANT: synthetic controlled input stays inline so legacy four-file repairs execute every control without new fixture dependencies.
 const generated = gunzipSync(
   Buffer.from(
