@@ -33,7 +33,7 @@ const fixtureDirectory = 'tests/fixtures/source-unknown';
 const canonicalDigest =
   'bce4e34fe5c47377e6a679966a37257d944cd00ccf3c15b4ba437f144ed559ed';
 const currentWorkflowDigest =
-  'ecb61e8922594ec9b74a67301156787cd3ce656c43d6254d3dfd8a6dbe08bb6c';
+  '74ede3c4e1de12fa5f63135349e61365bd845443dbb4dbe51573d8c490baa1d5';
 const generatedDigest =
   '77d4951b3e6852ead73cef8b9e8901e3de774f9aca70f71cc0c932c13903ff32';
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -1615,6 +1615,77 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   assert.doesNotMatch(handoffJob, /\|\s*tee /);
   for (const action of workflow.matchAll(/^\s+uses:\s+([^\s#]+)/gm)) {
     assert.match(action[1], /@[a-f0-9]{40}$/);
+  }
+});
+
+test('GitHub attestation availability is exact and leaves signed handoff required', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const decision = workflow.match(
+    /- name: Check GitHub attestation availability[\s\S]*?run: \|\n          node - <<'NODE'\n([\s\S]*?)\n          NODE/,
+  );
+  assert.ok(decision);
+  const script = decision[1].replace(/^ {10}/gm, '');
+  assert.match(
+    workflow,
+    /- name: Attest immutable image archive provenance\n        if: \$\{\{ steps\.attestation-availability\.outputs\.available == 'true' \}\}/,
+  );
+  assert.match(
+    workflow,
+    /- name: Request GitHub OIDC token and submit workflow evidence\n        env:/,
+  );
+  const directory = mkdtempSync(join(tmpdir(), 'eai-attestation-availability-'));
+  const eventPath = join(directory, 'event.json');
+  const outputPath = join(directory, 'output');
+  const repository = {
+    id: 1414837259,
+    full_name: 'customer/app',
+    private: true,
+    owner: { id: 332652381, login: 'customer', type: 'User' },
+  };
+  const check = (candidate) => {
+    writeFileSync(eventPath, JSON.stringify({ repository: candidate }));
+    writeFileSync(outputPath, '');
+    const result = spawnSync(process.execPath, ['-'], {
+      input: script,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GITHUB_EVENT_PATH: eventPath,
+        GITHUB_OUTPUT: outputPath,
+        EXPECTED_REPOSITORY: 'customer/app',
+        EXPECTED_REPOSITORY_ID: '1414837259',
+        EXPECTED_OWNER_ID: '332652381',
+      },
+    });
+    return { result, output: readFileSync(outputPath, 'utf8') };
+  };
+  try {
+    const personalPrivate = check(repository);
+    assert.equal(personalPrivate.result.status, 0, personalPrivate.result.stderr);
+    assert.equal(personalPrivate.output, 'available=false\n');
+    for (const supported of [
+      { ...repository, private: false },
+      { ...repository, owner: { ...repository.owner, type: 'Organization' } },
+    ]) {
+      const outcome = check(supported);
+      assert.equal(outcome.result.status, 0, outcome.result.stderr);
+      assert.equal(outcome.output, 'available=true\n');
+    }
+    for (const invalid of [
+      { ...repository, private: undefined },
+      { ...repository, private: 'true' },
+      { ...repository, id: 3 },
+      { ...repository, full_name: 'other/app' },
+      { ...repository, owner: { ...repository.owner, type: undefined } },
+      { ...repository, owner: { ...repository.owner, id: 3 } },
+      { ...repository, owner: { ...repository.owner, login: 'other' } },
+    ]) {
+      const outcome = check(invalid);
+      assert.notEqual(outcome.result.status, 0);
+      assert.equal(outcome.output, '');
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
