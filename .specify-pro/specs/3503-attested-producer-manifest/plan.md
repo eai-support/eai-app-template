@@ -3,11 +3,11 @@
 - **Engineer:** Van / #3503 delivery team
 - **Primary repo:** `eai-support/eai-app-template`
 - **Issue:** `enterpriseaigroup/Issues2025#3503`
-- **Status:** draft; no feature implementation or merge authorized by this document
+- **Status:** approved for isolated branch implementation; release activation and merge remain gated by the controls and evidence below
 
 ## 1. Why — business outcome
 
-Every new approved app-template commit currently needs a separate AdminAPI and PublicAPI code change that adds its commit and workflow/collector hashes to static allowlists. AdminAPI #475 and PublicAPI #1106 did this for v1.0.17. That is a release bottleneck and makes a one-off local customer fixture look like a product release. The outcome is that an independently verified template release can be adopted without new backend code while unreviewed workflow bytes still fail closed. Success is a subsequent template version entering the customer deployment path through one release manifest and normal product pin/config adoption, with no new per-version AdminAPI/PublicAPI code PR.
+Every new approved app-template commit currently needs a separate AdminAPI and PublicAPI code change that adds its commit and workflow/collector hashes to static allowlists. Template release 1.0.17 required AdminAPI #475 and PublicAPI #1106. That is a release bottleneck and makes a one-off local customer fixture look like a product release. The outcome is that an independently verified template release can be adopted without new backend code while unreviewed workflow bytes still fail closed. Success is a subsequent template version entering the customer deployment path through one release manifest and normal product pin/config adoption, with no new per-version AdminAPI/PublicAPI code PR.
 
 ## 2. Customer journey
 
@@ -27,7 +27,7 @@ This spans the template release workflow and the AdminAPI/PublicAPI producer-adm
 
 ## 6. Multi-region
 
-The manifest represents one global, public template release, while each operation is still scoped to its existing tenant, app, home region, and regional PublicAPI. No `homeRegion` format change is proposed (`au` remains distinct from Azure `ae`). Verification must use the same pinned digest in AU, CC, and GWC, with bounded regional fetch/cache behavior and fail-closed errors. New App Configuration is deferred unless implementation proves a need; if introduced it must be defined in Infra2025 for all environments and read back live.
+The manifest represents one global, public template release, while each operation is still scoped to its existing tenant, app, home region, and regional PublicAPI. No `homeRegion` format change is proposed (`au` remains distinct from Azure `ae`). Verification must use the same pinned digest in AU, CC, and GWC, with bounded regional fetch/cache behavior and fail-closed errors. Both AdminAPI and PublicAPI production images use Python 3.14; TypeScript verification is needed for the CLI and Installer package. New App Configuration is deferred unless implementation proves a need; if introduced it must be defined in Infra2025 for all environments and read back live.
 
 ## 7. Architecture
 
@@ -44,7 +44,7 @@ flowchart LR
   G --> N[TenantInfra exact-commit deployment]
 ```
 
-Manifest v1 binds the canonical repository ID `1205696460`, release tag, exact template commit, producer workflow path and SHA-256, collector path and SHA-256, and release CI provenance. Its canonical bytes, digest, attestation bundle, and trusted workflow identity form one release artifact. New operations store a manifest reference/digest plus the exact producer pair in the existing HMAC-sealed operation/anchor. Existing operations without a manifest use the existing static map only; migration never recomputes their producer from today's release.
+Manifest v1 binds the canonical repository ID `1205696460`, release tag, exact template commit, producer workflow path and SHA-256, collector path and SHA-256, and release CI provenance. Its canonical bytes, digest, GitHub artifact-attestation bundle, and trusted workflow identity form one release artifact. AdminAPI and PublicAPI each run a pinned `gh attestation verify` binary against those same immutable bytes and a TUF-validated trusted root, then independently check the verified certificate's source repository ID, workflow identity, commit, ref, subject digest, and manifest fields. A repository name or workflow-controlled predicate alone is insufficient. New operations store a manifest reference/digest plus the exact producer pair in the existing HMAC-sealed operation/anchor. Existing operations without a manifest use the existing static map only; migration never recomputes their producer from today's release.
 
 ## 8. Flows
 
@@ -84,7 +84,7 @@ The number of releases is low relative to deployment operations. Verification sh
 
 ## 11. Infra and config
 
-The intended MVP reuses the template GitHub release, GitHub Actions attestation, existing service GitHub App credentials, and current operation storage. No new Azure resource, secret, or environment variable is assumed. Template tag/release protection and privileged workflow path protection are required release controls, not merely source-code comments. The live GitHub rules read for `eai-support/eai-app-template` currently shows only an organization Copilot-review rule on `main`, and the branch-protection endpoint reports unprotected. Its v1.0.17 release API says `immutable: false` and has no release assets. The existing release workflow also allows manual dispatch without an exact-commit CI check. GitHub documents [tag rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets), [release immutability](https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/establish-provenance-and-integrity/prevent-release-changes), and [artifact-attestation verification](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/verify-attestations-offline). The `gh attestation verify` contract requires checking signed certificate identity/repository ID and signer workflow, because predicate fields are workflow-controlled. OPEN QUESTION: who owns enabling and recording tag/release/workflow protection, and which verified attestation API/library works in both backend runtimes without a shared secret? If configuration is required, Infra2025 owns DEV/TEST/PROD/region parity and live readback.
+The MVP reuses the template GitHub release, GitHub Actions artifact attestation, existing service GitHub App credentials, and current operation storage. The only new runtime component is a version-pinned GitHub CLI verifier packaged in the AdminAPI and PublicAPI images; its GitHub TUF trust root is refreshed and cached with a bounded policy, while an imported `trusted_root.jsonl` plus bundle permits offline verification. No new Azure resource, signing secret, or environment variable is assumed. A real GitHub Actions DSSE bundle was verified offline with `gh 2.96.0` against its artifact, exact repository, workflow, source SHA, and ref; a changed artifact and wrong source SHA were rejected. Python `sigstore` cannot parse GitHub's TSA-only bundle, so it is not an acceptable verifier fallback. The CLI/Installer pin verifies the manifest SHA-256 and exact release identity; both backends independently verify its attestation. Template tag/release protection and privileged workflow path protection are activation requirements, not merely source-code comments. The live GitHub rules read for `eai-support/eai-app-template` currently shows only an organization Copilot-review rule on `main`, and the branch-protection endpoint reports unprotected. Its v1.0.17 release API says `immutable: false` and has no release assets. The existing release workflow also allows manual dispatch without an exact-commit CI check. The template release/security owner must enable and record a protected version-tag ruleset, protected release-workflow changes, immutable release assets, and an exact-commit successful CI requirement before any new manifest is admitted; until then verification fails closed and historical operations keep their existing pins. GitHub documents [tag rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets), [release immutability](https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/establish-provenance-and-integrity/prevent-release-changes), and [offline artifact-attestation verification](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/verify-attestations-offline). The `gh attestation verify` result must be checked for signed certificate source repository ID and signer workflow; predicate fields are workflow-controlled. The named configuration owner and completed control receipts remain explicit release blockers. If new App Configuration is required, Infra2025 owns DEV/TEST/PROD/region parity and live readback.
 
 ## 12. Options and reasoning
 
@@ -102,7 +102,7 @@ Smallest service change, but lets a caller select its own trusted workflow bytes
 
 ### Decision
 
-Propose Option B. OPEN QUESTION: Product and CEO must agree the initial MVP versus later cleanup, and the exact trust anchor for a GitHub artifact attestation must pass security review. The AI recommendation is Option B; no engineer/stakeholder decision has been recorded yet.
+Choose Option B for the 80:20 MVP. Use GitHub's version-pinned CLI as the common cryptographic verifier in both Python services; each service still independently fetches and checks the attestation and manifest. CLI/Installer verify their packaged manifest digest and release pin. The security boundary remains disabled until the template release/security owner supplies the live protection receipts in Section 11 and the exact verifier package plus signed-field checks pass review. Product and CEO approvals below authorize branch implementation and validation, not an unprotected release or customer sign-off.
 
 ## 13. Test and release evidence
 
@@ -112,7 +112,7 @@ Template CI must test canonical manifest generation from the exact Git tree, suc
 
 ### In MVP
 
-Proposed: one trusted manifest per future template release; exact-byte and attestation verification independently in AdminAPI/PublicAPI; manifest digest sealed per new operation; historical static-map dual-read; CLI/Installer pin verification; owning tests and one deployed contract. This is a proposal, not an approved commitment.
+Approved: one trusted manifest per future template release; exact-byte and attestation verification independently in AdminAPI/PublicAPI; manifest digest sealed per new operation; historical static-map dual-read; CLI/Installer pin verification; owning tests and one deployed contract. Development stays in isolated branches and DEV runs from exact checkouts before a merge decision. No new manifest may be admitted before Section 11 trust controls are recorded.
 
 ### Deferred
 
@@ -124,6 +124,6 @@ None proposed.
 
 ### Decision log
 
-- OPEN QUESTION: Product approval name and date.
-- OPEN QUESTION: CEO approval name and date.
-- OPEN QUESTION: security owner confirms attestation verifier and tag/release protection before implementation.
+- Product: Vandana Rao Emaneni, 2026-10-15 (Australia/Sydney), approved this Section 14 MVP in chat.
+- CEO: Vandana Rao Emaneni, 2026-10-15 (Australia/Sydney), approved this Section 14 MVP in chat.
+- The offline trust spike selected `gh attestation verify` with exact signed-field checks; this permits isolated branch implementation. The template release/security owner must be named and provide live tag, workflow, release-immutability, CI, and verifier-package receipts before activation or merge. This approval does not waive those controls.
