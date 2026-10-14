@@ -1729,16 +1729,26 @@ test('local CLI dispatch binds direct DEV tunnel, original template and numeric 
     const wrongInitialTemplate = [...args, '--local-e2e-template-commit-sha', 'd'.repeat(40)];
     assert.equal(spawnSync(process.execPath, [evidenceScript, ...wrongInitialTemplate], { encoding: 'utf8' }).status, 1);
     const predecessorOperationId = `cli-managed-${'e'.repeat(32)}`;
-    writeFileSync(join(root, '.eai/cli-managed-source-operation.json'), JSON.stringify({
+    const historicalOperationId = `cli-managed-${'9'.repeat(32)}`;
+    const successorMarker = {
       schemaVersion: 'eai.cli_managed_source_operation.v1',
-      sourceMode: 'eai-cli-generated', operationId: predecessorOperationId, environment: 'dev',
+      sourceMode: 'eai-cli-generated', operationId: historicalOperationId, environment: 'dev',
       tenantId: 'tenant-parent', targetTenantId: 'hosting-tenant', appKey: 'rates-review',
       repositoryAuthority: 'customer-owned', templateCommitSha: 'b'.repeat(40),
-    }));
+      predecessor: { operationId: predecessorOperationId },
+    };
+    const markerPath = join(root, '.eai/cli-managed-source-operation.json');
+    writeFileSync(markerPath, JSON.stringify(successorMarker));
     const successor = [...args,
       '--local-e2e-template-commit-sha', 'd'.repeat(40),
       '--local-e2e-predecessor-operation-id', predecessorOperationId];
     runEvidenceScript(successor);
+    writeFileSync(markerPath, JSON.stringify({ ...successorMarker,
+      predecessor: { operationId: `cli-managed-${'f'.repeat(32)}` } }));
+    assert.equal(spawnSync(process.execPath, [evidenceScript, ...successor], { encoding: 'utf8' }).status, 1);
+    writeFileSync(markerPath, JSON.stringify({ ...successorMarker, repositoryAuthority: 'eai-managed' }));
+    assert.equal(spawnSync(process.execPath, [evidenceScript, ...successor], { encoding: 'utf8' }).status, 1);
+    writeFileSync(markerPath, JSON.stringify(successorMarker));
     for (const mutated of [
       [...args],
       [...successor.slice(0, -1), `cli-managed-${'f'.repeat(32)}`],

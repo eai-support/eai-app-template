@@ -237,7 +237,11 @@ function localE2eBinding(options, mode, environment, root) {
   if (
     binding.schemaVersion !== 'eai.cli_managed_source_operation.v1' ||
     binding.sourceMode !== mode ||
-    binding.operationId !== (predecessorOperationId || operationId) ||
+    (predecessorOperationId
+      ? (binding.predecessor?.operationId !== predecessorOperationId ||
+        !/^cli-managed-[a-f0-9]{32}$/.test(binding.operationId || '') ||
+        binding.operationId === operationId)
+      : binding.operationId !== operationId) ||
     binding.tenantId !== option(options, 'tenantId') ||
     binding.appKey !== option(options, 'appKey') ||
     binding.targetTenantId !== option(options, 'targetTenantId') ||
