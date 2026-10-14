@@ -1724,6 +1724,17 @@ test('local CLI dispatch binds direct DEV tunnel, original template and numeric 
       '--local-e2e-expires-at', expiry, '--github-event-name', 'workflow_dispatch',
       '--reusable-call', 'false', '--repository-id', '12345'];
     runEvidenceScript(args);
+    writeFileSync(join(root, '.eai/cli-managed-source-operation.json'), JSON.stringify({
+      schemaVersion: 'eai.cli_managed_source_operation.v1', sourceMode: 'eai-cli-generated',
+      operationId, environment: 'dev', tenantId: 'tenant-parent', targetTenantId: 'hosting-tenant',
+      appKey: 'rates-review', repositoryAuthority: 'customer-owned', templateCommitSha: 'b'.repeat(40),
+    }));
+    assert.equal(spawnSync(process.execPath, [evidenceScript, ...args], { encoding: 'utf8' }).status, 1);
+    writeFileSync(join(root, '.eai/cli-managed-source-operation.json'), JSON.stringify({
+      schemaVersion: 'eai.cli_managed_source_operation.v1', sourceMode: 'eai-cli-generated',
+      operationId, environment: 'dev', tenantId: 'tenant-parent', targetTenantId: 'hosting-tenant',
+      appKey: 'rates-review', repositoryAuthority: 'eai-managed', templateCommitSha: 'b'.repeat(40),
+    }));
     const sameTemplate = [...args, '--local-e2e-template-commit-sha', 'b'.repeat(40)];
     runEvidenceScript(sameTemplate);
     const wrongInitialTemplate = [...args, '--local-e2e-template-commit-sha', 'd'.repeat(40)];
@@ -1790,6 +1801,36 @@ test('local CLI dispatch binds direct DEV tunnel, original template and numeric 
     assert.doesNotMatch(reusableInputs, /local_e2e_tunnel:|local_e2e_expires_at:|local_e2e_template_commit_sha:|local_e2e_predecessor_operation_id:/);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('build and OIDC workflow stages enforce the same server-pinned successor template', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const buildError = workflow.indexOf("throw new Error('Build evidence local successor binding changed.');");
+  const buildStart = workflow.lastIndexOf('if (sourceUnknownLocal', buildError);
+  const buildEnd = workflow.indexOf('\n            const tuple =', buildError);
+  const oidcStep = workflow.indexOf('name: Request GitHub OIDC token and submit workflow evidence');
+  const oidcStart = workflow.indexOf('if (sourceUnknownLocal\n', oidcStep);
+  const oidcEnd = workflow.indexOf('\n          const expectedKeys', oidcStart);
+  assert.ok(buildError > 0 && buildStart > 0 && buildEnd > buildError);
+  assert.ok(oidcStep > 0 && oidcStart > oidcStep && oidcEnd > oidcStart);
+  for (const guard of [workflow.slice(buildStart, buildEnd), workflow.slice(oidcStart, oidcEnd)]) {
+    const runGuard = (sourceUnknownLocal, localSha, serverSha, predecessorId = '') => runInNewContext(guard, {
+      sourceUnknownLocal,
+      local: { templateCommitSha: localSha },
+      process: {
+        env: {
+          LOCAL_E2E_TEMPLATE_COMMIT_SHA: serverSha,
+          LOCAL_E2E_PREDECESSOR_OPERATION_ID: predecessorId,
+        },
+        exit(code) { throw new Error(`exit ${code}`); },
+      },
+    });
+    assert.doesNotThrow(() => runGuard(false, 'a'.repeat(40), 'a'.repeat(40), `cli-managed-${'b'.repeat(32)}`));
+    assert.throws(() => runGuard(false, 'a'.repeat(40), 'c'.repeat(40), `cli-managed-${'b'.repeat(32)}`));
+    assert.doesNotThrow(() => runGuard(false, 'a'.repeat(40), ''));
+    assert.throws(() => runGuard(true, 'a'.repeat(40), 'c'.repeat(40)));
+    assert.throws(() => runGuard(true, 'a'.repeat(40), '', `cli-managed-${'b'.repeat(32)}`));
   }
 });
 
