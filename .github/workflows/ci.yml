@@ -61,6 +61,9 @@ jobs:
       - name: Producer manifest release contract test
         run: npm run test:producer-manifest
 
+      - name: Draft release asset verification test
+        run: npm run test:release-assets
+
       - name: Unit tests
         run: npm run test:unit:ci
 

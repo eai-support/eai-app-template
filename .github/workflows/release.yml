@@ -156,6 +156,19 @@ jobs:
           }
           cp "$BUNDLE_PATH" dist/release/producer-manifest.sigstore.json
 
+      - name: Require immutable releases before creating a release
+        if: steps.guard.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ENABLED=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/immutable-releases" --jq .enabled)
+          test "$ENABLED" = 'true' || {
+            echo 'Immutable releases must be enabled before a producer release is created.' >&2
+            exit 1
+          }
+
       - name: Push the release tag
         if: steps.guard.outputs.release == 'true'
         env:
@@ -167,7 +180,7 @@ jobs:
 
       - name: Prepare the GitHub release with all assets
         if: steps.guard.outputs.release == 'true'
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
@@ -178,6 +191,29 @@ jobs:
           generate_release_notes: true
           draft: true
 
+      - name: Verify uploaded draft release assets
+        if: steps.guard.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          REMOTE_SHA=$(git ls-remote origin "refs/tags/${TAG}^{}" | cut -f1)
+          test "$REMOTE_SHA" = "$(git rev-parse HEAD)" || {
+            echo "Draft release ${TAG} does not point at the attested source commit." >&2
+            exit 1
+          }
+          DRAFT=$(gh release view "$TAG" --json isDraft,assets \
+            --jq '.isDraft and ([.assets[].name] | sort | . == ["producer-manifest.json", "producer-manifest.sigstore.json"])')
+          test "$DRAFT" = 'true' || {
+            echo "Draft release ${TAG} is absent or has unexpected assets." >&2
+            exit 1
+          }
+          DOWNLOADED=$(mktemp -d)
+          trap 'rm -rf "$DOWNLOADED"' EXIT
+          gh release download "$TAG" --dir "$DOWNLOADED"
+          node scripts/verify-draft-release-assets.mjs dist/release "$DOWNLOADED"
+
       - name: Publish and read back immutable release
         if: steps.guard.outputs.release == 'true'
         env:
@@ -185,6 +221,17 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
+          ENABLED=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/immutable-releases" --jq .enabled)
+          test "$ENABLED" = 'true' || {
+            echo 'Immutable releases were disabled before publication.' >&2
+            exit 1
+          }
+          REMOTE_SHA=$(git ls-remote origin "refs/tags/${TAG}^{}" | cut -f1)
+          test "$REMOTE_SHA" = "$(git rev-parse HEAD)" || {
+            echo "Draft release ${TAG} changed its source tag before publication." >&2
+            exit 1
+          }
           gh release edit "$TAG" --draft=false --latest
           IMMUTABLE=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .immutable)
           COMPLETE=$(gh release view "$TAG" --json assets \
@@ -193,3 +240,12 @@ jobs:
             echo "Published release ${TAG} is not immutable with exact manifest assets." >&2
             exit 1
           }
+          REMOTE_SHA=$(git ls-remote origin "refs/tags/${TAG}^{}" | cut -f1)
+          test "$REMOTE_SHA" = "$(git rev-parse HEAD)" || {
+            echo "Published release ${TAG} does not point at the attested source commit." >&2
+            exit 1
+          }
+          DOWNLOADED=$(mktemp -d)
+          trap 'rm -rf "$DOWNLOADED"' EXIT
+          gh release download "$TAG" --dir "$DOWNLOADED"
+          node scripts/verify-draft-release-assets.mjs dist/release "$DOWNLOADED"
