@@ -156,10 +156,32 @@ jobs:
           }
           cp "$BUNDLE_PATH" dist/release/producer-manifest.sigstore.json
 
+      - name: Require release verifier App credentials
+        if: steps.guard.outputs.release == 'true'
+        env:
+          APP_ID: ${{ vars.TEMPLATE_RELEASE_ADMIN_READ_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.TEMPLATE_RELEASE_ADMIN_READ_PRIVATE_KEY }}
+        run: |
+          test -n "$APP_ID" && test -n "$APP_PRIVATE_KEY" || {
+            echo 'Repository-scoped immutable-release verifier App credentials are missing.' >&2
+            exit 1
+          }
+
+      - name: Create repository-scoped immutable-release read token
+        if: steps.guard.outputs.release == 'true'
+        id: immutable-read-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.TEMPLATE_RELEASE_ADMIN_READ_APP_ID }}
+          private-key: ${{ secrets.TEMPLATE_RELEASE_ADMIN_READ_PRIVATE_KEY }}
+          owner: eai-support
+          repositories: eai-app-template
+          permission-administration: read
+
       - name: Require immutable releases before creating a release
         if: steps.guard.outputs.release == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.immutable-read-token.outputs.token }}
         run: |
           set -euo pipefail
           ENABLED=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
@@ -218,10 +240,12 @@ jobs:
         if: steps.guard.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          IMMUTABLE_READ_TOKEN: ${{ steps.immutable-read-token.outputs.token }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
-          ENABLED=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+          test -n "$IMMUTABLE_READ_TOKEN"
+          ENABLED=$(GH_TOKEN="$IMMUTABLE_READ_TOKEN" gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
             "repos/${GITHUB_REPOSITORY}/immutable-releases" --jq .enabled)
           test "$ENABLED" = 'true' || {
             echo 'Immutable releases were disabled before publication.' >&2

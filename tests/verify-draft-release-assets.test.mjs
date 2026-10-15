@@ -117,3 +117,61 @@ test('the release workflow gates immutability and compares assets on both sides 
   assert.ok(firstTagReadback > tagPush && firstTagReadback < publish);
   assert.ok(secondTagReadback > publish && secondTagReadback < secondVerify);
 });
+
+test('immutable-release reads use only a single-repository App token', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  const credentialGuard = workflow.indexOf(
+    'name: Require release verifier App credentials',
+  );
+  const tokenStep = workflow.indexOf('id: immutable-read-token');
+  const preflight = workflow.indexOf(
+    'name: Require immutable releases before creating a release',
+  );
+  const publish = workflow.indexOf(
+    'name: Publish and read back immutable release',
+  );
+  const tokenBinding = '${{ steps.immutable-read-token.outputs.token }}';
+  assert.ok(
+    credentialGuard > 0 &&
+      credentialGuard < tokenStep &&
+      tokenStep < preflight &&
+      preflight < publish,
+  );
+  assert.ok(
+    workflow
+      .slice(credentialGuard, tokenStep)
+      .includes('test -n "$APP_ID" && test -n "$APP_PRIVATE_KEY"'),
+  );
+  const action = workflow.slice(tokenStep, preflight);
+  assert.match(
+    action,
+    /uses: actions\/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349/,
+  );
+  assert.match(
+    action,
+    /app-id: \$\{\{ vars\.TEMPLATE_RELEASE_ADMIN_READ_APP_ID \}\}/,
+  );
+  assert.match(
+    action,
+    /private-key: \$\{\{ secrets\.TEMPLATE_RELEASE_ADMIN_READ_PRIVATE_KEY \}\}/,
+  );
+  assert.match(
+    action,
+    /owner: eai-support\n\s+repositories: eai-app-template\n\s+permission-administration: read/,
+  );
+  assert.match(
+    workflow.slice(preflight, publish),
+    /GH_TOKEN: \$\{\{ steps\.immutable-read-token\.outputs\.token \}\}/,
+  );
+  const publication = workflow.slice(publish);
+  assert.ok(publication.includes(`IMMUTABLE_READ_TOKEN: ${tokenBinding}`));
+  assert.equal(workflow.split(tokenBinding).length - 1, 2);
+  assert.match(publication, /GH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(publication, /GH_TOKEN="\$IMMUTABLE_READ_TOKEN" gh api/);
+  assert.ok(
+    !publication.includes('GH_TOKEN="$IMMUTABLE_READ_TOKEN" gh release'),
+  );
+});
