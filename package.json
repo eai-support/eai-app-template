@@ -41,6 +41,8 @@
     "test:ai-workspace-guidance": "node --test tests/ai-workspace-guidance.test.mjs",
     "test:object-types-generator": "node --test tests/generate-object-types-json.test.mjs",
     "test:release-version": "node --test tests/next-release-version.test.mjs",
+    "test:producer-manifest": "node --test tests/producer-manifest.test.mjs",
+    "test:release-assets": "node --test tests/verify-draft-release-assets.test.mjs",
     "test:smoke": "npm run check:portability && npm run check:route-exports && npm run eai:config:validate && npm run check:object-types && npm run test:ai-workspace-guidance && npm run test:cross-platform-lifecycle && npm run test:portability",
     "test:e2e": "playwright test tests/e2e tests/business-scenarios",
     "test:business-scenarios": "playwright test tests/business-scenarios",

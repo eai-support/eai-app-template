@@ -53,7 +53,7 @@ test('only the reviewed template repository can run the inherited release job', 
     jobCondition,
     "github.repository == 'eai-support/eai-app-template' && " +
       "github.repository_id == '1205696460' && " +
-      "(github.event_name == 'workflow_dispatch' || " +
+      "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' || " +
       "github.event.workflow_run.conclusion == 'success')",
   );
 });
