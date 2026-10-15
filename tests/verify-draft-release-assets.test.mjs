@@ -11,7 +11,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { verifyDraftReleaseAssets } from '../scripts/verify-draft-release-assets.mjs';
+import {
+  verifyDraftReleaseAssets,
+  verifyExistingReleaseAssets,
+} from '../scripts/verify-draft-release-assets.mjs';
 
 const MANIFEST = 'producer-manifest.json';
 const BUNDLE = 'producer-manifest.sigstore.json';
@@ -81,6 +84,48 @@ test('rejects missing or unexpected draft assets', (t) => {
   );
 });
 
+test('published release accepts its original source manifest and a nonempty attestation bundle', (t) => {
+  const { local, downloaded } = fixture(t);
+  writeFileSync(
+    join(downloaded, BUNDLE),
+    'different valid bundle checked by gh attestation verify',
+  );
+  assert.doesNotThrow(() => verifyExistingReleaseAssets(local, downloaded));
+});
+
+test('published release rejects changed manifest bytes or missing attestation asset', (t) => {
+  const { local, downloaded } = fixture(t);
+  writeFileSync(join(downloaded, MANIFEST), 'changed');
+  assert.throws(
+    () => verifyExistingReleaseAssets(local, downloaded),
+    /Published release asset SHA-256 mismatch/,
+  );
+  writeFileSync(
+    join(downloaded, MANIFEST),
+    readFileSync(join(local, MANIFEST)),
+  );
+  rmSync(join(downloaded, BUNDLE));
+  assert.throws(
+    () => verifyExistingReleaseAssets(local, downloaded),
+    /asset names differ/,
+  );
+});
+
+test('published release rejects symlinked or empty attestation asset', (t) => {
+  const { local, downloaded } = fixture(t);
+  writeFileSync(join(downloaded, BUNDLE), '');
+  assert.throws(
+    () => verifyExistingReleaseAssets(local, downloaded),
+    /nonempty regular file/,
+  );
+  rmSync(join(downloaded, BUNDLE));
+  symlinkSync(join(local, BUNDLE), join(downloaded, BUNDLE));
+  assert.throws(
+    () => verifyExistingReleaseAssets(local, downloaded),
+    /nonempty regular file/,
+  );
+});
+
 test('the release workflow gates immutability and compares assets on both sides of publication', () => {
   const workflow = readFileSync(
     new URL('../.github/workflows/release.yml', import.meta.url),
@@ -92,6 +137,7 @@ test('the release workflow gates immutability and compares assets on both sides 
   const tagPush = workflow.indexOf('git push origin "refs/tags/$TAG"');
   const firstVerify = workflow.indexOf(
     'node scripts/verify-draft-release-assets.mjs',
+    tagPush,
   );
   const publish = workflow.indexOf('gh release edit "$TAG" --draft=false');
   const secondVerify = workflow.indexOf(
@@ -104,6 +150,7 @@ test('the release workflow gates immutability and compares assets on both sides 
   );
   const firstTagReadback = workflow.indexOf(
     'git ls-remote origin "refs/tags/${TAG}^{}"',
+    tagPush,
   );
   const secondTagReadback = workflow.indexOf(
     'git ls-remote origin "refs/tags/${TAG}^{}"',
@@ -116,6 +163,51 @@ test('the release workflow gates immutability and compares assets on both sides 
   assert.ok(secondPreflight > firstVerify && secondPreflight < publish);
   assert.ok(firstTagReadback > tagPush && firstTagReadback < publish);
   assert.ok(secondTagReadback > publish && secondTagReadback < secondVerify);
+});
+
+test('an interrupted tag or draft resumes exact release without creating a new tag', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  const guard = workflow.slice(
+    workflow.indexOf('name: Resolve exact release state'),
+    workflow.indexOf('name: Verify an already-published release'),
+  );
+  assert.match(
+    guard,
+    /git ls-remote origin "refs\/tags\/\$\{EXISTING\}\^\{\}"/,
+  );
+  assert.match(guard, /if \[ "\$DRAFT" = true \]; then[\s\S]*?resume=true/);
+  assert.match(guard, /404\[\[:space:\]\][\s\S]*?resume=true/);
+  assert.match(workflow, /steps\.guard\.outputs\.resume != 'true'/);
+  assert.match(workflow, /overwrite_files: true/);
+});
+
+test('a published release is verified before a rerun succeeds', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  const published = workflow.slice(
+    workflow.indexOf('name: Verify an already-published release'),
+    workflow.indexOf('name: Resolve the next release version'),
+  );
+  assert.match(published, /generate-producer-manifest\.mjs --tag "\$TAG"/);
+  assert.match(
+    published,
+    /verify-draft-release-assets\.mjs "\$EXPECTED" "\$DOWNLOADED" --existing/,
+  );
+  assert.match(
+    published,
+    /gh attestation verify "\$DOWNLOADED\/producer-manifest\.json"/,
+  );
+  assert.match(
+    published,
+    /--source-digest "\$\(git rev-parse HEAD\)" --source-ref refs\/heads\/main/,
+  );
+  assert.match(published, /test "\$REPO_ID" = "\$GITHUB_REPOSITORY_ID"/);
+  assert.match(published, /--jq \.immutable\)" = true/);
 });
 
 test('immutable-release reads use only a single-repository App token', () => {

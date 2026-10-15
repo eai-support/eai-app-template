@@ -79,38 +79,105 @@ jobs:
             exit 1
           }
 
-      - name: Refuse partial release tags
+      - name: Resolve exact release state
         id: guard
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          EXISTING=$(git tag --points-at HEAD --list 'v*' | head -n1)
-          if [ -n "$EXISTING" ]; then
-            IMMUTABLE=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${EXISTING}" --jq .immutable)
-            COMPLETE=$(gh release view "$EXISTING" --json assets \
-              --jq '[.assets[].name] | sort | . == ["producer-manifest.json", "producer-manifest.sigstore.json"]')
-            test "$IMMUTABLE" = 'true' && test "$COMPLETE" = 'true' || {
-              echo "Existing tag ${EXISTING} lacks the complete attested producer release." >&2
+          mapfile -t TAGS < <(git tag --points-at HEAD --list 'v*')
+          if [ "${#TAGS[@]}" -eq 0 ]; then
+            echo 'release=true' >> "$GITHUB_OUTPUT"
+            echo 'resume=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${#TAGS[@]}" -ne 1 ]; then
+            echo 'Multiple release tags point at the same source commit.' >&2
+            exit 1
+          fi
+          EXISTING=${TAGS[0]}
+          [[ "$EXISTING" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          test "$(git cat-file -t "refs/tags/$EXISTING")" = tag
+          test "$(git ls-remote origin "refs/tags/${EXISTING}^{}" | cut -f1)" = "$(git rev-parse HEAD)" || {
+            echo "Existing tag ${EXISTING} is absent or points elsewhere on the remote." >&2
+            exit 1
+          }
+          echo "tag=$EXISTING" >> "$GITHUB_OUTPUT"
+          RELEASE_ENDPOINT="repos/${GITHUB_REPOSITORY}/releases/tags/${EXISTING}"
+          if RESPONSE=$(gh api -i "$RELEASE_ENDPOINT" 2>/dev/null); then
+            DRAFT=$(gh api "$RELEASE_ENDPOINT" --jq .draft)
+            if [ "$DRAFT" = true ]; then
+              echo 'release=true' >> "$GITHUB_OUTPUT"
+              echo 'resume=true' >> "$GITHUB_OUTPUT"
+            else
+              test "$(gh api "$RELEASE_ENDPOINT" --jq .immutable)" = true || {
+                echo "Published release ${EXISTING} is not immutable." >&2
+                exit 1
+              }
+              echo 'release=false' >> "$GITHUB_OUTPUT"
+              echo 'verify_existing=true' >> "$GITHUB_OUTPUT"
+            fi
+          else
+            STATUS=${RESPONSE%%$'\n'*}
+            [[ "$STATUS" =~ ^HTTP/[0-9.]+[[:space:]]404[[:space:]] ]] || {
+              echo "Could not inspect existing tag ${EXISTING} release state." >&2
               exit 1
             }
-            echo "::notice::$(git rev-parse --short HEAD) is already released as ${EXISTING}."
-            echo "release=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo 'release=true' >> "$GITHUB_OUTPUT"
+            echo 'resume=true' >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Verify an already-published release before skipping
+        if: steps.guard.outputs.verify_existing == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.guard.outputs.tag }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          set -euo pipefail
+          EXPECTED=$(mktemp -d)
+          DOWNLOADED=$(mktemp -d)
+          trap 'rm -rf "$EXPECTED" "$DOWNLOADED"' EXIT
+          node scripts/generate-producer-manifest.mjs --tag "$TAG" --out "$EXPECTED/producer-manifest.json"
+          COMPLETE=$(gh release view "$TAG" --json assets \
+            --jq '[.assets[].name] | sort | . == ["producer-manifest.json", "producer-manifest.sigstore.json"]')
+          test "$COMPLETE" = true || {
+            echo "Published release ${TAG} has missing or unexpected assets." >&2
+            exit 1
+          }
+          gh release download "$TAG" --dir "$DOWNLOADED"
+          node scripts/verify-draft-release-assets.mjs "$EXPECTED" "$DOWNLOADED" --existing
+          REPO_ID=$(gh attestation verify "$DOWNLOADED/producer-manifest.json" \
+            --repo "$GITHUB_REPOSITORY" --bundle "$DOWNLOADED/producer-manifest.sigstore.json" \
+            --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/heads/main" \
+            --source-digest "$(git rev-parse HEAD)" --source-ref refs/heads/main \
+            --format json \
+            --jq '.[0].verificationResult.signature.certificate.sourceRepositoryIdentifier')
+          test "$REPO_ID" = "$GITHUB_REPOSITORY_ID" || {
+            echo "Published release ${TAG} attestation repository ID changed." >&2
+            exit 1
+          }
+          test "$(git ls-remote origin "refs/tags/${TAG}^{}" | cut -f1)" = "$(git rev-parse HEAD)"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq .immutable)" = true
+          echo "::notice::$(git rev-parse --short HEAD) is verified as ${TAG}."
 
       - name: Resolve the next release version
         id: version
         if: steps.guard.outputs.release == 'true'
+        env:
+          RESUME_TAG: ${{ steps.guard.outputs.tag }}
         run: |
-          LATEST=$(git tag --list 'v*' --sort=-v:refname | head -n1)
-          NEXT=$(node scripts/next-release-version.mjs "${LATEST}" "${{ inputs.bump || 'patch' }}")
-          echo "previous=${LATEST}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${NEXT}" >> "$GITHUB_OUTPUT"
+          if [ -n "$RESUME_TAG" ]; then
+            echo "tag=$RESUME_TAG" >> "$GITHUB_OUTPUT"
+          else
+            LATEST=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+            NEXT=$(node scripts/next-release-version.mjs "${LATEST}" "${{ inputs.bump || 'patch' }}")
+            echo "previous=${LATEST}" >> "$GITHUB_OUTPUT"
+            echo "tag=v${NEXT}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Prepare the release tag locally
-        if: steps.guard.outputs.release == 'true'
+        if: steps.guard.outputs.release == 'true' && steps.guard.outputs.resume != 'true'
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
@@ -192,7 +259,7 @@ jobs:
           }
 
       - name: Push the release tag
-        if: steps.guard.outputs.release == 'true'
+        if: steps.guard.outputs.release == 'true' && steps.guard.outputs.resume != 'true'
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
@@ -210,6 +277,7 @@ jobs:
             dist/release/producer-manifest.json
             dist/release/producer-manifest.sigstore.json
           fail_on_unmatched_files: true
+          overwrite_files: true
           generate_release_notes: true
           draft: true
 
