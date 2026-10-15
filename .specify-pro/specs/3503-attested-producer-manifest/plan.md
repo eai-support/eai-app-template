@@ -3,7 +3,7 @@
 - **Engineer:** Van / #3503 delivery team
 - **Primary repo:** `eai-support/eai-app-template`
 - **Issue:** `enterpriseaigroup/Issues2025#3503`
-- **Status:** approved for isolated branch implementation; release activation and merge remain gated by the controls and evidence below
+- **Status:** original new-source MVP approved for isolated branch implementation; retained-customer successor amendment in Section 14 awaits separate Product and CEO approval; release activation and merge remain gated by the controls and evidence below
 
 ## 1. Why — business outcome
 
