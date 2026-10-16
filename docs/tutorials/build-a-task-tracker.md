@@ -86,13 +86,15 @@ export const tenantConfigs = {
 
 ## Step 3: Define Object Types
 
-Edit `src/eai.config/object-types.ts`:
+In `src/eai.config/object-types.ts`, add this entry to the existing
+`objectTypes` map alongside `template`. Keep the other entries and the
+`appSqlStorage` helper in that same file:
 
 ```typescript
-export const objectTypes = {
   'task-tracker': [
     {
       name: 'Task',
+      slug: 'task',
       displayName: 'Task',
       description: 'A trackable unit of work',
       ...appSqlStorage('tasks'),
@@ -123,7 +125,10 @@ export const objectTypes = {
         },
         { name: 'assignee', type: 'text', required: false },
         { name: 'dueDate', type: 'date', required: false },
+        { name: 'startedAt', type: 'date', required: false },
+        { name: 'completedAt', type: 'date', required: false },
       ],
+      linkTypes: [],
       actions: [
         {
           name: 'start',
@@ -149,20 +154,24 @@ export const objectTypes = {
       status: 'published',
     },
   ],
-};
 ```
 
-`appSqlStorage('tasks')` is the template helper for the workspace app storage
-contract. It uses the technical `tenant-postgres` alias and an app-owned table
-name. Do not replace it with `resourceapi-postgres` or a generic table name. After
-`eai app provision`, the helper uses the generated `.eai/storage-bindings.json`
-contract and local prefix env values written by the CLI.
+`appSqlStorage('tasks')` is a private helper already defined in
+`src/eai.config/object-types.ts`; call it from the new entry in that file rather
+than importing it into another file. It uses the technical `tenant-postgres`
+alias and an app-owned table name. Do not replace it with
+`resourceapi-postgres` or a generic table name. After `eai app provision`, the
+helper uses the generated `.eai/storage-bindings.json` contract and local
+prefix env values written by the CLI. `task` is the exact published slug used
+by CLI resource commands; the React hook below accepts the model name `Task`.
 
 The CLI keeps `--tenant-id` for a workspace ID and `--tenant-key` for an Object Type scope key. These option names are part of the current platform contract.
 
 Validate, publish, and verify:
 
 ```bash
+npm run build:object-types
+npm run check:object-types
 eai login
 eai workspace list --format json
 eai workspace select <workspace-slug>
@@ -350,7 +359,7 @@ Open http://localhost:3001/tasks and:
 
 1. Click "New Task" to create a task
 2. See the task appear in the list
-3. Check `eai resources list Task` to verify platform storage
+3. Check `eai resources list task --tenant-id <workspace-id>` to verify platform storage
 
 ## Step 7: Add AI Assistance (Optional)
 
