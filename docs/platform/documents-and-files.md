@@ -31,7 +31,9 @@ Step goals:
 
 1. Upload the file with the app and workflow that own its published classifier.
 2. Capture the returned job or document ID.
-3. Classify the document when the app needs a document type or extraction path.
+3. Call `upload` or `classify` once per file, never both: each call stores a new
+   document. `upload` runs classification as part of full processing;
+   `classify` runs classification only.
 4. Index the document for RAG when chat or workflow stages need to answer from
    the content.
 5. Pass the document ID, business object ID, or workflow context to the AI
@@ -40,7 +42,7 @@ Step goals:
 App code:
 
 ```tsx
-const { upload, classify, ragIndex, getJobStatus } = useDocuments(tenantId);
+const { upload, ragIndex, getJobStatus } = useDocuments(tenantId);
 
 const workflow = {
   verticalKey: 'my-document-app',
@@ -58,7 +60,6 @@ const documentId =
   uploadPayload.documents?.[0]?.documentId ||
   uploadPayload.documents?.[0]?.document_id;
 
-await classify([file], workflow);
 await ragIndex({
   documentId,
   businessRequestId: applicationId,
@@ -74,9 +75,11 @@ CLI equivalent:
 
 ```bash
 eai docs upload ./supporting-document.pdf
-eai docs classify ./supporting-document.pdf
 eai docs index <document-id>
 ```
+
+`eai docs classify <file>` also uploads the file. Run it instead of
+`eai docs upload` when you want classification only, not after it.
 
 The PublicAPI route behind this workflow is:
 
