@@ -189,4 +189,39 @@ describe('DocumentsModule', () => {
       .rejects.toThrow('both verticalKey and workflowKey');
     expect(mockFetch).not.toHaveBeenCalled();
   });
+
+  it('HP008 rejects classify-by-url before sending when no tenant is configured', async () => {
+    const documents = new DocumentsModule('/api/eai', '');
+    await expect(
+      documents.classifyByUrl('https://example.com/document.pdf', {
+        verticalKey: 'business-docs',
+        workflowKey: 'classify',
+      }),
+    ).rejects.toThrow('classifyByUrl requires a tenantId');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('HP009 reads a saved ResourceAPI document record pinned to its upload job', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+
+    const documents = new DocumentsModule('/api/eai', 'tenant-a');
+    await documents.getRecord('DOC/123', 'job-456');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/eai/v4/data/documents/records/DOC%2F123?storage_target=resourceapi&job_id=job-456',
+      undefined,
+    );
+  });
+
+  it('HP010 reads a saved ResourceAPI document record without a job id', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+
+    const documents = new DocumentsModule('/api/eai', 'tenant-a');
+    await documents.getRecord('DOC-123');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/eai/v4/data/documents/records/DOC-123?storage_target=resourceapi',
+      undefined,
+    );
+  });
 });

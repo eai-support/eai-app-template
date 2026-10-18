@@ -69,7 +69,7 @@
         },
         {
           "id": "tenant-bound-document-lifecycle",
-          "description": "The document SDK uses the Curate-backed V4 upload lifecycle for stored-file processing, requires paired app and workflow classifier selection, and sends the deployed V4 documentUrl and tenantId contract for direct URL classification.",
+          "description": "The document SDK uses the Curate-backed V4 upload lifecycle for stored-file processing, requires paired app and workflow classifier selection, sends the deployed V4 documentUrl and tenantId contract for direct URL classification (rejecting it before sending when no tenant is configured), and reads saved ResourceAPI document records pinned to their upload job.",
           "owned_paths": [
             "packages/platform-sdk/src/modules/documents.ts",
             "packages/platform-sdk/src/index.ts",
