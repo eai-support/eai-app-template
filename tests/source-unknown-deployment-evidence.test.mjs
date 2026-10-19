@@ -6182,6 +6182,14 @@ test('fixture drift and template workflow drift fail closed', (t) => {
 });
 
 test('committed current canonical fixture retains its reviewed digest', () => {
+  if (!existsSync(join(repoRoot, fixtureDirectory))) {
+    assert.ok(
+      ['template', 'cli'].includes(
+        resolveDeploymentWorkflowContext(repoRoot).context,
+      ),
+    );
+    return;
+  }
   assert.equal(
     digest(regularBytes(join(repoRoot, currentWorkflowFixtureRelativePath))),
     currentWorkflowDigest,
