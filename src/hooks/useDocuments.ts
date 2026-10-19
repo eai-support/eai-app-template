@@ -11,14 +11,20 @@ import {
 /**
  * Document processing hook using Platform SDK.
  *
+ * The BFF sets the workspace header server-side, so upload, classify, job
+ * status and record reads need no tenant ID in the browser. `classifyByUrl`
+ * does: pass the override or set NEXT_PUBLIC_EAI_TENANT_ID.
+ *
  * @param tenantId - Optional tenant ID override
  *
  * @example
  * ```tsx
- * const { upload, classify, classifyByUrl } = useDocuments();
+ * const { upload, classify, classifyByUrl, getRecord } = useDocuments();
  *
  * await upload(file, { verticalKey: 'permits', workflowKey: 'document-intake' });
  * const results = await classify(files, { verticalKey: 'permits', workflowKey: 'document-intake' });
+ * // After getJobStatus(jobId) reports a finished job:
+ * const record = await getRecord(documentId, jobId);
  * ```
  */
 export function useDocuments(tenantId?: string) {
@@ -57,5 +63,11 @@ export function useDocuments(tenantId?: string) {
     [client],
   );
 
-  return { upload, classify, classifyByUrl, ragIndex, getJobStatus };
+  const getRecord = useCallback(
+    (documentId: string, jobId?: string) =>
+      client.documents.getRecord(documentId, jobId),
+    [client],
+  );
+
+  return { upload, classify, classifyByUrl, ragIndex, getJobStatus, getRecord };
 }

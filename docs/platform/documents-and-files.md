@@ -31,7 +31,9 @@ Step goals:
 
 1. Upload the file with the app and workflow that own its published classifier.
 2. Capture the returned job or document ID.
-3. Classify the document when the app needs a document type or extraction path.
+3. Call `upload` or `classify` once per file, never both: each call stores a new
+   document. `upload` runs classification as part of full processing;
+   `classify` runs classification only.
 4. Index the document for RAG when chat or workflow stages need to answer from
    the content.
 5. Pass the document ID, business object ID, or workflow context to the AI
@@ -40,7 +42,7 @@ Step goals:
 App code:
 
 ```tsx
-const { upload, classify, ragIndex, getJobStatus } = useDocuments(tenantId);
+const { upload, ragIndex, getJobStatus } = useDocuments(tenantId);
 
 const workflow = {
   verticalKey: 'my-document-app',
@@ -58,7 +60,6 @@ const documentId =
   uploadPayload.documents?.[0]?.documentId ||
   uploadPayload.documents?.[0]?.document_id;
 
-await classify([file], workflow);
 await ragIndex({
   documentId,
   businessRequestId: applicationId,
@@ -74,9 +75,11 @@ CLI equivalent:
 
 ```bash
 eai docs upload ./supporting-document.pdf
-eai docs classify ./supporting-document.pdf
 eai docs index <document-id>
 ```
+
+`eai docs classify <file>` also uploads the file. Run it instead of
+`eai docs upload` when you want classification only, not after it.
 
 The PublicAPI route behind this workflow is:
 
@@ -91,6 +94,166 @@ classifier.
 
 Use `eai publicapi get /v4/data/documents/jobs/<job-id>` for job status until a
 named CLI job command exists.
+
+### Show Content Understanding Results
+
+`classify` returns `202 Accepted` when the upload is queued. Content
+Understanding finishes later. To show its results:
+
+1. Call `classify([file], workflow)` once. It uploads the file, so do not also
+   call `upload` for the same file: each call creates a new document.
+2. Read `jobId` and `documents[0].document_id` from the `202` response.
+3. Poll `getJobStatus(jobId)` until `status` is `completed`,
+   `completed_with_errors`, or `failed`.
+4. Read the saved record with `getRecord(documentId, jobId)`. Mind the read
+   limits below.
+5. Show `record.machineAnalysis`, and save the values you need.
+
+The record read for an app-workflow (business) document has limits:
+
+- It needs the upload job ID.
+- It works only for the user who uploaded the file.
+- It works only while PublicAPI keeps the job: about 24 hours after the job's
+  last update. Reading the record does not extend that time.
+- A read with no job ID, or with an expired job, returns 404. In a workspace
+  without planning documents the error code is
+  `PASSIVE_SCHEMA_OBJECT_TYPE_NOT_PROVISIONED`. It does not mean your Object
+  Type schema is wrong.
+
+So save the `machineAnalysis` values you need right after the read, for
+example into your own resource.
+
+| `machineAnalysis` field    | Meaning                                                                                                                                                                                                           |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `detectedDocumentTypeCode` | The matched document type, or `Unknown` when no published type matched. Custom extraction is then skipped.                                                                                                        |
+| `classificationConfidence` | Classifier confidence from 0 to 1, or `null`.                                                                                                                                                                     |
+| `stageResults`             | An object with `classification.status` and `customExtraction.status`.                                                                                                                                             |
+| `extractedFields`          | A list, not a map. Each entry has `name`, `value`, and `confidence`, an optional `status` (`found`, `not_found`, or `unclear`), and an optional `sourceSpan` (`{ offset, length }`) when the analyser reports it. |
+
+App code for a page such as `src/app/documents/page.tsx`:
+
+```tsx
+'use client';
+
+import { useState } from 'react';
+import { signIn, useSession } from 'next-auth/react';
+import type {
+  BatchJobStatusResponse,
+  DocumentRecordResponse,
+} from '@enterpriseaigroup/platform-sdk';
+import { useDocuments } from '@/hooks/useDocuments';
+
+const workflow = {
+  verticalKey: 'my-document-app',
+  workflowKey: 'document-intake',
+};
+const FINISHED = ['completed', 'completed_with_errors', 'failed'];
+
+function show(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—';
+  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+export default function DocumentReviewPage() {
+  const { status } = useSession();
+  const { classify, getJobStatus, getRecord } = useDocuments();
+  const [message, setMessage] = useState('');
+  const [record, setRecord] = useState<DocumentRecordResponse | null>(null);
+
+  async function review(file: File) {
+    setRecord(null);
+    setMessage('Uploading…');
+    const accepted = await classify([file], workflow);
+    const upload = await accepted.json();
+    if (!accepted.ok) {
+      setMessage(`Upload refused (HTTP ${accepted.status}): ${show(upload)}`);
+      return;
+    }
+    const jobId: string = upload.jobId;
+    const documentId: string = upload.documents[0].document_id;
+
+    // 202 Accepted is not completion: poll the job before reading results.
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const job: BatchJobStatusResponse = await (
+        await getJobStatus(jobId)
+      ).json();
+      setMessage(`Job ${job.status}`);
+      if (FINISHED.includes(job.status)) break;
+    }
+
+    // Only the uploader can read this, and only while the job is kept (about
+    // 24 hours). Save the values you need now, e.g. into your own resource.
+    const saved = await getRecord(documentId, jobId);
+    if (!saved.ok) {
+      setMessage(`Record read failed (HTTP ${saved.status})`);
+      return;
+    }
+    setRecord(await saved.json());
+  }
+
+  if (status === 'unauthenticated') {
+    // src/auth.ts adds APP_BASE_PATH to relative callback paths. Pass an
+    // absolute URL, or a path without the base path, so it is not doubled.
+    return (
+      <button
+        type='button'
+        onClick={() =>
+          void signIn('microsoft-entra-id', {
+            callbackUrl: window.location.href,
+          })
+        }
+      >
+        Sign in
+      </button>
+    );
+  }
+
+  const analysis = record?.machineAnalysis;
+  return (
+    <main>
+      <input
+        type='file'
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            review(file).catch((error) => setMessage(String(error)));
+          }
+        }}
+      />
+      {message && <p>{message}</p>}
+      {analysis && (
+        <section>
+          <p>
+            {analysis.detectedDocumentTypeCode} (confidence{' '}
+            {show(analysis.classificationConfidence)}). Classification{' '}
+            {analysis.stageResults.classification.status}, extraction{' '}
+            {analysis.stageResults.customExtraction.status}.
+          </p>
+          <ul>
+            {analysis.extractedFields.map((field) => (
+              <li key={field.name}>
+                {field.name}: {show(field.value)} ({show(field.status)},
+                confidence {show(field.confidence)})
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </main>
+  );
+}
+```
+
+### Workspace ID In The Browser
+
+The BFF adds the workspace header from the server-side workspace ID
+(`EAI_TENANT_ID`) to each call. So `upload`, `classify`, `getJobStatus`, and
+`getRecord` work without `NEXT_PUBLIC_EAI_TENANT_ID`. `getRecord` still has the
+job ID, uploader and 24-hour limits described above. `classifyByUrl` is the
+exception: PublicAPI reads its workspace ID from the request body. The SDK
+throws before it sends that request when neither `NEXT_PUBLIC_EAI_TENANT_ID`
+nor a `useDocuments(tenantId)` argument gives a workspace ID.
 
 ## Resource File Property Workflow
 
