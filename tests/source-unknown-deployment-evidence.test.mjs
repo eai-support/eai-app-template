@@ -6181,6 +6181,13 @@ test('fixture drift and template workflow drift fail closed', (t) => {
   }
 });
 
+test('committed current canonical fixture retains its reviewed digest', () => {
+  assert.equal(
+    digest(regularBytes(join(repoRoot, currentWorkflowFixtureRelativePath))),
+    currentWorkflowDigest,
+  );
+});
+
 test('generated contract fixture drift fails before comparison', () => {
   const fixture = exportedFixture();
   assert.throws(() =>
