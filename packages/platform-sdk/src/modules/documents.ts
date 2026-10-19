@@ -240,8 +240,17 @@ export class DocumentsModule {
 
   /**
    * Read a saved document record, including `machineAnalysis` (classification
-   * and extracted fields) once its job has finished. Pass the upload job ID so
-   * the read resolves the document that job created.
+   * and extracted fields) once its job has finished.
+   *
+   * An app-workflow (business) document needs the upload `jobId`. Only the
+   * uploading user can read it, and only while PublicAPI keeps the job: about
+   * 24 hours after the job's last update. Save the `machineAnalysis` values you
+   * need right after the read, for example into your own resource.
+   *
+   * Without `jobId`, the read finds planning-application documents only. For a
+   * business document it then returns 404; in a workspace without planning
+   * documents the code is `PASSIVE_SCHEMA_OBJECT_TYPE_NOT_PROVISIONED`, which
+   * does not mean the schema is wrong. An expired job gives the same 404.
    */
   async getRecord(documentId: string, jobId?: string): Promise<Response> {
     const params = new URLSearchParams({ storage_target: 'resourceapi' });

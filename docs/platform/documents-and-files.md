@@ -105,9 +105,23 @@ Understanding finishes later. To show its results:
 2. Read `jobId` and `documents[0].document_id` from the `202` response.
 3. Poll `getJobStatus(jobId)` until `status` is `completed`,
    `completed_with_errors`, or `failed`.
-4. Read the saved record with `getRecord(documentId, jobId)`. The job ID makes
-   the read resolve the document that this job created.
-5. Show `record.machineAnalysis`.
+4. Read the saved record with `getRecord(documentId, jobId)`. Mind the read
+   limits below.
+5. Show `record.machineAnalysis`, and save the values you need.
+
+The record read for an app-workflow (business) document has limits:
+
+- It needs the upload job ID.
+- It works only for the user who uploaded the file.
+- It works only while PublicAPI keeps the job: about 24 hours after the job's
+  last update. Reading the record does not extend that time.
+- A read with no job ID, or with an expired job, returns 404. In a workspace
+  without planning documents the error code is
+  `PASSIVE_SCHEMA_OBJECT_TYPE_NOT_PROVISIONED`. It does not mean your Object
+  Type schema is wrong.
+
+So save the `machineAnalysis` values you need right after the read, for
+example into your own resource.
 
 | `machineAnalysis` field    | Meaning                                                                                                                                                                                                           |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -168,6 +182,8 @@ export default function DocumentReviewPage() {
       if (FINISHED.includes(job.status)) break;
     }
 
+    // Only the uploader can read this, and only while the job is kept (about
+    // 24 hours). Save the values you need now, e.g. into your own resource.
     const saved = await getRecord(documentId, jobId);
     if (!saved.ok) {
       setMessage(`Record read failed (HTTP ${saved.status})`);
@@ -233,7 +249,8 @@ export default function DocumentReviewPage() {
 
 The BFF adds the workspace header from the server-side workspace ID
 (`EAI_TENANT_ID`) to each call. So `upload`, `classify`, `getJobStatus`, and
-`getRecord` work without `NEXT_PUBLIC_EAI_TENANT_ID`. `classifyByUrl` is the
+`getRecord` work without `NEXT_PUBLIC_EAI_TENANT_ID`. `getRecord` still has the
+job ID, uploader and 24-hour limits described above. `classifyByUrl` is the
 exception: PublicAPI reads its workspace ID from the request body. The SDK
 throws before it sends that request when neither `NEXT_PUBLIC_EAI_TENANT_ID`
 nor a `useDocuments(tenantId)` argument gives a workspace ID.

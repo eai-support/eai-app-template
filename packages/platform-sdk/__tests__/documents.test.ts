@@ -213,7 +213,7 @@ describe('DocumentsModule', () => {
     );
   });
 
-  it('HP010 reads a saved ResourceAPI document record without a job id', async () => {
+  it('HP010 reads planning-application document records without a job id', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
 
     const documents = new DocumentsModule('/api/eai', 'tenant-a');
