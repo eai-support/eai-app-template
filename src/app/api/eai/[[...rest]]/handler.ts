@@ -296,6 +296,11 @@ async function proxyRequest(
     responseHeaders.delete('content-length');
     responseHeaders.delete('transfer-encoding');
     stampTraceResponseHeaders(responseHeaders, traceContext);
+    // SSE: tell reverse proxies and CDNs not to buffer or transform events.
+    if (contentType?.toLowerCase().startsWith('text/event-stream')) {
+      responseHeaders.set('Cache-Control', 'no-cache, no-transform');
+      responseHeaders.set('X-Accel-Buffering', 'no');
+    }
 
     return new NextResponse(response.body, {
       status: response.status,

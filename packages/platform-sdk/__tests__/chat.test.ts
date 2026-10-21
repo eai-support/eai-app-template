@@ -149,6 +149,36 @@ describe('ChatModule', () => {
       expect(body.tool_choice).toBe('auto');
     });
 
+    it('passes include_citations through when set', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+
+      await chat.send({
+        workflowId: 'wf',
+        stage: 's',
+        message: 'Which page says this?',
+        params: {},
+        document_scope: 'kb_only',
+        include_citations: true,
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.include_citations).toBe(true);
+    });
+
+    it('omits include_citations when it is not set', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+
+      await chat.send({
+        workflowId: 'wf',
+        stage: 's',
+        message: 'hi',
+        params: {},
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect('include_citations' in body).toBe(false);
+    });
+
     it('uses baseUrl (not streamBaseUrl)', async () => {
       mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
 

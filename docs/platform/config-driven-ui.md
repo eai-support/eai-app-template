@@ -154,7 +154,7 @@ The UI config and service hooks should describe one coherent app:
 - Documents and RAG: `useDocuments()`
 - Chat workflows: `useChat(workflowId, stage)`
 - Browser fetch path: `/api/eai/...`
-- Browser streaming path: `/api/eai/stream/...`
+- Browser streaming path: `/api/eai/...` (the same BFF proxy)
 
 Do not call PublicAPI, ResourceAPI, Azure services, database backends, blob
 stores, search services, or model providers directly from browser components.
