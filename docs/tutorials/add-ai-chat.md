@@ -28,7 +28,7 @@ it should not call model providers or downstream platform services directly.
 ```text
 Browser
   -> useChat hook
-  -> /api/eai/stream/...
+  -> /api/eai/v4/ai/chat/stream/...
   -> app BFF attaches auth and workspace context
   -> PublicAPI chat route
   -> SSE events stream back to the browser
@@ -272,7 +272,7 @@ eai chat stream "Summarise the uploaded documents" --workflow <workflow-id>
 ## What You Learned
 
 - How to call chat through `useChat`.
-- How to keep streaming behind `/api/eai/stream/...`.
+- How to keep streaming behind the app BFF proxy, `/api/eai/...`.
 - How to use `conversation_id` for multi-turn context.
 - How to upload and index documents through `useDocuments`.
 

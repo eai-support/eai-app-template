@@ -54,7 +54,7 @@ Some stable API fields, routes, and CLI flags still use `tenant` in their names.
 | Classify documents           | `useDocuments().classify(files, { verticalKey, workflowKey })` or `classifyByUrl(url)`   | `eai docs classify <file>`                                                                  | Stored-file classification uses the Curate upload lifecycle.                                                               |
 | Index documents for RAG      | `useDocuments().ragIndex(documentId)`                                                    | `eai docs index <documentId>`                                                               | RAG indexing is document-service indexing, not an Object Type storage backend.                                             |
 | Non-streaming chat           | `useChat(workflowId, stage).send(...)`                                                   | `eai chat send "message"`                                                                   | Requires workspace, workflow, stage, message, conversation ID, and params.                                                    |
-| Streaming chat               | `useChat(workflowId, stage).stream(...)`                                                 | `eai chat stream "message"`                                                                 | Uses the stream BFF path `/api/eai/stream/...`.                                                                            |
+| Streaming chat               | `useChat(workflowId, stage).stream(...)`                                                 | `eai chat stream "message"`                                                                 | Streams through the same BFF proxy, `/api/eai/v4/ai/chat/stream/...`.                                                      |
 | Identity/session             | server route, middleware, auth helpers, or workspace-scoped `client.platform` user helpers  | `eai whoami`, `eai workspace select`, `eai publicapi get /v4/identity/me`                      | Keep access tokens server-side in apps. For platform user/member prerequisites, use `/v4/platform/tenants/{tenantId}/...`. |
 | Advanced V4 route            | BFF route or approved server helper                                                      | `eai publicapi <method> /v4/...`                                                            | Use named SDK/CLI commands when available.                                                                                 |
 
@@ -108,6 +108,9 @@ await client.chat.send({
 
 The platform expects `message`, `conversation_id`, and `params`. Do not generate
 legacy payloads such as `chat_input` for new apps.
+
+To get source citations on the completed answer, set `include_citations: true`.
+PublicAPI leaves citations off by default.
 
 ## Resource Payload Pattern
 
@@ -183,7 +186,7 @@ When eai-gofer is generating or modifying an EAI app:
 3. Choose `useResources` for workspace business data.
 4. Choose `useDocuments` for upload, classification, and RAG indexing.
 5. Choose `useChat` for AI workflow calls.
-6. Use `/api/eai/stream` for browser streaming.
+6. Stream chat in the browser through the same BFF proxy, `/api/eai/...`.
 7. Use the `eai` CLI for terminal automation and verification.
 8. Use `eai publicapi` only for authorized V4 routes without named support.
 9. Never place direct downstream credentials or private platform details in app

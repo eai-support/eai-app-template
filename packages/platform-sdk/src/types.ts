@@ -264,6 +264,8 @@ export interface ChatMessage {
   use_context_enrichment?: boolean;
   integrations?: Array<Record<string, unknown>>;
   document_scope?: 'all' | 'kb_only' | 'br_only' | 'kb_and_br' | 'none';
+  /** Ask PublicAPI to return resolved document citations (default false). */
+  include_citations?: boolean;
   business_request_id?: string;
   ultimate_parent_id?: string;
   tags?: string[];
@@ -292,6 +294,8 @@ export interface ChatStreamOptions {
   use_context_enrichment?: boolean;
   integrations?: Array<Record<string, unknown>>;
   document_scope?: 'all' | 'kb_only' | 'br_only' | 'kb_and_br' | 'none';
+  /** Ask PublicAPI to return resolved document citations (default false). */
+  include_citations?: boolean;
   business_request_id?: string;
   ultimate_parent_id?: string;
   tags?: string[];

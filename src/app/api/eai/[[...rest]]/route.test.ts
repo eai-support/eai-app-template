@@ -330,4 +330,51 @@ describe('EAI proxy v4 route-family routing', () => {
     expect(headers.get('x-request-id')).toBe('req-template-3');
     expect(headers.get('x-correlation-id')).toBe('corr-template-3');
   });
+
+  it('HP007 streams v4 chat SSE through with anti-buffering headers', async () => {
+    const upstreamBody = new ReadableStream<Uint8Array>();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      body: upstreamBody,
+      headers: new Headers({ 'Content-Type': 'text/event-stream' }),
+      status: 200,
+      statusText: 'OK',
+    });
+    const body = JSON.stringify({
+      message: 'Which page says this?',
+      conversation_id: 'conversation-1',
+      params: {},
+      include_citations: true,
+    });
+
+    const response = await POST(
+      createRequest('v4/ai/chat/stream/tenant-a/workflow-a/chat', {
+        body,
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      }),
+      createContext('v4/ai/chat/stream/tenant-a/workflow-a/chat'),
+    );
+
+    const [targetUrl, fetchOptions] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(targetUrl).toBe(
+      'https://regional-api.example.com/public/v4/ai/chat/stream/tenant-a/workflow-a/chat',
+    );
+    expect(fetchOptions.body).toBe(body);
+    expect(response.body).toBe(upstreamBody);
+    expect(response.headers.get('content-type')).toBe('text/event-stream');
+    expect(response.headers.get('cache-control')).toBe(
+      'no-cache, no-transform',
+    );
+    expect(response.headers.get('x-accel-buffering')).toBe('no');
+  });
+
+  it('HP008 keeps JSON responses free of stream headers', async () => {
+    const response = await GET(
+      createRequest('v4/data/resources/tenant-a/Application?limit=5'),
+      createContext('v4/data/resources/tenant-a/Application'),
+    );
+
+    expect(response.headers.get('cache-control')).toBeNull();
+    expect(response.headers.get('x-accel-buffering')).toBeNull();
+  });
 });
