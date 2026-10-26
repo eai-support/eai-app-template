@@ -29,21 +29,12 @@
           ],
           "required_cross_service_surfaces": [
             "backend",
-            "eai-cli",
-            "eai-managed-deploy"
+            "eai-cli"
           ],
           "required_deployed_contracts": [
             {
               "repository": "eai-testing-dev",
               "path": "tests/cross-service/contracts/platform-lifecycle/publicapi-v4-platform-lifecycle.spec.ts"
-            },
-            {
-              "repository": "eai-testing-dev",
-              "path": "tests/cross-service/contracts/eai-cli/eai-managed-deploy.spec.ts"
-            },
-            {
-              "repository": "eai-testing-dev",
-              "path": "tests/cross-service/contracts/eai-cli/eai-managed-deploy-mutation.spec.ts"
             }
           ]
         },
