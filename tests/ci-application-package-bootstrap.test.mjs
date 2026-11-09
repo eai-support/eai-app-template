@@ -108,6 +108,10 @@ test('validation workflow pins the producer and preserves the published release 
     /if: steps\.application-package-source\.outputs\.bootstrap != 'true'/,
   );
   assert.match(workflow, /verify-installed/);
+  assert.match(workflow, /test ! -e "\$RUNNER_TEMP\/application-package-producer"/);
+  assert.match(workflow, /mv \.ci\/application-package-producer "\$RUNNER_TEMP\/application-package-producer"/);
+  assert.ok(workflow.indexOf('verify-installed') < workflow.indexOf('mv .ci/application-package-producer'));
+  assert.ok(workflow.indexOf('mv .ci/application-package-producer') < workflow.indexOf('Confirm application portability'));
   const portability = workflow.slice(workflow.indexOf('\n  portability:'));
   assert.match(portability, /needs: validate/);
   assert.match(

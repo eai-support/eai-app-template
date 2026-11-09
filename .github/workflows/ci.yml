@@ -127,6 +127,18 @@ jobs:
         if: steps.application-package-source.outputs.bootstrap != 'true'
         run: npm install --no-save lightningcss-linux-x64-gnu@1.30.2 @tailwindcss/oxide-linux-x64-gnu@4.1.18
 
+      - name: Retain verified producer checkout outside application source
+        if: steps.application-package-source.outputs.bootstrap == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d .ci/application-package-producer/.git
+          test ! -e "$RUNNER_TEMP/application-package-producer"
+          mv .ci/application-package-producer "$RUNNER_TEMP/application-package-producer"
+
+      - name: Confirm application portability after dependency preparation
+        run: node scripts/check-portability.mjs
+
       - name: Build object types
         run: npm run build:object-types
 
