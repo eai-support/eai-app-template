@@ -108,6 +108,24 @@ test('validation workflow pins the producer and preserves the published release 
     /if: steps\.application-package-source\.outputs\.bootstrap != 'true'/,
   );
   assert.match(workflow, /verify-installed/);
+  const portability = workflow.slice(workflow.indexOf('\n  portability:'));
+  assert.match(portability, /needs: validate/);
+  assert.match(
+    portability,
+    /actions\/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093/,
+  );
+  assert.match(
+    portability,
+    /application-package-producer-\$\{\{ github.run_id \}\}-\$\{\{ github.run_attempt \}\}/,
+  );
+  assert.match(
+    portability,
+    /verify-tarball "\$tarball"\s+npm install --no-save "\.\/\$tarball"/,
+  );
+  assert.match(
+    portability,
+    /if: needs.validate.outputs.application-package-bootstrap != 'true'\s+run: npm ci/,
+  );
 
   const jestConfig = await readFile(path.join(root, 'jest.config.ts'), 'utf8');
   assert.match(

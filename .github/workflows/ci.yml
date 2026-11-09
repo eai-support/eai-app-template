@@ -21,6 +21,8 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    outputs:
+      application-package-bootstrap: ${{ steps.application-package-source.outputs.bootstrap }}
 
     steps:
       - name: Check out repository
@@ -90,6 +92,15 @@ jobs:
           node "$GITHUB_WORKSPACE/scripts/ci-application-package-bootstrap.mjs" verify-tarball "$tarball"
           echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
 
+      - name: Retain verified PR-only producer for portability
+        if: steps.application-package-source.outputs.bootstrap == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: application-package-producer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.producer-package.outputs.tarball }}
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Install dependencies from published package
         if: steps.application-package-source.outputs.bootstrap != 'true'
         # npm ci can miss optional native bindings used by Tailwind/Next on Ubuntu.
@@ -148,6 +159,7 @@ jobs:
 
   portability:
     name: portability (${{ matrix.os }})
+    needs: validate
     strategy:
       fail-fast: false
       matrix:
@@ -165,7 +177,26 @@ jobs:
       - name: Validate portable project paths
         run: node scripts/check-portability.mjs
       - name: Fresh dependency install
+        if: needs.validate.outputs.application-package-bootstrap != 'true'
         run: npm ci
+      - name: Download exact validated producer from this run
+        if: needs.validate.outputs.application-package-bootstrap == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: application-package-producer-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .ci/application-package-tarball
+      - name: Install verified PR-only producer package
+        if: needs.validate.outputs.application-package-bootstrap == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tarball=".ci/application-package-tarball/enterpriseaigroup-application-package-0.1.0.tgz"
+          node scripts/ci-application-package-bootstrap.mjs verify-tarball "$tarball"
+          npm install --no-save "./$tarball"
+      - name: Verify installed application-package contract
+        run: |
+          node scripts/ci-application-package-bootstrap.mjs verify-installed
+          git diff --exit-code -- package.json package-lock.json eai.application.schema-lock.json
       - name: Portability regression tests
         run: npm run test:portability
       - name: Cross-platform lifecycle tests

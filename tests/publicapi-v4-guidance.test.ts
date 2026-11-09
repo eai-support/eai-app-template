@@ -1,4 +1,13 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { extname, join, relative } from 'node:path';
 
 const ROOT = process.cwd();
@@ -25,11 +34,17 @@ const EXCLUDED_FILES = new Set(['package-lock.json']);
 const LEGACY_API_GUIDANCE =
   /(?:PublicAPI|ResourceAPI).{0,160}(?:\s|\/)V[123]\b|(?:\s|\/)V[123]\b.{0,160}(?:PublicAPI|ResourceAPI)/i;
 
-function repositoryGuidanceFiles(directory = ROOT): string[] {
+function repositoryGuidanceFiles(directory = ROOT, root = directory): string[] {
   return readdirSync(directory).flatMap((entry) => {
     if (EXCLUDED_DIRECTORIES.has(entry)) return [];
     const path = join(directory, entry);
-    if (statSync(path).isDirectory()) return repositoryGuidanceFiles(path);
+    if (
+      relative(root, path).split('\\').join('/') ===
+      '.ci/application-package-producer'
+    )
+      return [];
+    if (statSync(path).isDirectory())
+      return repositoryGuidanceFiles(path, root);
     if (EXCLUDED_FILES.has(entry) || !INCLUDED_EXTENSIONS.has(extname(entry))) {
       return [];
     }
@@ -39,6 +54,23 @@ function repositoryGuidanceFiles(directory = ROOT): string[] {
 
 describe('PublicAPI V4 repository guidance', () => {
   const files = repositoryGuidanceFiles();
+
+  it('excludes only the external producer checkout, not owned CI guidance', () => {
+    const fixture = mkdtempSync(join(tmpdir(), 'template-guidance-'));
+    try {
+      const producer = join(fixture, '.ci', 'application-package-producer');
+      mkdirSync(producer, { recursive: true });
+      writeFileSync(
+        join(producer, 'external.md'),
+        'External package documentation',
+      );
+      const owned = join(fixture, '.ci', 'owned.md');
+      writeFileSync(owned, 'Owned guidance');
+      expect(repositoryGuidanceFiles(fixture)).toEqual([owned]);
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  });
 
   it('contains no EAI browser proxy examples below V4', () => {
     const violations = files.flatMap((path) => {
