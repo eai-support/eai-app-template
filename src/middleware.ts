@@ -5,12 +5,7 @@ import { auth } from '@/auth';
 const PROTECTED_API_ROUTES = ['/api/eai/v4/identity/'];
 
 // Routes that should bypass auth check
-const PUBLIC_ROUTES = [
-  '/api/auth',
-  '/api/eai/config',
-  '/api/eai/stream',
-  '/_next',
-];
+const PUBLIC_ROUTES = ['/api/auth', '/api/eai/config', '/_next'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

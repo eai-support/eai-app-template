@@ -1,0 +1,91 @@
+# Tasks
+
+- [x] Record 2026-09-25 approval and preserved user contract.
+- [x] Merge current `main` without force-pushing.
+- [x] Validate every dispatch/path/operation input (DTE-020, DTE-021).
+- [x] Hash complete nested source configuration, exclude deterministic generated outputs, reject links, and validate every canonical provenance anchor (DTE-018).
+- [x] Upload and attest the hidden nonempty no-follow artifact (DTE-022, DTE-024).
+- [x] Isolate application lifecycle work from OIDC and recheck source/endpoint integrity in the trusted handoff (DTE-025).
+- [x] Pin actions and the base image immutably (DTE-023).
+- [x] Preserve `environment`/`env` caller compatibility (DTE-026).
+- [x] Preserve optional `target_tenant_id` compatibility for legacy `source-unknown` callers while requiring it for `eai-cli-generated`.
+- [x] Preserve explicitly empty optional dispatch aliases as values rather than boolean flags (DTE-020, DTE-021).
+- [x] Reject multiline provenance and GitHub output values (DTE-025).
+- [x] Confine evidence creation to a no-link path and refuse existing destinations (DTE-022).
+- [x] Revalidate the immutable evidence nonce at the trusted handoff boundary before OIDC (DTE-025).
+- [x] Reject every nonregular entry in the governed configuration tree (DTE-018).
+- [x] Reject a link or non-directory in every governed configuration ancestor and recheck ancestors before file reads (DTE-018).
+- [x] Reject an application-controlled link or non-directory in `.eai-build`, image-context, archive, metadata, and evidence ancestors before copying, writing, or hashing (DTE-022, DTE-025).
+- [x] Include `.test.*` and `.spec.*` files in the governed configuration digest while excluding only the two generated Object Type outputs (DTE-018).
+- [x] Copy standalone, static, and public source trees entry by entry without following nested links or accepting nonregular files (DTE-022).
+- [x] Apply the canonical generated-runtime app-key grammar in collector and handoff validation and retain the template's supported `demo` environment (DTE-020, DTE-021, DTE-026).
+- [x] Write collector values to `$GITHUB_OUTPUT` only through a verified no-follow regular-file descriptor (DTE-025).
+- [x] Bind observed evidence to the exact source commit's canonical `workflowBlobSha` and `collectorDigest` for authoritative platform-side installation reads (DTE-019–DTE-021, DTE-025).
+- [x] Recompute or independently retrieve every submitted workflow/run/provenance/artifact/image field in the isolated handoff before OIDC (DTE-025).
+- [x] Reject linked or replaced `$GITHUB_OUTPUT` ancestors as well as the leaf (DTE-025).
+- [x] Update owned tests and traceability.
+- [x] Rerun prescribed checks and record exact-head results after trusted-producer and complete-handoff hardening.
+- [x] Recompute the complete governed configuration from the exact source commit before OIDC (DTE-018, DTE-025).
+- [x] Bind image-context and evidence output ancestors through opened-descriptor writes (DTE-022, DTE-025).
+- [x] Update owned regressions and rerun exact-head checks for the final live review findings.
+- [x] Bind bounded collector reads through parent and leaf revalidation (DTE-022, DTE-025).
+- [x] Bound exact-commit Git blob retrieval while preserving deterministic manifest order (DTE-018, DTE-025).
+- [x] Reject preexisting isolated outputs instead of path-based cleanup (DTE-022, DTE-025).
+- [x] Leave failed bound-copy output in the disposable workspace without unsafe path cleanup (DTE-022).
+- [x] Repeat the governed configuration inventory and bind every post-read path and file identity (DTE-018).
+- [x] Bind every image-tree source ancestor and final path through the copy (DTE-022).
+- [x] Stage the OCI archive through bounded descriptors before artifact upload (DTE-022, DTE-025).
+- [x] Keep the minted OIDC token within the request-and-submit step (DTE-025).
+- [x] Require the exact TenantInfra deployment identity in runtime configuration and every authenticated readiness probe (DTE-036, DTE-074).
+- [x] Revalidate the bound `$GITHUB_OUTPUT` descriptor, leaf, and parent chain after append (DTE-025).
+- [x] Validate canonical schema provenance inside the isolated OIDC-authorized handoff (DTE-025).
+- [x] Create generated image-context files exclusively before any destructive write (DTE-022).
+- [x] Bind governed configuration size and timestamps between pre-open and opened descriptors (DTE-018).
+- [x] Bind retained `workflow_call` compatibility to a manually dispatched same-repository caller, a canonical signed callee identity, and caller-provided least privilege without restoring `EAI_ACCESS_TOKEN` (DTE-025, DTE-026).
+- [x] Hash the downloaded OCI archive through a bounded fixed-size no-follow reader in the isolated handoff (DTE-025).
+- [x] Replace every collector descriptor-wide read with a fixed-size capped loop that rejects post-open growth before allocating beyond the opened snapshot (DTE-018, DTE-025).
+- [x] Bind all generated-tree and archive-copy sources to pre-open size, mtime, and ctime through their final path checks (DTE-022, DTE-025).
+- [x] Align collector and handoff governed-manifest limits at 10 MiB per file, 32 MiB total, and 4,096 files, including a valid 4–10 MiB regression (DTE-018, DTE-025).
+- [x] Replace the staged-archive digest EOF stream with a fixed-buffer opened-size loop and post-bound growth probe, then sweep all collector reads for an explicit bound (DTE-022, DTE-025).
+- [x] Bound the handoff response during transfer and parse it through trusted inline no-follow code without a handoff checkout, while applying the same constraints in the collector command; add oversized and linked response regressions (DTE-025).
+- [x] Bound downloaded evidence, exact-source bytes, GitHub metadata bodies, and the OIDC token response before parsing or retention, without narrowing the governed-file contract (DTE-025).
+- [x] Keep `workflow_call.config_hash` optional, derive the exact checked-out digest when absent, and carry one validated value through build evidence and isolated handoff (DTE-026).
+- [x] Enforce both OIDC and handoff response limits against bytes actually read when `Content-Length` is absent or false, and create the handoff response through a new no-follow descriptor (DTE-025).
+- [x] Hash the exact bounded OCI manifest blob referenced by the Linux/amd64 archive index and bind it to evidence before OIDC (DTE-025).
+- [x] Replace every collector `O_NOFOLLOW` fallback with one shared fail-closed capability guard and add regression evidence (DTE-022, DTE-025).
+- [x] Restore Windows `config-hash` through a command-scoped validated read fallback and prove deployment commands still fail closed (DTE-018, DTE-022).
+- [x] Validate the OCI layout plus bounded configuration and layer descriptors, then stream every unique referenced blob through exact member/validator count, type, path, size, and digest checks with matching-digest malformed, missing, regular/nonregular duplicate, and substituted regressions; keep the compact 1,024-layer authority table below Linux's per-string execution bound (DTE-025).
+- [x] Derive the OCI validator output cap from the full configuration-plus-1,024-layer record set and prove the accepted maximum cannot overflow it (DTE-025).
+- [x] Pipe Buildx OCI stdout into a live-bounded collector writer with an exclusive no-follow archive descriptor, derive the image digest directly from that archive, and reject path substitution without unsafe cleanup (DTE-022, DTE-025).
+- [x] Bind copied, generated, and evidence destination files to exact final byte length and single-link descriptor/path identity (DTE-022, DTE-025).
+- [x] Reject empty or malformed direct-dispatch `commit_sha` before checkout while preserving reusable caller-SHA compatibility (DTE-026).
+- [x] Prove GitHub REST artifact digests remain canonical `sha256:<hex>` values and retain the exact comparison (DTE-025).
+- [x] Validate and encode the canonical positive safe-integer artifact ID before any GitHub provenance request (DTE-025).
+- [x] Remove persistent cache integration from the application-controlled source job and prove the deployment workflow cannot restore or save a cross-run cache (DTE-025).
+- [x] Require the approved source commit to equal signed `github.sha` before checkout and pass only that signed event value to checkout (DTE-025, DTE-026).
+- [x] Use GNU/BSD-compatible bounded tar extraction flags in collector and isolated handoff, with Linux exact-head coverage (DTE-025).
+- [x] Reject an empty direct `config_hash` while preserving omitted reusable configuration derivation (DTE-026).
+- [x] Exact-bind a present evidence source mode, permit omission only for legacy `source-unknown`, and require absent optional target-tenant evidence when its legacy input is absent or exact equality when present (DTE-020, DTE-025).
+- [x] Bind artifact ID/digest to current upload outputs and exact repository/run/source/attempt metadata (DTE-022, DTE-025).
+- [x] Bound each GitHub output value to 4 KiB and aggregate serialized output to 64 KiB before command-file open (DTE-025).
+- [x] Confirm GNU tar member-record stdout and the derived full-count output cap in Linux exact-head evidence (DTE-025).
+- [x] Require one link in both GitHub command-file descriptor and leaf snapshots, rejecting a hard link added between post-append snapshots (DTE-025).
+- [x] Reject external hard links in every standalone/static/public source-copy and governed configuration pre-open, opened, rebound and final snapshot (DTE-018, DTE-022).
+- [x] Add authenticated runtime-owned deployment and managed-identity binding, with no binding on rejected probes, no caller identity substitution, and unchanged legacy readiness checks (DTE-036, DTE-074).
+- [x] Omit the complete runtime deployment binding when any scope, deployment, or Azure identity identifier is absent, blank, or noncanonical; preserve existing readiness status/check behavior and fail managed qualification closed (DTE-036, DTE-074).
+- [x] Require one link in the rebound, final descriptor, and final path snapshots for bounded response reads, archive digests, and staged archive sources; prove real hard-link rejection during reads and between final snapshots with coarse timestamps (DTE-022, DTE-025).
+
+## Exact-head evidence
+
+- `actionlint .github/workflows/eai-app.yml`
+- `npm run test:object-types-generator`
+- `npm run test:release-version`
+- `npm run test:source-unknown-evidence` (69 passed and 3 Linux-only OCI/archive-writer cases skipped on macOS; network-free Linux Node 24 executes all 72 with zero skips)
+- `npm run test:ai-workspace-guidance`
+- `npm run test:cross-platform-lifecycle`
+- `npm run test:unit:ci -- --runInBand` (347 passed across 50 suites)
+- `npm run typecheck`
+- `npm run build`
+- `actionlint .github/workflows/eai-app.yml`
+- Exact source evidence tests cover Git tree/blob configuration recomputation with aligned manifest and transfer bounds, actual-byte-capped OIDC and handoff response streams, fixed-buffer local reads and archive hashing with growth probes, one held archive descriptor for bounded GNU/BSD-compatible OCI layout/index/manifest extraction and streaming verification of every referenced configuration/layer blob, exact manifest and descriptor size/content-digest/schema/media-family verification, mixed regular/nonregular duplicate rejection, a compact full-count authority table below Linux's per-string execution bound, a validation-output cap derived from the complete 1,025-member record set, a shared fail-closed no-follow/nonblocking deployment-open guard, the isolated Windows local configuration-hash fallback, pre-open size/time and single-link binding for every governed read and source copy, clean checkout-free inline handoff response parsing, exclusive generated-output creation with exact byte/link validation, source/output ancestor binding including post-append command-file replacement and inter-snapshot hard-link rejection, canonical handoff provenance validation, a pipefail-protected Buildx stdout stream written live into a bounded exclusive runner-temporary archive descriptor, direct/reusable trigger-schema separation, approved-commit equality to signed `github.sha` before checkout, direct signed checkout selection, required direct configuration binding, strict legacy source-mode and target-tenant presence semantics, current-upload and exact workflow-attempt provenance, per-value and aggregate GitHub output byte caps, no persistent cache in the application-controlled build job, canonical pre-network artifact-ID validation and REST artifact-digest comparison, step-local OIDC submission, and optional reusable-call configuration derivation without a legacy token; workflow digest `sha256:2a2d4d904546d121a5f26b9a191903afb8b5dc9e0d21857242b61701134fffc6`, workflow Git blob `b8b4d410947002c707c8136fe048bada9697708a`, collector digest `sha256:c60592ac0d489da41400042f086015fb67f939783a9020ef36ef7a0f8e16238f`.
+- Readiness-focused route/runtime tests passed 40/40, including exact runtime-owned binding, missing/mismatched tenant/app/environment/config/deployment scope, unauthenticated binding denial, absent Azure identity without caller substitution, missing runtime scope metadata, and absent/blank/padded/noncanonical deployment or Azure identity metadata without a partial binding while preserving the legacy checklist statuses. The complete unit run also covers the runtime and deployment contracts.

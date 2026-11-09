@@ -83,6 +83,46 @@ export interface BatchJobStatusResponse {
   updatedAt: string;
 }
 
+/** One entry of `machineAnalysis.extractedFields`, which is a list, not a map. */
+export interface DocumentExtractedField {
+  name: string;
+  value: unknown;
+  confidence: number | null;
+  status?: 'found' | 'not_found' | 'unclear';
+  sourcePage?: number;
+  /** Where the analyser found the value in the document text, when it reports it. */
+  sourceSpan?: { offset: number; length: number };
+}
+
+export interface DocumentStageResult {
+  /** queued, processing, completed, failed, skipped, review_needed, or pending. */
+  status: string;
+}
+
+/** Content Understanding results saved on a business-document record. */
+export interface DocumentMachineAnalysis {
+  processingStatus: string;
+  /** `Unknown` when no published document type matched. */
+  detectedDocumentTypeCode: string;
+  classificationConfidence: number | null;
+  extractedFields: DocumentExtractedField[];
+  stageResults: {
+    classification: DocumentStageResult;
+    customExtraction: DocumentStageResult;
+  };
+}
+
+export interface DocumentRecordResponse {
+  documentId: string;
+  resourceId: string;
+  fileName: string;
+  documentType: string;
+  status: string;
+  /** Present on records created by an app workflow (business documents). */
+  machineAnalysis?: DocumentMachineAnalysis;
+  [key: string]: unknown;
+}
+
 export class DocumentsModule {
   constructor(
     private baseUrl: string,
@@ -157,6 +197,12 @@ export class DocumentsModule {
     url: string,
     options: ClassifyByUrlOptions = {},
   ): Promise<Response> {
+    // PublicAPI reads this route's tenant from the body, not the BFF header.
+    if (!this.tenantId) {
+      throw new Error(
+        'classifyByUrl requires a tenantId (EAI workspace ID). Set NEXT_PUBLIC_EAI_TENANT_ID or pass tenantId to the client.',
+      );
+    }
     const verticalKey = options.verticalKey?.trim();
     const workflowKey = options.workflowKey?.trim();
     if (Boolean(verticalKey) !== Boolean(workflowKey)) {
@@ -190,6 +236,28 @@ export class DocumentsModule {
   /** Get status for a document upload/indexing job. */
   async getJobStatus(jobId: string): Promise<Response> {
     return platformFetch(this.docsUrl(`/jobs/${encodeURIComponent(jobId)}`));
+  }
+
+  /**
+   * Read a saved document record, including `machineAnalysis` (classification
+   * and extracted fields) once its job has finished.
+   *
+   * An app-workflow (business) document needs the upload `jobId`. Only the
+   * uploading user can read it, and only while PublicAPI keeps the job: about
+   * 24 hours after the job's last update. Save the `machineAnalysis` values you
+   * need right after the read, for example into your own resource.
+   *
+   * Without `jobId`, the read finds planning-application documents only. For a
+   * business document it then returns 404; in a workspace without planning
+   * documents the code is `PASSIVE_SCHEMA_OBJECT_TYPE_NOT_PROVISIONED`, which
+   * does not mean the schema is wrong. An expired job gives the same 404.
+   */
+  async getRecord(documentId: string, jobId?: string): Promise<Response> {
+    const params = new URLSearchParams({ storage_target: 'resourceapi' });
+    if (jobId) params.set('job_id', jobId);
+    return platformFetch(
+      this.docsUrl(`/records/${encodeURIComponent(documentId)}?${params}`),
+    );
   }
 
   /** Index a document (general indexing). */

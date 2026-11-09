@@ -32,6 +32,7 @@ const REQUIRED_RUNTIME_ENV = [
   'ROUTING_BOOTSTRAP_PUBLIC_API_URL',
   'EAI_ENVIRONMENT',
   'EAI_CONFIG_HASH',
+  'EAI_DEPLOYMENT_ID',
   'TENANT_KEYS',
   'ENTRA_TENANT_NAME',
   'ENTRA_TENANT_ID',
@@ -75,13 +76,19 @@ function isHttpUrl(value: string | undefined): boolean {
 }
 
 function checkRuntimeEnv(env: NodeJS.ProcessEnv): ReadinessCheck {
-  const missing = [
-    ...missingEnv(env, REQUIRED_RUNTIME_ENV),
-    ...missingAnyEnv(env, [
-      ['NEXT_PUBLIC_EAI_TENANT_ID', 'EAI_TENANT_ID'],
-      ['EAI_PRODUCT_SLUG', 'EAI_APP_KEY'],
+  const deploymentId = env.EAI_DEPLOYMENT_ID;
+  const missing = Array.from(
+    new Set([
+      ...missingEnv(env, REQUIRED_RUNTIME_ENV),
+      ...(deploymentId && deploymentId.trim() === deploymentId
+        ? []
+        : ['EAI_DEPLOYMENT_ID']),
+      ...missingAnyEnv(env, [
+        ['NEXT_PUBLIC_EAI_TENANT_ID', 'EAI_TENANT_ID'],
+        ['EAI_PRODUCT_SLUG', 'EAI_APP_KEY'],
+      ]),
     ]),
-  ];
+  );
   return {
     name: 'runtime-env',
     ok: missing.length === 0,
@@ -117,11 +124,17 @@ function checkAuth(env: NodeJS.ProcessEnv): ReadinessCheck {
   };
 }
 
-function checkTenantAssignment(env: NodeJS.ProcessEnv): ReadinessCheck {
+function checkTenantAssignment(
+  env: NodeJS.ProcessEnv,
+  requireWorkflowAssignment: boolean,
+): ReadinessCheck {
   const tenantKeys = splitTenantKeys(env);
   const missing = tenantKeys.flatMap((tenantKey) => {
     const envKey = envKeyForTenant(tenantKey);
-    return missingEnv(env, [`TENANT_${envKey}_ID`, `WORKFLOW_${envKey}_ID`]);
+    return missingEnv(env, [
+      `TENANT_${envKey}_ID`,
+      ...(requireWorkflowAssignment ? [`WORKFLOW_${envKey}_ID`] : []),
+    ]);
   });
 
   return {
@@ -171,14 +184,18 @@ function checkObjectTypes(env: NodeJS.ProcessEnv): ReadinessCheck {
   };
 }
 
+/** Workflow assignment may be omitted only for an unconfigured source-controlled workflow adapter. */
 export function evaluateRuntimeReadiness(
   env: NodeJS.ProcessEnv = process.env,
+  {
+    requireWorkflowAssignment = true,
+  }: { requireWorkflowAssignment?: boolean } = {},
 ): RuntimeReadiness {
   const checks = [
     checkRuntimeEnv(env),
     checkRequiredSecrets(env),
     checkAuth(env),
-    checkTenantAssignment(env),
+    checkTenantAssignment(env, requireWorkflowAssignment),
     checkPublicApi(env),
     checkObjectTypes(env),
   ];

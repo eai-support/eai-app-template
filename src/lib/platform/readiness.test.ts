@@ -16,6 +16,7 @@ function readyEnv(): NodeJS.ProcessEnv {
     EAI_PRODUCT_SLUG: 'contract-test',
     EAI_ENVIRONMENT: 'dev',
     EAI_CONFIG_HASH: 'cfg-123',
+    EAI_DEPLOYMENT_ID: 'deployment-123',
     TENANT_KEYS: TEST_TENANT_KEY,
     [`TENANT_${TEST_TENANT_ENV_KEY}_ID`]: 'tenant-template',
     [`WORKFLOW_${TEST_TENANT_ENV_KEY}_ID`]: 'workflow-template',
@@ -56,6 +57,35 @@ describe('runtime readiness contract', () => {
     expect(result.failureCategories).toEqual([]);
   });
 
+  it.each(['   ', ' deployment-123 '])(
+    'rejects a noncanonical runtime deployment identity %j',
+    (deploymentId) => {
+      const env = readyEnv();
+      env.EAI_DEPLOYMENT_ID = deploymentId;
+
+      const result = evaluateRuntimeReadiness(env);
+
+      expect(result.ok).toBe(false);
+      expect(result.failureCategories).toContain('config_missing');
+      expect(result.checks).toContainEqual(
+        expect.objectContaining({
+          name: 'runtime-env',
+          ok: false,
+          missing: expect.arrayContaining(['EAI_DEPLOYMENT_ID']),
+        }),
+      );
+    },
+  );
+
+  it('accepts an exact nonempty runtime deployment identity', () => {
+    const env = readyEnv();
+
+    const result = evaluateRuntimeReadiness(env);
+
+    expect(result.ok).toBe(true);
+    expect(result.failureCategories).toEqual([]);
+  });
+
   it('reports sanitized failure categories without returning secret values', () => {
     const env = readyEnv();
     delete env.AUTH_SECRET;
@@ -75,5 +105,23 @@ describe('runtime readiness contract', () => {
     expect(serialized).toContain('AUTH_SECRET');
     expect(serialized).not.toContain('test-entra-secret');
     expect(serialized).not.toContain('test-auth-secret');
+  });
+
+  it('requires tenant identity but permits no workflow assignment for generic apps', () => {
+    const env = readyEnv();
+    delete env[`WORKFLOW_${TEST_TENANT_ENV_KEY}_ID`];
+
+    expect(evaluateRuntimeReadiness(env).failureCategories).toContain(
+      'tenant_assignment_invalid',
+    );
+    expect(
+      evaluateRuntimeReadiness(env, { requireWorkflowAssignment: false }).ok,
+    ).toBe(true);
+
+    delete env[`TENANT_${TEST_TENANT_ENV_KEY}_ID`];
+    expect(
+      evaluateRuntimeReadiness(env, { requireWorkflowAssignment: false })
+        .failureCategories,
+    ).toContain('tenant_assignment_invalid');
   });
 });

@@ -45,6 +45,7 @@ export class ChatModule {
       'use_context_enrichment',
       'integrations',
       'document_scope',
+      'include_citations',
       'business_request_id',
       'ultimate_parent_id',
       'tags',

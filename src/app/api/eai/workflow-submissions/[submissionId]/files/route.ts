@@ -100,21 +100,20 @@ export async function POST(
         { status: 400, headers: NO_STORE_HEADERS },
       );
     }
-    const validationError = validateSubmissionFile(file);
+    const fileField = resolved.runtime.snapshot.steps
+      .find((step) => step.id === stepId)
+      ?.fields?.find((field) => field.id === fieldId && field.type === 'file');
+    if (!fileField) return notFound();
+    const validationError = validateSubmissionFile(
+      file,
+      fileField.acceptedFileExtensions,
+    );
     if (validationError) {
       return NextResponse.json(
         { error: 'INVALID_UPLOAD', message: validationError },
         { status: 400, headers: NO_STORE_HEADERS },
       );
     }
-    const fileFieldExists = resolved.runtime.snapshot.steps.some(
-      (step) =>
-        step.id === stepId &&
-        step.fields?.some(
-          (field) => field.id === fieldId && field.type === 'file',
-        ),
-    );
-    if (!fileFieldExists) return notFound();
 
     const fileName = sanitizeSubmissionFileName(file.name);
     const upstreamForm = new FormData();

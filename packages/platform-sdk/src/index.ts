@@ -82,6 +82,10 @@ export type { ChatModule } from './modules/chat';
 export type {
   BatchJobStatusResponse,
   ClassifyByUrlOptions,
+  DocumentExtractedField,
+  DocumentMachineAnalysis,
+  DocumentRecordResponse,
+  DocumentStageResult,
   DocumentWorkflowOptions,
   DocumentsModule,
   RagIndexRequest,

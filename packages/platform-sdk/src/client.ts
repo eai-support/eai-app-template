@@ -20,9 +20,9 @@ export interface PlatformClientConfig {
   baseUrl?: string;
   /**
    * Base URL for SSE streaming (chat.stream).
-   * Defaults to '/api/eai/stream'.
-   * Separate from baseUrl because SSE requires explicit headers
-   * and must bypass the standard proxy's content-encoding stripping.
+   * Defaults to '/api/eai', the same BFF proxy as baseUrl; it passes SSE
+   * through with anti-buffering headers. Set this only for an app-owned
+   * stream route.
    */
   streamBaseUrl?: string;
 }
@@ -45,8 +45,7 @@ export class EAIPlatformClient {
     );
     this.tenantId = config.tenantId;
     this.baseUrl = config.baseUrl || `${appBasePath}/api/eai`;
-    this.streamBaseUrl =
-      config.streamBaseUrl || `${appBasePath}/api/eai/stream`;
+    this.streamBaseUrl = config.streamBaseUrl || `${appBasePath}/api/eai`;
   }
 
   /** CRUD operations through the canonical v4 resource routing owner. */

@@ -1,8 +1,14 @@
 # EAI App Template
 
-A production-ready Next.js template for building tenant-scoped applications on the Enterprise AI platform.
+A production-ready Next.js template for building workspace-based applications on the Enterprise AI platform.
 
 **[Documentation](https://eai-support.github.io/eai-app-docs/)** | **[Package Registry](https://enterpriseaigroup.github.io/enterpriseai-packages/)** | **[Mirror Repo](https://github.com/eai-support/eai-app-template)**
+
+Customer-facing guidance calls this an EAI workspace. Some stable contract
+fields, routes, and CLI flags keep the historical word `tenant` in their names.
+For example, `tenantId` and `--tenant-id` carry an EAI workspace ID. The CLI
+accepts `eai workspace` as the preferred command and keeps `eai tenant` as an
+alias.
 
 ## What This Template Assumes
 
@@ -11,15 +17,15 @@ A production-ready Next.js template for building tenant-scoped applications on t
   when the CLI is released; this template does not need a separate template
   release tag.
 - Object types declare a logical storage backend such as `postgresql`, `documentdb`, `blob`, or `search`.
-- Tenant connections resolve the physical store for that tenant at runtime.
-- PublicAPI and ResourceAPI enforce tenant access. Frontends do not receive raw Blob, DocumentDB, PostgreSQL, or AI Search credentials.
+- Workspace connections resolve the physical store for that workspace at runtime.
+- PublicAPI and ResourceAPI enforce workspace access. Frontends do not receive raw Blob, DocumentDB, PostgreSQL, or AI Search credentials.
 
 ## Quick Start
 
 ```bash
 git clone https://github.com/eai-support/eai-app-template.git my-app
 cd my-app
-npm install
+npm ci
 cp .env.example .env.local
 ./run.sh dev 3001
 ```
@@ -27,6 +33,10 @@ cp .env.example .env.local
 On Windows, use:
 
 ```bat
+git clone https://github.com/eai-support/eai-app-template.git my-app
+cd my-app
+npm ci
+copy .env.example .env.local
 run.bat dev 3001
 ```
 
@@ -35,21 +45,35 @@ already listens on the chosen port, and restarts the development server on that
 same port. AI agents should use this runner instead of calling `npm run dev`
 directly.
 
-Then connect the project to a real tenant:
+Use Node.js 24 on each machine. After pulling dependency changes, run `npm ci`;
+keep `package-lock.json` committed and never copy `node_modules` or `.next`
+between operating systems. `npm run clean:install` removes those local outputs
+and reinstalls from the existing lockfile. Local `.env.local` values must be
+configured separately on each machine.
+
+`npm run check:portability` rejects control characters, Windows-invalid names,
+case/Unicode collisions, and symlinks, including in projects without Git metadata.
+It also runs before builds. Do not automatically rename conflicting files:
+compare their contents first. Export tools should use filesystem APIs or
+NUL-delimited filename lists rather than newline-separated paths. CI performs
+fresh installs, production builds, and a local `/health` check on Linux, macOS,
+and Windows; this proves local startup, not authenticated platform readiness.
+
+Then connect the project to an EAI workspace:
 
 ```bash
 npm config set @enterpriseai:registry https://eai-support.github.io/eai/registry/ --location=user
 npm install -g @enterpriseai/cli
 eai update --check
 eai login
-eai tenant list --format json
-eai tenant select <tenant-slug>
+eai workspace list --format json
+eai workspace select <workspace-slug>
 eai whoami
-eai app provision <app-key> --tenant-id <tenant-id> --format json
+eai app provision <app-key> --tenant-id <workspace-id> --format json
 eai types validate
-eai types diff --tenant-key template --tenant-id <tenant-id>
-eai types seed --tenant-key template --tenant-id <tenant-id> --format json
-eai resources schema --tenant-id <tenant-id> --format json
+eai types diff --tenant-key template --tenant-id <workspace-id>
+eai types seed --tenant-key template --tenant-id <workspace-id> --format json
+eai resources schema --tenant-id <workspace-id> --format json
 ```
 
 Review the pre-seed `types diff`, then seed the intended definitions. Re-run
@@ -67,9 +91,9 @@ The default contract requires:
 
 - Auth.js with Microsoft Entra sign-in
 - PublicAPI access through the app BFF at `/api/eai`
-- tenant/workflow runtime configuration through `/api/eai/config`
+- workspace/workflow runtime configuration through `/api/eai/config`
 - `/health` for host-level liveness
-- user-delegated access for tenant data-plane calls
+- user-delegated access for workspace data calls
 
 Validate the local contract and a deployed app with:
 
@@ -80,38 +104,62 @@ eai deploy doctor --url https://your-deployed-app.example.com
 ```
 
 `/health` returning 200 is only the first check. A deployment is not considered
-healthy until Auth.js, runtime config, tenant/workflow values, and declared
+healthy until Auth.js, runtime config, workspace/workflow values, and declared
 smoke tests pass.
 
 The readiness smoke test remains authenticated. The deploy-doctor process and
 the deployed runtime must receive matching values for
 `EAI_READINESS_PROBE_TOKEN`, `NEXT_PUBLIC_EAI_TENANT_ID`, `EAI_PRODUCT_SLUG`,
-`EAI_ENVIRONMENT`, and `EAI_CONFIG_HASH`. Inject the probe token through the
-operator or CI secret environment; do not put it on the command line or commit
-it. The CLI resolves the contract's `${ENV_NAME}` header values only in memory,
-sends them to the declared endpoint, and does not include them in output. If a
-required value is absent, doctor does not send an unauthenticated request and
-reports missing probe configuration instead of PublicAPI authorization failure.
+`EAI_ENVIRONMENT`, `EAI_CONFIG_HASH`, and the server-only
+`EAI_DEPLOYMENT_ID`. TenantInfra sends the exact active deployment ID with its
+authenticated readiness probe. Inject the probe token through the operator or
+CI secret environment; do not put it on the command line or commit it. The CLI
+resolves the contract's `${ENV_NAME}` header values only in memory, sends them
+to the declared endpoint, and does not include them in output. If a required
+value is absent, doctor does not send an unauthenticated request and reports
+missing probe configuration instead of PublicAPI authorization failure.
 
-## Tenant Data Access
+### Managed deployment workflow invocation
 
-Tenant app data access is user-delegated. Browser code calls the app BFF at
+The EAI CLI starts `.github/workflows/eai-app.yml` with `workflow_dispatch`.
+Existing reusable callers can keep using `workflow_call` when the caller is in
+the same repository, was started manually with `workflow_dispatch`, and uses
+the same source ref as the canonical EAI workflow. PublicAPI verifies the
+signed GitHub caller and callee workflow claims, ref, and source SHA before it
+accepts the handoff. Cross-repository and cross-ref reusable calls fail.
+The direct CLI dispatch supplies the server-approved `config_hash`. A reusable
+caller can omit that newer input: the called workflow derives the exact
+checked-out configuration digest before application work. If the reusable
+caller supplies `config_hash`, it must match that digest.
+The reusable schema's `eai_reusable_call` input is an internal trigger marker;
+leave its default value unchanged. Direct dispatch does not expose that input.
+
+The reusable caller must grant `contents: read`, `packages: read`,
+`actions: read`, `attestations: write`, and `id-token: write`. GitHub can reduce
+permissions through a reusable workflow call, but the called workflow cannot
+add a permission that its caller did not grant. Deprecated
+`EAI_ACCESS_TOKEN` and `EAI_PUBLIC_API_URL` secrets are accepted as unused
+compatibility declarations; they do not authorize a deployment.
+
+## Workspace Data Access
+
+Workspace data access is user-delegated. Browser code calls the app BFF at
 `/api/eai/...`, and the BFF forwards to PublicAPI with the signed-in user's
 session token. PublicAPI, OPA/Authz, and ResourceAPI then evaluate the user,
-app, and tenant together.
+app, and workspace together.
 
 Do not add app-only `client_credentials` access for normal ResourceAPI reads,
 writes, files, or search. If work must continue after the user leaves the page,
-have the user request a platform workflow/job and pass tenant, app, and user
+have the user request a platform workflow/job and pass workspace, app, and user
 context into that workflow.
 
 These credentials and identities have different purposes:
 
 - Auth.js uses the app registration's confidential-client secret to complete
   interactive sign-in and establish the user's server-side session.
-- The BFF uses the signed-in user's delegated token for tenant-scoped PublicAPI
-  calls; PublicAPI evaluates the user, app client, and tenant together.
-- An app-only/service identity is optional and separate. Generic tenant apps do
+- The BFF uses the signed-in user's delegated token for workspace-scoped PublicAPI
+  calls; PublicAPI evaluates the user, app client, and workspace together.
+- An app-only/service identity is optional and separate. Generic workspace apps do
   not need one for normal data-plane access, and `eai app provision` must not
   create one merely to repair an interactive login.
 
@@ -171,13 +219,13 @@ Use `eai update --check` or `eai doctor --check-updates` when a command is missi
 
 Use the app-owned test scripts before inventing commands:
 
-| Script | Purpose |
-| ------ | ------- |
-| `npm run verify` | Local template health: object types, route exports, config, typecheck, and unit tests. |
-| `npm run test:smoke` | Fast local smoke checks for template and AI workspace guidance. |
-| `npm run test:business-scenarios` | Gofer-created browser journeys for business outcomes. |
-| `npm run test:e2e` | Browser end-to-end tests for app journeys. |
-| `npm run test:playwright` | Full Playwright runner for explicit browser test work. |
+| Script                            | Purpose                                                                                |
+| --------------------------------- | -------------------------------------------------------------------------------------- |
+| `npm run verify`                  | Local template health: object types, route exports, config, typecheck, and unit tests. |
+| `npm run test:smoke`              | Fast local smoke checks for template and AI workspace guidance.                        |
+| `npm run test:business-scenarios` | Gofer-created browser journeys for business outcomes.                                  |
+| `npm run test:e2e`                | Browser end-to-end tests for app journeys.                                             |
+| `npm run test:playwright`         | Full Playwright runner for explicit browser test work.                                 |
 
 Gofer should prefer `test:business-scenarios` for user journeys, then
 `test:e2e`, then `test:playwright`. A screenshot is only visual evidence. It
@@ -192,19 +240,19 @@ required for app tokens", explain that error before changing state:
 eai errors explain app_token_tenant_context_required --format json
 ```
 
-Then confirm the tenant with `eai whoami` and `eai tenant list --format json`
-and use tenant-scoped platform routes such as
-`/v4/platform/tenants/<tenant-id>/users/by-email?email=<email>`,
-`/v4/platform/tenants/<tenant-id>/users/<oid>/memberships`,
-`/v4/platform/tenants/<tenant-id>/members`, and
-`/v4/platform/tenants/<tenant-id>/role-definitions`. Do not start by changing
-tenant members, Entra configuration, role definitions, databases, or cloud
+Then confirm the workspace with `eai whoami` and `eai workspace list --format json`
+and use workspace-scoped platform routes. Existing platform routes retain the `tenants` path name, such as
+`/v4/platform/tenants/<workspace-id>/users/by-email?email=<email>`,
+`/v4/platform/tenants/<workspace-id>/users/<oid>/memberships`,
+`/v4/platform/tenants/<workspace-id>/members`, and
+`/v4/platform/tenants/<workspace-id>/role-definitions`. Do not change
+workspace members, Entra configuration, role definitions, databases, or cloud
 portals.
 
-## Tenant Data Plane Model
+## Workspace Data Plane Model
 
 - `postgresql`: canonical structured resource storage for most app data.
-- `documentdb`: tenant-scoped document storage when a resource type genuinely needs a document model.
+- `documentdb`: workspace-scoped document storage when a resource type genuinely needs a document model.
 - `blob`: file and large object storage behind API-mediated access.
 - `search`: derived search/vector projection only, never the system of record.
 
@@ -219,18 +267,18 @@ create standalone browser-visible blob upload paths for new apps. See
 ## Common Local Workflow
 
 ```bash
-# 1. Edit tenant config and object types
+# 1. Edit workspace config and object types
 
 # 2. Validate locally
 eai types validate
 
-# 3. Publish to the selected tenant
-eai types seed --tenant-key template --tenant-id <tenant-id> --format json
+# 3. Publish to the selected workspace
+eai types seed --tenant-key template --tenant-id <workspace-id> --format json
 
 # 4. Confirm the remote platform matches local source
-eai types diff --tenant-key template --tenant-id <tenant-id>
-eai resources schema --tenant-id <tenant-id> --format json
-eai verify calls --tenant-id <tenant-id> --resource-type application
+eai types diff --tenant-key template --tenant-id <workspace-id>
+eai resources schema --tenant-id <workspace-id> --format json
+eai verify calls --tenant-id <workspace-id> --resource-type application
 ```
 
 ## Object Type Naming
@@ -275,8 +323,8 @@ The `@enterpriseaigroup/*` packages are served from a public registry. The inclu
 Full documentation is available at **https://eai-support.github.io/eai-app-docs/**, covering:
 
 - Getting started and onboarding
-- CLI usage and tenant workflows
-- Architecture and tenant data-plane patterns
+- CLI usage and workspace workflows
+- Architecture and workspace data patterns
 - Platform service usage patterns for resources, storage, documents, search, and chat
 - Config-driven UI composition with store bindings and component registries
 - App configuration and extension points

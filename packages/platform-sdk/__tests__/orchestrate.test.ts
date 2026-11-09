@@ -1,16 +1,14 @@
 import { EAIPlatformClient } from '../src/client';
 
-describe('orchestrate module retirement', () => {
-  it('BP001 does not expose legacy generic v3 orchestrate proxies', () => {
+describe('EAIPlatformClient typed surface', () => {
+  it('HP001 exposes the typed PublicAPI client modules', () => {
     const client = new EAIPlatformClient({ tenantId: 'test-tenant' });
 
-    expect('orchestrate' in client).toBe(false);
-    expect('legacyOrchestrate' in client).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(client, 'orchestrate')).toBe(
-      false,
-    );
-    expect(
-      Object.prototype.hasOwnProperty.call(client, 'legacyOrchestrate'),
-    ).toBe(false);
+    expect(client.resources).toBeDefined();
+    expect(client.chat).toBeDefined();
+    expect(client.documents).toBeDefined();
+    expect(client.users).toBeDefined();
+    expect(client.auth).toBeDefined();
+    expect(client.platform).toBeDefined();
   });
 });

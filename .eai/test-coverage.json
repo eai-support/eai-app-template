@@ -5,8 +5,92 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "application-package-and-installed-access-defaults",
+          "description": "Reusable package generation, delegated installed-app BFF access, short-lived workload callbacks and lifecycle documentation.",
+          "owned_paths": [
+            "eai.application.json",
+            "eai.application.generated.json",
+            "eai.application.schema-lock.json",
+            ".eai-manifest.json",
+            "eai.runtime.json",
+            "scripts/generate-application-package.mjs",
+            "scripts/ci-application-package-bootstrap.mjs",
+            ".github/workflows/ci.yml",
+            "src/lib/platform/app-access.ts",
+            "src/app/api/eai/[[...rest]]/handler.ts",
+            "packages/platform-sdk/src/workload.ts",
+            "docs/application-packaging.md"
+          ],
+          "required_repo_tests": [
+            "tests/application-package.test.mjs",
+            "tests/ci-application-package-bootstrap.test.mjs",
+            "src/lib/platform/app-access.test.ts",
+            "packages/platform-sdk/__tests__/workload.test.ts",
+            "src/eai.config/deployment-contract.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [],
+          "required_deployed_contracts": []
+        },
+        {
+          "id": "source-unknown-eai-managed-deployment",
+          "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact, submit nonce-bound GitHub OIDC evidence from the validated eai-generated environment for exact source-unknown or reviewed CLI-generated authority, distinguish a configured handoff from persisted pending work, and verify scoped runtime readiness without requiring an unconfigured NCB workflow.",
+          "owned_paths": [
+            ".eai/test-coverage.json",
+            ".specify-pro/specs/3503-eai-managed-deploy/**",
+            ".github/workflows/eai-app.yml",
+            ".github/workflows/release.yml",
+            "tests/fixtures/source-unknown/**",
+            "tests/source-unknown-deployment-evidence.test.mjs",
+            "scripts/source-unknown-deployment-evidence.mjs",
+            "src/lib/platform/readiness.ts",
+            "src/app/api/eai/readiness/route.ts"
+          ],
+          "required_repo_tests": [
+            "tests/source-unknown-deployment-evidence.test.mjs",
+            "tests/next-release-version.test.mjs",
+            "src/lib/platform/readiness.test.ts",
+            "src/app/api/eai/readiness/route.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [
+            "backend",
+            "eai-cli"
+          ],
+          "required_deployed_contracts": [
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/platform-lifecycle/publicapi-v4-platform-lifecycle.spec.ts"
+            }
+          ]
+        },
+        {
+          "id": "publicapi-v4-only-guidance",
+          "description": "Repository documentation, examples, tests, and app proxy guidance use PublicAPI V4 interfaces only.",
+          "owned_paths": [
+            "README.md",
+            "docs/**",
+            "src/lib/platform/publicapi-route-family.ts",
+            "src/app/api/eai/[[...rest]]/**",
+            "packages/platform-sdk/**"
+          ],
+          "required_repo_tests": [
+            "tests/publicapi-v4-guidance.test.ts",
+            "src/lib/platform/publicapi-route-family.test.ts",
+            "src/app/api/eai/[[...rest]]/route.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": []
+        },
+        {
           "id": "tenant-bound-document-lifecycle",
-          "description": "The document SDK uses the Curate-backed V4 upload lifecycle for stored-file processing, requires paired app and workflow classifier selection, and sends the deployed V4 documentUrl and tenantId contract for direct URL classification.",
+          "description": "The document SDK uses the Curate-backed V4 upload lifecycle for stored-file processing, requires paired app and workflow classifier selection, sends the deployed V4 documentUrl and tenantId contract for direct URL classification (rejecting it before sending when no tenant is configured), and reads saved ResourceAPI document records pinned to their upload job.",
           "owned_paths": [
             "packages/platform-sdk/src/modules/documents.ts",
             "packages/platform-sdk/src/index.ts",
@@ -93,7 +177,7 @@
         },
         {
           "id": "generated-workflow-anonymous-container-runtime",
-          "description": "Generated NCB apps render an immutable workflow snapshot, use an ACA managed-identity BFF for anonymous submissions and files, and expose semantic readiness proof.",
+          "description": "Generated NCB apps render an immutable workflow snapshot, use an ACA managed-identity BFF for anonymous submissions and files, and expose semantic readiness proof. Completed responses remain read-only under their original signed browser capability and issuer-verified workflow binding after an app update; all mutations retain the current workflow guard.",
           "owned_paths": [
             "next.config.ts",
             "src/app/globals.css",
@@ -123,6 +207,7 @@
             "src/lib/generated-workflow/runtime-contract.test.ts",
             "src/lib/generated-workflow/runtime.test.ts",
             "src/lib/generated-workflow/server-configuration.test.ts",
+            "src/lib/generated-workflow/submission-files.test.ts",
             "src/lib/generated-workflow/submission-store.test.ts",
             "src/lib/generated-workflow/submission-session.test.ts",
             "src/app/api/eai/workflow-assistant/route.test.ts",
@@ -135,19 +220,9 @@
             "validate"
           ],
           "required_cross_service_surfaces": [
-            "admin-portal",
-            "ncb-sugar-hit"
+            "admin-portal"
           ],
-          "required_deployed_contracts": [
-            {
-              "repository": "eai-testing-dev",
-              "path": "tests/cross-service/contracts/adminportal-adminapi/generated-workflow-public-routes.spec.ts"
-            },
-            {
-              "repository": "eai-testing-dev",
-              "path": "tests/cross-service/contracts/ncb/ncb-boundaries.spec.ts"
-            }
-          ]
+          "required_deployed_contracts": []
         },
         {
           "id": "eai-app-template-nextjs-runtime-dependencies",
@@ -166,31 +241,32 @@
           "required_deployed_contracts": []
         },
         {
-          "id": "application-package-and-installed-access-defaults",
-          "description": "Reusable package generation, delegated installed-app BFF access, short-lived workload callbacks and lifecycle documentation.",
+          "id": "generated-app-cross-platform-portability",
+          "description": "Portable project filenames, lockfile-preserving cleanup and fresh install/build/local health checks on macOS, Windows and Linux.",
+          "ci_only": true,
           "owned_paths": [
-            "eai.application.json",
-            "eai.application.generated.json",
-            "eai.application.schema-lock.json",
-            ".eai-manifest.json",
-            "eai.runtime.json",
-            "scripts/generate-application-package.mjs",
-            "scripts/ci-application-package-bootstrap.mjs",
+            ".gitattributes",
             ".github/workflows/ci.yml",
-            "src/lib/platform/app-access.ts",
-            "src/app/api/eai/[[...rest]]/handler.ts",
-            "packages/platform-sdk/src/workload.ts",
-            "docs/application-packaging.md"
+            "package.json",
+            "scripts/check-portability.mjs",
+            "scripts/clean.mjs",
+            "scripts/smoke-local-start.mjs",
+            "tests/portability.test.mjs",
+            "run.sh",
+            "run.ps1",
+            "run.bat",
+            "tests/cross-platform-lifecycle.test.mjs",
+            "scripts/start-local-production.mjs"
           ],
           "required_repo_tests": [
-            "tests/application-package.test.mjs",
-            "tests/ci-application-package-bootstrap.test.mjs",
-            "src/lib/platform/app-access.test.ts",
-            "packages/platform-sdk/__tests__/workload.test.ts",
-            "src/eai.config/deployment-contract.test.ts"
+            "tests/portability.test.mjs",
+            "tests/cross-platform-lifecycle.test.mjs"
           ],
           "required_ci_checks": [
-            "validate"
+            "validate",
+            "portability (ubuntu-latest)",
+            "portability (macos-latest)",
+            "portability (windows-latest)"
           ],
           "required_cross_service_surfaces": [],
           "required_deployed_contracts": []

@@ -1,4 +1,5 @@
 import {
+  getSubmissionSessionDigest,
   hasSubmissionSession,
   setSubmissionSession,
 } from './submission-session';
@@ -53,6 +54,39 @@ describe('anonymous generated workflow submission session', () => {
     expect(
       hasSubmissionSession(request, 'submission-1', `sha256:${'b'.repeat(64)}`),
     ).toBe(false);
+    expect(getSubmissionSessionDigest(request, 'submission-1')).toBe(
+      `sha256:${'a'.repeat(64)}`,
+    );
+    expect(getSubmissionSessionDigest(request, 'submission-2')).toBeNull();
+  });
+
+  it('rejects tampered, absent and expired capabilities before exposing their original digest', () => {
+    const set = jest.fn();
+    setSubmissionSession(
+      { cookies: { set } } as never,
+      'submission-1',
+      `sha256:${'a'.repeat(64)}`,
+    );
+    const cookie = set.mock.calls[0][0] as { value: string };
+    const request = (value?: string) =>
+      ({ cookies: { get: () => (value ? { value } : undefined) } }) as never;
+    expect(getSubmissionSessionDigest(request(), 'submission-1')).toBeNull();
+    expect(
+      getSubmissionSessionDigest(
+        request(`${cookie.value}tampered`),
+        'submission-1',
+      ),
+    ).toBeNull();
+    const clock = jest
+      .spyOn(Date, 'now')
+      .mockReturnValue(Date.now() + 8 * 24 * 60 * 60 * 1000);
+    try {
+      expect(
+        getSubmissionSessionDigest(request(cookie.value), 'submission-1'),
+      ).toBeNull();
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('keeps concurrent submission capabilities isolated by cookie name', () => {

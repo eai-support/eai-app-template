@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -37,4 +38,22 @@ test('rejects a malformed latest tag instead of restarting numbering', () => {
 
 test('rejects an unsupported bump', () => {
   assert.throws(() => nextReleaseVersion('v1.0.0', 'rebuild'), /Unsupported bump/);
+});
+
+test('only the reviewed template repository can run the inherited release job', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  const jobCondition = workflow.match(
+    /^jobs:\n  release:\n(?:.*\n)*?    if: >-\n((?:      .*\n)+)    runs-on:/m,
+  )?.[1]?.replace(/\s+/g, ' ').trim();
+
+  assert.equal(
+    jobCondition,
+    "github.repository == 'eai-support/eai-app-template' && " +
+      "github.repository_id == '1205696460' && " +
+      "(github.event_name == 'workflow_dispatch' || " +
+      "github.event.workflow_run.conclusion == 'success')",
+  );
 });

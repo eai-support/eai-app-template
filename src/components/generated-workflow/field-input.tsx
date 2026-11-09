@@ -1,7 +1,7 @@
 'use client';
 
 import type { GeneratedWorkflowField } from '@/lib/generated-workflow/runtime-contract';
-import { SUBMISSION_FILE_ACCEPT } from '@/lib/generated-workflow/submission-files';
+import { submissionFileAccept } from '@/lib/generated-workflow/submission-files';
 import { fieldInputAttrs } from '@/lib/generated-workflow/field-format';
 
 interface GeneratedWorkflowFieldInputProps {
@@ -70,7 +70,7 @@ export function GeneratedWorkflowFieldInput({
       <input
         id={id}
         type='file'
-        accept={SUBMISSION_FILE_ACCEPT}
+        accept={submissionFileAccept(field.acceptedFileExtensions)}
         className={`${INPUT_CLASS} file:bg-muted file:text-foreground file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-sm file:font-medium`}
         disabled={disabled}
         onChange={(event) => onFileSelect(event.target.files?.[0] ?? null)}

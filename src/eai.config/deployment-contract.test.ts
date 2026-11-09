@@ -55,7 +55,7 @@ describe('template deployment contract', () => {
       required: [
         {
           ...templateDeploymentContract.secretRefs.required[0],
-          credentialRef: 'ghp_thisLooksLikeARawGithubToken000000',
+          credentialRef: 'ghp_' + 'x'.repeat(34),
         },
       ],
       optional: [],

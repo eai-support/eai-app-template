@@ -21,8 +21,7 @@ interface TraceHeaderContext {
   tracestate: string | null;
 }
 
-const TRACEPARENT_PATTERN =
-  /^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/i;
+const TRACEPARENT_PATTERN = /^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/i;
 
 function validTraceparent(traceparent: string | null): string | null {
   if (!traceparent) return null;
@@ -90,6 +89,40 @@ function applyTraceRequestHeaders(
   }
 }
 
+function stripInboundProxyHeaders(headers: Headers): void {
+  const connection = headers.get('connection');
+  for (const name of connection?.split(',') ?? []) {
+    const token = name.trim();
+    if (/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(token)) {
+      headers.delete(token);
+    }
+  }
+
+  // SECURITY: Client proxy metadata must not control the upstream redirect host.
+  for (const name of [
+    'connection',
+    'content-length',
+    'forwarded',
+    'host',
+    'keep-alive',
+    'proxy-authenticate',
+    'proxy-authorization',
+    'te',
+    'trailer',
+    'transfer-encoding',
+    'upgrade',
+    'x-forwarded-for',
+    'x-forwarded-host',
+    'x-forwarded-port',
+    'x-forwarded-prefix',
+    'x-forwarded-proto',
+    'x-forwarded-server',
+    'x-real-ip',
+  ]) {
+    headers.delete(name);
+  }
+}
+
 function getServerTenantId(): string | undefined {
   return (
     process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
@@ -123,7 +156,10 @@ function isBinaryContentType(contentType: string | null): boolean {
   );
 }
 
-function resolveTenantScopedPlatformPath(path: string, tenantId?: string): string {
+function resolveTenantScopedPlatformPath(
+  path: string,
+  tenantId?: string,
+): string {
   if (!tenantId) return path;
 
   const encodedTenantId = encodeURIComponent(tenantId);
@@ -131,7 +167,9 @@ function resolveTenantScopedPlatformPath(path: string, tenantId?: string): strin
     return `v4/platform/tenants/${encodedTenantId}/users/by-email`;
   }
 
-  const membershipMatch = path.match(/^v4\/platform\/users\/([^/]+)\/memberships$/);
+  const membershipMatch = path.match(
+    /^v4\/platform\/users\/([^/]+)\/memberships$/,
+  );
   if (membershipMatch?.[1]) {
     return `v4/platform/tenants/${encodedTenantId}/users/${membershipMatch[1]}/memberships`;
   }
@@ -155,8 +193,8 @@ async function proxyRequest(
 
     // Ensure baseUrl ends with / and path doesn't start with /
     const headers = new Headers(request.headers);
+    stripInboundProxyHeaders(headers);
     headers.delete('cookie');
-    headers.delete('host');
     headers.delete('tenant');
     headers.delete('x-tenant-id');
     applyInstalledAppHeaders(headers, {
@@ -263,6 +301,11 @@ async function proxyRequest(
     responseHeaders.delete('content-length');
     responseHeaders.delete('transfer-encoding');
     stampTraceResponseHeaders(responseHeaders, traceContext);
+    // SSE: tell reverse proxies and CDNs not to buffer or transform events.
+    if (contentType?.toLowerCase().startsWith('text/event-stream')) {
+      responseHeaders.set('Cache-Control', 'no-cache, no-transform');
+      responseHeaders.set('X-Accel-Buffering', 'no');
+    }
 
     return new NextResponse(response.body, {
       status: response.status,
@@ -289,7 +332,7 @@ async function proxyRequest(
     if (error instanceof UnsupportedPublicApiRouteError) {
       return new NextResponse(
         JSON.stringify({
-          error: 'Legacy PublicAPI route retired',
+          error: 'Unsupported PublicAPI route',
           message: error.message,
         }),
         {
