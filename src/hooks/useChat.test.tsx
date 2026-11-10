@@ -7,8 +7,10 @@ global.fetch = mockFetch;
 
 describe('useChat', () => {
   const originalTenantId = process.env.NEXT_PUBLIC_EAI_TENANT_ID;
+  const originalAppBasePath = process.env.NEXT_PUBLIC_APP_BASE_PATH;
 
   beforeEach(() => {
+    delete process.env.NEXT_PUBLIC_APP_BASE_PATH;
     mockFetch.mockReset();
     mockFetch.mockResolvedValue({
       ok: true,
@@ -22,6 +24,11 @@ describe('useChat', () => {
       delete process.env.NEXT_PUBLIC_EAI_TENANT_ID;
     } else {
       process.env.NEXT_PUBLIC_EAI_TENANT_ID = originalTenantId;
+    }
+    if (originalAppBasePath === undefined) {
+      delete process.env.NEXT_PUBLIC_APP_BASE_PATH;
+    } else {
+      process.env.NEXT_PUBLIC_APP_BASE_PATH = originalAppBasePath;
     }
   });
 

@@ -112,10 +112,29 @@ function keys(value, allowed, label) {
 function validateCliManifest(manifest) {
   keys(
     manifest,
-    ['schemaVersion', 'cli', 'packages', 'template', 'gofer'],
+    [
+      'schemaVersion', 'cli', 'packages', 'template', 'gofer',
+      'applicationPackage', 'runtime',
+    ],
     'CLI manifest',
   );
   assert.equal(manifest.schemaVersion, 1);
+  if (manifest.applicationPackage !== undefined) {
+    assert.deepEqual(manifest.applicationPackage, {
+      source: 'eai.application.json',
+      generated: 'eai.application.generated.json',
+      schemaLock: 'eai.application.schema-lock.json',
+      validator: '@enterpriseaigroup/application-package@0.1.0',
+    });
+  }
+  if (manifest.runtime !== undefined) {
+    assert.deepEqual(manifest.runtime, {
+      interactiveIdentity: 'delegated-user',
+      workloadIdentity: 'short-lived-installation-binding',
+      platformIngress: 'regional-public-api',
+      supportedHosting: ['eai-hosted', 'buyer-hosted'],
+    });
+  }
   if (manifest.cli !== undefined) {
     keys(manifest.cli, ['version'], 'CLI version');
     assert.ok(boundedString(manifest.cli.version));
@@ -5956,6 +5975,37 @@ test('known CLI project manifest retains actual canonical workflow authority', (
     context: 'cli',
     workflowPath: join(directory, canonicalWorkflowRelativePath),
   });
+});
+
+test('package metadata retains canonical workflow authority and rejects altered metadata', (t) => {
+  const manifest = {
+    schemaVersion: 1,
+    applicationPackage: {
+      source: 'eai.application.json',
+      generated: 'eai.application.generated.json',
+      schemaLock: 'eai.application.schema-lock.json',
+      validator: '@enterpriseaigroup/application-package@0.1.0',
+    },
+    runtime: {
+      interactiveIdentity: 'delegated-user',
+      workloadIdentity: 'short-lived-installation-binding',
+      platformIngress: 'regional-public-api',
+      supportedHosting: ['eai-hosted', 'buyer-hosted'],
+    },
+  };
+  assert.equal(resolveDeploymentWorkflowContext(contextFixture(t, manifest)).context, 'cli');
+  for (const changed of [
+    { ...manifest, applicationPackage: { ...manifest.applicationPackage, source: '../escape.json' } },
+    { ...manifest, applicationPackage: { ...manifest.applicationPackage, validator: 'unverified-validator' } },
+    { ...manifest, runtime: { ...manifest.runtime, interactiveIdentity: 'shared-service-credential' } },
+    { ...manifest, runtime: { ...manifest.runtime, platformIngress: 'direct-payload' } },
+    { ...manifest, runtime: { ...manifest.runtime, authority: 'tenant-admin' } },
+  ]) {
+    assert.throws(() => resolveDeploymentWorkflowContext(contextFixture(t, changed)));
+  }
+  const changedWorkflow = contextFixture(t, manifest);
+  writeFileSync(join(changedWorkflow, canonicalWorkflowRelativePath), 'name: unreviewed\n');
+  assert.throws(() => resolveDeploymentWorkflowContext(changedWorkflow), /canonical digest/);
 });
 
 test('NCB validates its actual generated workflow and keeps all canonical collector controls', (t) => {

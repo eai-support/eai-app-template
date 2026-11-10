@@ -29,6 +29,12 @@ export interface TemplateDeploymentContract {
     sourceMode: SourceMode;
     templateVersion: string;
     supportedEnvironments: DeploymentEnvironment[];
+    applicationPackage: {
+      source: 'eai.application.json';
+      generated: 'eai.application.generated.json';
+      distribution: 'private';
+      runtime: 'isolated-hosted';
+    };
   };
   deployment: {
     target: 'container-apps';
@@ -84,6 +90,12 @@ export const templateDeploymentContract: TemplateDeploymentContract = {
     sourceMode: 'admin-portal-generated',
     templateVersion: '0.1.0',
     supportedEnvironments: ['dev', 'test', 'prod', 'demo'],
+    applicationPackage: {
+      source: 'eai.application.json',
+      generated: 'eai.application.generated.json',
+      distribution: 'private',
+      runtime: 'isolated-hosted',
+    },
   },
   deployment: {
     target: 'container-apps',

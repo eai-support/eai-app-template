@@ -7,8 +7,13 @@ global.fetch = mockFetch;
 
 describe('useDocuments', () => {
   const originalTenantId = process.env.NEXT_PUBLIC_EAI_TENANT_ID;
+  const originalAppBasePath = process.env.NEXT_PUBLIC_APP_BASE_PATH;
 
   beforeEach(() => {
+    // These tests exercise tenant selection, not subpath deployment. Keep the
+    // client on its documented root-mount default even when a developer's
+    // local .env configures APP_BASE_PATH=/my-app.
+    delete process.env.NEXT_PUBLIC_APP_BASE_PATH;
     mockFetch.mockReset();
     mockFetch.mockResolvedValue({
       ok: true,
@@ -22,6 +27,11 @@ describe('useDocuments', () => {
       delete process.env.NEXT_PUBLIC_EAI_TENANT_ID;
     } else {
       process.env.NEXT_PUBLIC_EAI_TENANT_ID = originalTenantId;
+    }
+    if (originalAppBasePath === undefined) {
+      delete process.env.NEXT_PUBLIC_APP_BASE_PATH;
+    } else {
+      process.env.NEXT_PUBLIC_APP_BASE_PATH = originalAppBasePath;
     }
   });
 

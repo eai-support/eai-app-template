@@ -5,6 +5,36 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "application-package-and-installed-access-defaults",
+          "description": "Reusable package generation, delegated installed-app BFF access, short-lived workload callbacks and lifecycle documentation.",
+          "owned_paths": [
+            "eai.application.json",
+            "eai.application.generated.json",
+            "eai.application.schema-lock.json",
+            ".eai-manifest.json",
+            "eai.runtime.json",
+            "scripts/generate-application-package.mjs",
+            "scripts/ci-application-package-bootstrap.mjs",
+            ".github/workflows/ci.yml",
+            "src/lib/platform/app-access.ts",
+            "src/app/api/eai/[[...rest]]/handler.ts",
+            "packages/platform-sdk/src/workload.ts",
+            "docs/application-packaging.md"
+          ],
+          "required_repo_tests": [
+            "tests/application-package.test.mjs",
+            "tests/ci-application-package-bootstrap.test.mjs",
+            "src/lib/platform/app-access.test.ts",
+            "packages/platform-sdk/__tests__/workload.test.ts",
+            "src/eai.config/deployment-contract.test.ts"
+          ],
+          "required_ci_checks": [
+            "validate"
+          ],
+          "required_cross_service_surfaces": [],
+          "required_deployed_contracts": []
+        },
+        {
           "id": "source-unknown-eai-managed-deployment",
           "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact, submit nonce-bound GitHub OIDC evidence from the validated eai-generated environment for exact source-unknown or reviewed CLI-generated authority, distinguish a configured handoff from persisted pending work, and verify scoped runtime readiness without requiring an unconfigured NCB workflow.",
           "owned_paths": [

@@ -1,0 +1,230 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+import {
+  selectDependencySource,
+  sha256,
+  verifyContractDirectory,
+  verifyTarball,
+} from '../scripts/ci-application-package-bootstrap.mjs';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+test('producer bootstrap is available only to pull-request validation', () => {
+  assert.equal(
+    selectDependencySource({ eventName: 'pull_request', published: false }),
+    'producer',
+  );
+  assert.equal(
+    selectDependencySource({ eventName: 'push', published: true }),
+    'published',
+  );
+  assert.throws(
+    () => selectDependencySource({ eventName: 'push', published: false }),
+    /producer bootstrap is PR-only/,
+  );
+  assert.throws(
+    () =>
+      selectDependencySource({
+        eventName: 'workflow_dispatch',
+        published: false,
+      }),
+    /producer bootstrap is PR-only/,
+  );
+});
+
+test('contract verification rejects a one-byte producer mutation', async () => {
+  const temporaryRoot = await mkdtemp(
+    path.join(os.tmpdir(), 'eai-package-bootstrap-'),
+  );
+  const generatedRoot = path.join(temporaryRoot, 'src/generated');
+  const schema = Buffer.from('{"schema":"locked"}\n');
+  const runtime = Buffer.from('export const locked = true;\n');
+  const lock = {
+    schemaSha256: `sha256:${sha256(schema)}`,
+    runtimeSha256: `sha256:${sha256(runtime)}`,
+  };
+  try {
+    await mkdir(generatedRoot, { recursive: true });
+    await writeFile(
+      path.join(generatedRoot, 'application-package.schema.json'),
+      schema,
+    );
+    await writeFile(
+      path.join(generatedRoot, 'application-package-runtime.mjs'),
+      runtime,
+    );
+    await verifyContractDirectory(temporaryRoot, lock);
+
+    await writeFile(
+      path.join(generatedRoot, 'application-package-runtime.mjs'),
+      `${runtime} `,
+    );
+    await assert.rejects(
+      verifyContractDirectory(temporaryRoot, lock),
+      /runtime bytes do not match the locked contract/,
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test('validation workflow pins the producer and preserves the published release path', async () => {
+  const workflow = await readFile(
+    path.join(root, '.github/workflows/ci.yml'),
+    'utf8',
+  );
+  assert.match(
+    workflow,
+    /APPLICATION_PACKAGE_PRODUCER_SHA: caaf4fb0de88f63d2294a37cfd57772b8237d559/,
+  );
+  assert.match(
+    workflow,
+    /actions\/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1/,
+  );
+  assert.match(
+    workflow,
+    /repository: enterpriseaigroup\/enterpriseai-packages/,
+  );
+  assert.match(workflow, /permission-contents: read/);
+  assert.match(
+    workflow,
+    /ref: \$\{\{ env\.APPLICATION_PACKAGE_PRODUCER_SHA \}\}/,
+  );
+  assert.match(
+    workflow,
+    /npm install --no-save\s+"\$\{\{ steps\.producer-package\.outputs\.tarball \}\}"\s+lightningcss-linux-x64-gnu@1\.30\.2\s+@tailwindcss\/oxide-linux-x64-gnu@4\.1\.18/,
+  );
+  assert.doesNotMatch(workflow, /npm install[^\n]*--package-lock=false/);
+  assert.match(
+    workflow,
+    /name: Install Linux native CSS bindings\s+if: steps\.application-package-source\.outputs\.bootstrap != 'true'/,
+  );
+  assert.match(
+    workflow,
+    /if: steps\.application-package-source\.outputs\.bootstrap != 'true'/,
+  );
+  assert.match(workflow, /verify-installed/);
+  assert.match(
+    workflow,
+    /test ! -e "\$RUNNER_TEMP\/application-package-producer"/,
+  );
+  assert.match(
+    workflow,
+    /mv \.ci\/application-package-producer "\$RUNNER_TEMP\/application-package-producer"/,
+  );
+  assert.ok(
+    workflow.indexOf('verify-installed') <
+      workflow.indexOf('mv .ci/application-package-producer'),
+  );
+  assert.ok(
+    workflow.indexOf('mv .ci/application-package-producer') <
+      workflow.indexOf('Confirm application portability'),
+  );
+  const portability = workflow.slice(workflow.indexOf('\n  portability:'));
+  assert.match(portability, /needs: validate/);
+  assert.match(
+    portability,
+    /name: Verify native archive bootstrap boundaries\s+run: npm run test:application-package-bootstrap/,
+  );
+  assert.match(
+    portability,
+    /actions\/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093/,
+  );
+  assert.match(
+    portability,
+    /application-package-producer-\$\{\{ github.run_id \}\}-\$\{\{ github.run_attempt \}\}/,
+  );
+  assert.match(
+    portability,
+    /verify-tarball "\$tarball"\s+npm install --no-save "\.\/\$tarball"/,
+  );
+  assert.match(
+    portability,
+    /if: needs.validate.outputs.application-package-bootstrap != 'true'\s+run: npm ci/,
+  );
+
+  const jestConfig = await readFile(path.join(root, 'jest.config.ts'), 'utf8');
+  assert.match(
+    jestConfig,
+    /testPathIgnorePatterns: \['<rootDir>\/\.next\/', '<rootDir>\/\.ci\/'\]/,
+  );
+
+  const releaseWorkflow = await readFile(
+    path.join(root, '.github/workflows/eai-app.yml'),
+    'utf8',
+  );
+  assert.doesNotMatch(
+    releaseWorkflow,
+    /ci-application-package-bootstrap|producer-package/,
+  );
+  assert.match(releaseWorkflow, /run: npm install/);
+});
+
+test('absolute native archive paths retain identity and byte verification', async () => {
+  const temporaryRoot = await mkdtemp(
+    path.join(os.tmpdir(), 'eai-archive-contract-'),
+  );
+  const packageRoot = path.join(temporaryRoot, 'package');
+  const generatedRoot = path.join(packageRoot, 'src/generated');
+  const schema = Buffer.from('{"schema":"locked"}\n');
+  const runtime = Buffer.from('export const locked = true;\n');
+  const lock = {
+    validatorVersion: '0.1.0',
+    schemaSha256: `sha256:${sha256(schema)}`,
+    runtimeSha256: `sha256:${sha256(runtime)}`,
+  };
+  const archive = path.resolve(temporaryRoot, 'contract.tgz');
+  const pack = () =>
+    execFileSync('tar', ['-czf', './contract.tgz', 'package'], {
+      cwd: temporaryRoot,
+    });
+  try {
+    await mkdir(generatedRoot, { recursive: true });
+    await writeFile(
+      path.join(packageRoot, 'package.json'),
+      JSON.stringify({
+        name: '@enterpriseaigroup/application-package',
+        version: '0.1.0',
+      }),
+    );
+    await writeFile(
+      path.join(generatedRoot, 'application-package.schema.json'),
+      schema,
+    );
+    await writeFile(
+      path.join(generatedRoot, 'application-package-runtime.mjs'),
+      runtime,
+    );
+    pack();
+    await verifyTarball(archive, lock);
+    await writeFile(
+      path.join(generatedRoot, 'application-package-runtime.mjs'),
+      `${runtime} `,
+    );
+    pack();
+    await assert.rejects(
+      verifyTarball(archive, lock),
+      /packed runtime bytes do not match/,
+    );
+    await writeFile(
+      path.join(packageRoot, 'package.json'),
+      JSON.stringify({
+        name: 'unapproved-package',
+        version: '0.1.0',
+      }),
+    );
+    pack();
+    await assert.rejects(
+      verifyTarball(archive, lock),
+      /wrong package identity/,
+    );
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});

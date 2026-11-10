@@ -10,14 +10,21 @@ import {
 } from '@/lib/platform/session-resolve';
 import { getGeneratedWorkflowRuntime } from '@/lib/generated-workflow/runtime';
 
-const SERVER_TENANT_ID =
-  process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
-  process.env.EAI_TENANT_ID ||
-  process.env.TENANT_DEFAULT_ID;
-const PRODUCT_SLUG =
-  process.env.EAI_PRODUCT_SLUG ||
-  process.env.NEXT_PUBLIC_APP_NAME ||
-  'eai-app-template';
+function getServerTenantId(): string | undefined {
+  return (
+    process.env.NEXT_PUBLIC_EAI_TENANT_ID ||
+    process.env.EAI_TENANT_ID ||
+    process.env.TENANT_DEFAULT_ID
+  );
+}
+
+function getProductSlug(): string {
+  return (
+    process.env.EAI_PRODUCT_SLUG ||
+    process.env.NEXT_PUBLIC_APP_NAME ||
+    'eai-app-template'
+  );
+}
 
 async function redirectToResolvedAppHost(): Promise<void> {
   const accessToken = await getAccessToken();
@@ -33,9 +40,9 @@ async function redirectToResolvedAppHost(): Promise<void> {
     const { routing } = await resolvePublicApiBaseUrl({
       accessToken,
       fallbackBaseUrl: process.env.BASE_URL_PUBLIC_API,
-      product: PRODUCT_SLUG,
+      product: getProductSlug(),
       currentAppHost,
-      requestedTenantId: SERVER_TENANT_ID,
+      requestedTenantId: getServerTenantId(),
     });
 
     const redirectUrl = getRoutingRedirectUrl(routing);
