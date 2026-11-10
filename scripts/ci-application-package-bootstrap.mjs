@@ -97,10 +97,16 @@ export async function verifyProducer(producerRoot, expectedCommit) {
 
 function readTarEntry(tarballPath, entry) {
   try {
-    return execFileSync('tar', ['-xOf', tarballPath, `package/${entry}`], {
-      encoding: null,
-      maxBuffer: 2 * 1024 * 1024,
-    });
+    const archive = path.resolve(tarballPath);
+    return execFileSync(
+      'tar',
+      ['-xOf', `./${path.basename(archive)}`, `package/${entry}`],
+      {
+        cwd: path.dirname(archive),
+        encoding: null,
+        maxBuffer: 2 * 1024 * 1024,
+      },
+    );
   } catch {
     fail(`packed dependency is missing ${entry}`);
   }

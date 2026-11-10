@@ -191,6 +191,8 @@ jobs:
       - name: Fresh dependency install
         if: needs.validate.outputs.application-package-bootstrap != 'true'
         run: npm ci
+      - name: Verify native archive bootstrap boundaries
+        run: npm run test:application-package-bootstrap
       - name: Download exact validated producer from this run
         if: needs.validate.outputs.application-package-bootstrap == 'true'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
