@@ -2,9 +2,8 @@
  * Object Types Schema Definitions
  *
  * This file defines the domain Object Types for this app.
- * Object Types are seeded to Configurator via the seed-configurator skill or
- * the `/api/eai/seed` endpoint, and serve as the schema for runtime data
- * validation via ResourceAPI.
+ * Provision app storage first, then publish with `eai types seed`. These
+ * definitions provide runtime data validation through ResourceAPI.
  *
  * Structure:
  * - For single-tenant apps: Use 'template' as the tenant key
@@ -50,6 +49,8 @@ export interface PropertyDefinition {
   options?: SelectOption[];
   /** Human-readable description / help text */
   description?: string;
+  /** Required for a relationship field when publishing: exact declared target Object Type slug. */
+  targetObjectType?: string;
 }
 
 /** Cardinality for relationships between object types */
@@ -63,7 +64,7 @@ export type Cardinality =
 export interface LinkTypeDefinition {
   /** Plural lowercase name (e.g., 'documents') */
   name: string;
-  /** PascalCase target object type name */
+  /** Exact declared target Object Type slug */
   targetObjectType: string;
   /** Relationship cardinality */
   cardinality: Cardinality;

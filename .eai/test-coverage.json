@@ -5,6 +5,15 @@
       "intentional_skipped_tests": [],
       "features": [
         {
+          "id": "object-type-relationship-targets",
+          "description": "Expose explicit relationship target authoring metadata and preserve it in generated Object Type JSON, with provision-before-seed and deliberate legacy migration guidance.",
+          "owned_paths": ["src/eai.config/object-types.ts", "scripts/generate-object-types-json.mjs", "tests/generate-object-types-json.test.mjs", "README.md", "docs/cli/commands.md"],
+          "required_repo_tests": ["tests/generate-object-types-json.test.mjs"],
+          "required_ci_checks": ["validate"],
+          "required_cross_service_surfaces": ["eai-cli", "backend"],
+          "required_deployed_contracts": []
+        },
+        {
           "id": "source-unknown-eai-managed-deployment",
           "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact, submit nonce-bound GitHub OIDC evidence from the validated eai-generated environment for exact source-unknown or reviewed CLI-generated authority, distinguish a configured handoff from persisted pending work, and verify scoped runtime readiness without requiring an unconfigured NCB workflow.",
           "owned_paths": [
