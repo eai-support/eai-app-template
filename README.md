@@ -80,6 +80,13 @@ Review the pre-seed `types diff`, then seed the intended definitions. Re-run
 `types diff` after seeding when you need convergence evidence; any remaining
 drift must be understood before continuing.
 
+If the app enrollment belongs to a parent workspace and runs in a child, use
+`eai app provision <app-key> --tenant-id <runtime-child-id> --app-tenant-id
+<enrollment-owner-id> --format json`. The create command prints the exact
+provisioning command for the app. Provision before seeding; a dry run only
+checks prerequisites and does not create storage. A failed schema sync is an
+unsuccessful seed, even when Object Type definitions were saved.
+
 ## Runtime Contract
 
 This template declares its deploy-time requirements in `eai.runtime.json`. The
@@ -272,10 +279,13 @@ create standalone browser-visible blob upload paths for new apps. See
 # 2. Validate locally
 eai types validate
 
-# 3. Publish to the selected workspace
+# 3. Provision storage before the first publish
+eai app provision <app-key> --tenant-id <workspace-id> --format json
+
+# 4. Publish to the selected workspace
 eai types seed --tenant-key template --tenant-id <workspace-id> --format json
 
-# 4. Confirm the remote platform matches local source
+# 5. Confirm the remote platform matches local source
 eai types diff --tenant-key template --tenant-id <workspace-id>
 eai resources schema --tenant-id <workspace-id> --format json
 eai verify calls --tenant-id <workspace-id> --resource-type application
@@ -290,6 +300,26 @@ eai verify calls --tenant-id <workspace-id> --resource-type application
 - If you need the slug explicitly, use the shared `toObjectTypeSlug(...)`
   helper from `@enterpriseaigroup/platform-sdk` instead of creating a local
   slugifier.
+
+### Relationship fields
+
+Every new or republished property of type `relationship` declares its target
+Object Type explicitly:
+
+```ts
+{ name: 'trust', type: 'relationship', targetObjectType: 'trust', required: true }
+```
+
+Use the target's exact declared `slug`; the field name does not identify a
+target type. `linkTypes[].targetObjectType` describes links separately and does
+not supply the target for a relationship property. Resource writes validate
+that the referenced record exists in that target type and the same workspace.
+
+Existing published relationship fields without this metadata remain readable.
+Before republishing them, add and verify `targetObjectType` for each field;
+review existing records separately. No target is guessed, and publishing does
+not repair or delete existing orphan records. Resource updates replace the full
+record data, so send all required fields and retain version checks.
 
 ## App Router Guardrail
 

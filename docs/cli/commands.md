@@ -231,6 +231,20 @@ aliases and app-owned naming prefix that Object Type publishing validates, and
 writes the local `.eai/storage-bindings.json` contract used by the starter
 Object Type helpers.
 
+For parent-owned apps that run in a child workspace, provision with
+`eai app provision <key> --tenant-id <runtime-child-id> --app-tenant-id
+<enrollment-owner-id> --format json`. Use the exact command printed by
+`eai create`, then seed in the runtime workspace. Dry-run only reads readiness;
+it never provisions storage. Schema sync failure is a failed seed and requires
+recovery before record operations.
+
+For every new or republished `relationship` property, set
+`targetObjectType` to the target Object Type's exact declared slug. For example,
+`{ name: 'trust', type: 'relationship', required: true, targetObjectType: 'trust' }`.
+Existing published definitions without a target remain readable; add explicit
+targets before republishing. The platform does not infer them from field names
+or repair existing orphan records.
+
 ### `eai types diff`
 
 Compare local Object Types with what's deployed on the platform.

@@ -50,6 +50,7 @@ export const objectTypes: Record<string, ObjectTypeDefinition[]> = {
       status: 'published' as const,
       properties: [
         { name: 'title', type: 'text' as const, required: true },
+        { name: 'parent', type: 'relationship' as const, targetObjectType: 'campaign', required: false },
       ] as const,
     },
   ],
@@ -71,6 +72,7 @@ export const objectTypes: Record<string, ObjectTypeDefinition[]> = {
     assert.equal(objectTypes.postPilot[0].name, 'Campaign');
     assert.equal(objectTypes.postPilot[0].storageBackend, 'postgresql');
     assert.equal(objectTypes.postPilot[0].properties[0].type, 'text');
+    assert.equal(objectTypes.postPilot[0].properties[1].targetObjectType, 'campaign');
 
     const provisioning = JSON.parse(
       readFileSync(provisioningOutputPath, 'utf8'),
