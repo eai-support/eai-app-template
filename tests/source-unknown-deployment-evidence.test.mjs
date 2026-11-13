@@ -35,7 +35,7 @@ const currentWorkflowFixtureRelativePath =
 const canonicalDigest =
   'bce4e34fe5c47377e6a679966a37257d944cd00ccf3c15b4ba437f144ed559ed';
 const currentWorkflowDigest =
-  '74ede3c4e1de12fa5f63135349e61365bd845443dbb4dbe51573d8c490baa1d5';
+  '2d0ce84b941bcd11942900434000da0a55c7a30d4ae6af1a243b1d03b8e747d7';
 const generatedDigest =
   '77d4951b3e6852ead73cef8b9e8901e3de774f9aca70f71cc0c932c13903ff32';
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -1341,6 +1341,34 @@ test('CLI evidence binds each merged commit and remains repository-owner agnosti
   }
 });
 
+test('CI and production builds enforce locked installs and retain failing production audits', () => {
+  const workflows = [
+    readFileSync(resolve(repoRoot, '.github/workflows/ci.yml'), 'utf8'),
+    readFileSync(workflowPath, 'utf8'),
+  ];
+  for (const workflow of workflows) {
+    assert.match(workflow, /npm ci --include=dev/);
+    assert.doesNotMatch(workflow, /npm install/);
+    assert.match(
+      workflow,
+      /npm audit --omit=dev --audit-level=high --json > "\$RUNNER_TEMP\/production-audit\.json"/,
+    );
+    assert.match(
+      workflow,
+      /name: Retain production audit evidence\n\s+if: always\(\)/,
+    );
+    assert.match(
+      workflow,
+      /path: \$\{\{ runner\.temp \}\}\/production-audit\.json\n\s+if-no-files-found: error/,
+    );
+    const auditStep = workflow.slice(
+      workflow.indexOf('      - name: Audit production dependencies'),
+      workflow.indexOf('      - name: Retain production audit evidence'),
+    );
+    assert.doesNotMatch(auditStep, /continue-on-error|\|\| true|set \+e/);
+  }
+});
+
 test('workflow sends OIDC evidence directly to the canonical PublicAPI route', () => {
   const workflow = readFileSync(workflowPath, 'utf8');
   const buildJob = workflow.slice(
@@ -1535,7 +1563,7 @@ test('workflow sends OIDC evidence directly to the canonical PublicAPI route', (
   );
   assert.match(handoffJob, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/);
   assert.match(handoffJob, /^      actions: read$/m);
-  assert.match(workflow, /npm ci --ignore-scripts/);
+  assert.match(workflow, /npm ci --include=dev --ignore-scripts/);
   assert.doesNotMatch(workflow, /> \.npmrc|>> \.npmrc/);
   assert.match(workflow, /include-hidden-files: true/);
   assert.match(workflow, /actions\/attest-build-provenance@[a-f0-9]{40}/);

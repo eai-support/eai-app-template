@@ -37,8 +37,12 @@ const config: Config = {
     transform: {
         '^.+\\.(ts|tsx)$': 'ts-jest', // Use ts-jest for TypeScript files
     },
-    transformIgnorePatterns: ['node_modules/(?!@azure/msal-react)', 'node_modules/(?!@azure/web-pubsub-client)'],
 }
 
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
-export default createJestConfig(config)
+const resolveJestConfig = createJestConfig(config)
+
+export default async () => ({
+    ...await resolveJestConfig(),
+    transformIgnorePatterns: ['^.+\\.module\\.(css|sass|scss)$'],
+})
