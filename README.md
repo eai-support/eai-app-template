@@ -59,6 +59,17 @@ NUL-delimited filename lists rather than newline-separated paths. CI performs
 fresh installs, production builds, and a local `/health` check on Linux, macOS,
 and Windows; this proves local startup, not authenticated platform readiness.
 
+Browser CI uses matching Playwright packages at 1.65.1 and installs Chromium on
+explicit Ubuntu 26.04 x64 and `ubuntu-latest` x64 runners. Its retained artifacts
+include the actual runner image, architecture, browser report, and failure traces.
+The smoke opens the anonymous starter page, checks missing-auth readiness, and
+confirms a sign-in request stays local with setup guidance before contacting Entra.
+
+Builds and the anonymous landing page work before sign-in is configured. A sign-in
+request with missing or placeholder Entra settings stays in the app and tells the
+app builder to run `eai provision entra`, then restart the app. Storage readiness
+and browser sign-in readiness are separate checks.
+
 Then connect the project to an EAI workspace:
 
 ```bash

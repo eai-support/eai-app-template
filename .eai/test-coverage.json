@@ -249,6 +249,36 @@
           ],
           "required_cross_service_surfaces": [],
           "required_deployed_contracts": []
+        },
+        {
+          "id": "template-auth-setup-and-chromium",
+          "description": "Build/import and anonymous use remain available without auth. Actual sign-in requests reject missing/placeholder configuration before Entra redirection, with local setup guidance and configured base-path preservation. Matching Playwright 1.65.1 Chromium smoke retains actual Linux runner image and architecture.",
+          "owned_paths": [
+            "src/auth.ts",
+            "src/lib/auth-configuration.ts",
+            "src/app/api/auth/[...nextauth]/**",
+            "src/app/auth/error/page.tsx",
+            "package.json",
+            "package-lock.json",
+            ".github/workflows/ci.yml",
+            "playwright.config.ts",
+            "README.md",
+            "tests/e2e/platform-readiness.spec.ts",
+            "tests/business-scenarios/starter-app.spec.ts"
+          ],
+          "required_repo_tests": [
+            "src/lib/auth-configuration.test.ts",
+            "src/app/api/auth/[...nextauth]/route.test.ts",
+            "tests/e2e/platform-readiness.spec.ts",
+            "tests/business-scenarios/starter-app.spec.ts"
+          ],
+          "required_ci_checks": [
+            "validate",
+            "chromium (ubuntu-26.04, x64)",
+            "chromium (ubuntu-latest, x64)"
+          ],
+          "required_cross_service_surfaces": [],
+          "required_deployed_contracts": []
         }
       ]
     }
