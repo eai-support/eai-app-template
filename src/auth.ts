@@ -25,7 +25,7 @@ declare module 'next-auth/jwt' {
 }
 
 // Use placeholder values during build if env vars are not set
-// This allows the build to succeed; actual auth will fail at runtime without real values
+// Sign-in requests are guarded in the auth route before redirecting to Entra.
 const tenantId = process.env.ENTRA_TENANT_ID || 'placeholder';
 const tenantName = process.env.ENTRA_TENANT_NAME || 'placeholder';
 

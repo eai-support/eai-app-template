@@ -1,5 +1,10 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { handlers } from '@/auth';
+import {
+  AUTH_SETUP_GUIDANCE,
+  AUTH_SETUP_REQUIRED,
+  missingSigninSettings,
+} from '@/lib/auth-configuration';
 
 // Auth.js v5 + Next.js basePath workaround.
 //
@@ -32,5 +37,25 @@ function rewrite(req: NextRequest): NextRequest {
   return req;
 }
 
-export const GET = (req: NextRequest) => handlers.GET(rewrite(req));
-export const POST = (req: NextRequest) => handlers.POST(rewrite(req));
+function authSetupResponse(req: NextRequest): NextResponse | undefined {
+  if (!/\/api\/auth\/(?:signin|callback)(?:\/|$)/.test(new URL(req.url).pathname)) {
+    return undefined;
+  }
+  if (missingSigninSettings(process.env).length === 0) return undefined;
+
+  const url = new URL(`${APP_BASE_PATH}/auth/error`, req.url);
+  url.searchParams.set('error', 'AuthSetupRequired');
+  if (
+    req.headers.has('X-Auth-Return-Redirect') ||
+    req.headers.get('accept')?.includes('application/json')
+  ) {
+    return NextResponse.json(
+      { error: AUTH_SETUP_REQUIRED, message: AUTH_SETUP_GUIDANCE, url: url.toString() },
+      { status: 503 },
+    );
+  }
+  return NextResponse.redirect(url);
+}
+
+export const GET = (req: NextRequest) => authSetupResponse(req) ?? handlers.GET(rewrite(req));
+export const POST = (req: NextRequest) => authSetupResponse(req) ?? handlers.POST(rewrite(req));
