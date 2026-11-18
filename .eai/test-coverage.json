@@ -221,10 +221,15 @@
         },
         {
           "id": "generated-app-cross-platform-portability",
-          "description": "Portable project filenames, lockfile-preserving cleanup and fresh install/build/local health checks on macOS, Windows and Linux.",
+          "description": "Portable project filenames, safecrlf-compatible scaffold text, exact Windows launcher bytes through raw Git provider publication, lockfile-preserving cleanup and fresh install/build/local health checks on macOS, Windows and Linux.",
           "ci_only": true,
           "owned_paths": [
             ".gitattributes",
+            ".lintstagedrc",
+            ".lintstagedrc.js",
+            ".prettierignore",
+            ".prettierrc.json",
+            "jest.setup.js",
             ".github/workflows/ci.yml",
             "package.json",
             "scripts/check-portability.mjs",

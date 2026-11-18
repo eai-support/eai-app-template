@@ -10,6 +10,56 @@ import { validatePaths, checkDirectory } from '../scripts/check-portability.mjs'
 const checker = fileURLToPath(new URL('../scripts/check-portability.mjs', import.meta.url));
 const cleaner = fileURLToPath(new URL('../scripts/clean.mjs', import.meta.url));
 
+const templateRoot = fileURLToPath(new URL('../', import.meta.url));
+const publicationFiles = ['.gitattributes', 'run.bat', 'run.ps1', 'run.sh',
+  '.lintstagedrc', '.lintstagedrc.js', '.prettierignore', '.prettierrc.json', 'jest.setup.js'];
+
+async function gitPublicationFixture() {
+  const root = await mkdtemp(join(tmpdir(), 'eai-source-git-'));
+  const git = (args, options = {}) => spawnSync('git', args, { cwd: root, encoding: 'utf8', ...options });
+  assert.equal(git(['init', '--quiet']).status, 0);
+  for (const [key, value] of [['core.autocrlf', 'false'], ['core.safecrlf', 'true'], ['commit.gpgsign', 'false']]) {
+    assert.equal(git(['config', key, value]).status, 0);
+  }
+  for (const path of publicationFiles) await writeFile(join(root, path), await readFile(join(templateRoot, path)));
+  return { root, git };
+}
+
+test('3658-git-source-line-endings:AC-1 native scaffold files commit with safecrlf enabled', async () => {
+  const { root, git } = await gitPublicationFixture();
+  try {
+    const result = git(['add', '--all']);
+    assert.equal(result.status, 0, result.stderr);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('3658-git-source-line-endings:AC-2 raw provider blobs survive checkout and the source integrity gate', async () => {
+  const { root, git } = await gitPublicationFixture();
+  try {
+    // GitHub's Git Data API stores the supplied bytes without Git's add-time filters.
+    for (const path of publicationFiles) {
+      const bytes = await readFile(join(root, path));
+      const blob = git(['hash-object', '-w', '--stdin'], { input: bytes });
+      assert.equal(blob.status, 0, blob.stderr);
+      const indexed = git(['update-index', '--add', '--cacheinfo', '100644', blob.stdout.trim(), path]);
+      assert.equal(indexed.status, 0, indexed.stderr);
+    }
+    const commit = git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '--quiet', '-m', 'Raw provider publication']);
+    assert.equal(commit.status, 0, commit.stderr);
+    assert.equal(git(['checkout', '--force', 'HEAD', '--', '.']).status, 0);
+    const diff = git(['diff', '--exit-code', '--', '.']);
+    assert.equal(diff.status, 0, diff.stdout);
+    assert.equal(git(['status', '--porcelain=v1', '--untracked-files=all']).stdout, '');
+    for (const path of ['run.bat', 'run.ps1']) {
+      assert.deepEqual(await readFile(join(root, path)), await readFile(join(templateRoot, path)));
+    }
+    await writeFile(join(root, 'run.ps1'), 'Write-Output "unexpected source change"\r\n');
+    assert.equal(git(['diff', '--exit-code', '--', '.']).status, 1);
+    await writeFile(join(root, 'unexpected.txt'), 'untracked source');
+    assert.match(git(['status', '--porcelain=v1', '--untracked-files=all']).stdout, /\?\? unexpected.txt/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 for (const path of ['src/page.html\r', 'gofer:side.md', 'src/CON.txt', 'NUL', 'COM1.json', 'LPT².txt', 'src/trailing.', 'src/trailing ', 'src/a\\b', 'src/a\n.js', 'src/a?.js']) {
   test(`rejects ${JSON.stringify(path)}`, () => assert.equal(validatePaths([path]).length, 1));
 }
