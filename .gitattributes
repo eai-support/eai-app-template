@@ -2,6 +2,7 @@ graphify-out/graph.json merge=graphify
 
 * text=auto eol=lf
 *.sh text eol=lf
-*.bat text eol=crlf
-*.cmd text eol=crlf
-*.ps1 text eol=crlf
+# Preserve authored Windows launcher bytes in raw Git Data API publications.
+*.bat -text
+*.cmd -text
+*.ps1 -text
