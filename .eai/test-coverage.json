@@ -15,7 +15,7 @@
         },
         {
           "id": "source-unknown-eai-managed-deployment",
-          "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact, submit nonce-bound GitHub OIDC evidence from the validated eai-generated environment for exact source-unknown or reviewed CLI-generated authority, distinguish a configured handoff from persisted pending work, and verify scoped runtime readiness without requiring an unconfigured NCB workflow.",
+          "description": "CLI and Gofer apps build one immutable linux/amd64 OCI artifact, submit nonce-bound GitHub OIDC evidence from the validated eai-generated environment for exact source-unknown or reviewed CLI-generated authority, distinguish a configured handoff from persisted pending work, and verify scoped runtime readiness without requiring an unconfigured NCB workflow. The inline handoff step validates the collector’s canonical decimal artifact ID before comparing it to the integral HTTP receipt.",
           "owned_paths": [
             ".eai/test-coverage.json",
             ".specify-pro/specs/3503-eai-managed-deploy/**",
