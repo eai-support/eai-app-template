@@ -18,7 +18,6 @@ const EXCLUDED_DIRECTORIES = new Set([
   '.git',
   '.next',
   'coverage',
-  'graphify-out',
   'node_modules',
 ]);
 const EXCLUDED_FILES = new Set(['package-lock.json']);
